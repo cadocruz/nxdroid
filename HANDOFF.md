@@ -8,8 +8,17 @@ work stands, what is broken, what to do next, and how to run it**.
 
 The repository points to remote `origin git@github.com:cadocruz/nxdroid.git`.
 The repository is initialized with a single commit on `main`; the working tree carries the uncommitted
-work of the host bring-up (§8 item 4) and the `P6` viewport work (§7), to be committed with proper
-descriptive messages following repository conventions.
+work of the host bring-up (§8 items 4, 4a, 4b), the `P6` viewport work and the engine rounds F to I (§7),
+and a rewritten `README.md`, to be committed with proper descriptive messages following repository
+conventions. Nothing has been committed or pushed. The repository-local git identity is
+`Ricardo A. F. da Cruz <7233682+cadocruz@users.noreply.github.com>` (`.git/config`; the global one is
+untouched). `AGENTS.md` still says to commit as `seedds`; that command-line override would ignore the local
+identity, and the rule goes with the Apple removal (§8 item 10).
+
+**Status at this cut:** all the work is code, read and checked statically on a Windows machine (gcc
+`-fsyntax-only` with shims, the generated-report gates, scratch mutation tests). Nothing has been built with
+the NDK and nothing has run on the S23 Ultra since the probe (§6). The next real information comes from an
+NDK build (§8 item 5) and a device run; installing an NDK or podman needs the owner's approval.
 
 ## 1. The goal
 
@@ -30,7 +39,8 @@ the NVN command stream is replayed. What changes is which GPU API that replay sp
 | `wdjwxh/Taikou5-mobile` | rejected | Ahead of `nx2apk`, behind `d2r-mobile`; a downstream of the same engine |
 | Build environment | **podman**, rootless, not docker | The host's docker daemon is down and podman is installed (5.7.0). The vendored `dm/android/docker/` is docker-shaped; it is used as a Dockerfile only |
 | `dm/gfx/nvn/nvn_obj.h` | master | The engine adapts to our command vocabulary, not the reverse. 93 game profiles record through `dm/gfx/nvn/hle_nvn.c`; the engine's fork had diverged from it |
-| Zero-copy | **not available**; mirror is the baseline | `VK_EXT_external_memory_host` is absent on the Adreno 740. The only remaining route is to allocate pool memory *as* an `AHardwareBuffer` and import it — unmeasured, see §8 item 8 |
+| Zero-copy | **not available**; mirror is the baseline | `VK_EXT_external_memory_host` is absent on the Adreno 740. The only remaining route is to allocate pool memory *as* an `AHardwareBuffer` and import it — unmeasured, see §8 item 6 |
+| Platforms | **Android only**, owner's decision | nxdroid is never built for Mac or iOS again. Consequences: `regress.py check --games` and the Mac `make -C dm/host` are no longer requirements; the Apple branch of `port.h`, the `.m` files and the IPA tooling stay in the tree only until the **last** task (§8 item 10), because `nvn_mtl.m` is still the reference the `opcode_map` / `abi_gaps` gates compare against |
 
 ## 3. The target, measured
 
@@ -64,7 +74,10 @@ The dump itself is not in the repository (it is a device artifact); regenerate i
 | `dm/gfx/vk/probe/` | the device capability probe: `vk_probe.c`, a Makefile with a desktop and an `android` target, a frozen output contract in `tests/test_probe_output.py` | built and run on the device, 0 breaches |
 | `dm/gfx/vk/engine_smoke/` | the out-of-tree harness that compiles the vendored engine against **our** headers and initializes it, plus the two generated vocabulary reports and `README.md` | green on desktop (llvmpipe + RTX 5060 Ti) |
 | `dm/gfx/vk/address_space.md` | the 64-bit-address-space decision | written, unreviewed by hand |
+| `dm/host/port.h`, `dm/android/port_android.c`, `dm/android/apple_stubs.c` (+ `apple_stubs/include`) | the host's platform layer (Apple inline, bionic real) and the interface stubs for AudioUnit / CF / CV / VT | written, read and syntax-checked only (§8 items 4, 4a) |
+| `dm/android/tools/{host_sources,undef_scan}.py`, `dm/tools/tests/test_{thread_slots,android_undef_scan}.py` | the source-list expander, the undefined-symbol and Mach-O assembly gate, and their tests | green |
 | `dm/tools/android_audit.py` + baseline + tests | "is this file portable to Android?", with a baseline that only shrinks | green; 760 hits in 38 files |
+| `README.md` | rewritten for nxdroid: Android-only, status (not built, not run), build structure, open list | current; its gallery block is generated from Apple builds (§8 item 10) |
 | `docs/reference/android.md` | the vendored engine reference: pin, gate, device, Adreno gates, ABI gaps, licensing | current |
 | `.opencode/agents/android-{dev,qa,shaders,upstream}.md` | the four specialist agents this work was coordinated through | in use / active |
 
@@ -95,7 +108,14 @@ python3 dm/tools/android_audit.py --check
     dm/tools/tests/test_thread_slots.py dm/tools/tests/test_android_undef_scan.py \
     dm/gfx/vk/probe/tests/test_probe_output.py -q
 python3 dm/tools/docs_symptoms.py    # after any docs/reference edit
+
+# engine source checks that need no device (text checks, not compiles); event_order_test needs hle_nvn.c and xbg_game.cpp as they are
+python3 dm/gfx/vulkan/engine/tests/pipeline_memo_source_test.py
+python3 dm/gfx/vulkan/engine/tests/event_order_test.py
 ```
+
+On the Windows machine this round was done on: use LibreOffice's python with `-X utf8`, `CC=gcc` for
+`opcode_map.py`, `pytest` is absent (run the modules with `unittest`), and read §10 for the CRLF false reds.
 
 The system `python3` has no pytest; use `/home/cado/.venv/bin/python -m pytest`. The full
 `dm/tools/tests` suite is **not** green on this machine and was not before this work: five modules
@@ -227,13 +247,9 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    `NVN_DEVICE_INFO_MAX_VIEWPORTS` from the device (`multiViewport ? min(16, maxViewports) : 1`);
    `hle_nvn.c` records `SetScissors` / `SetDepthRanges` index 0 only (a `[RED]` line each when
    `first + n > 1`), so a split-screen draw selecting viewport 1 is cut by viewport 0's scissor and
-   takes its depth range until the records carry the arrays. **Risk, undecidable without a Mac:**
-   those two lines were plain `ONCE_LOG`s before and also print on the Apple build, where the Metal
-   replay binds viewport 0 only (the picture is equally wrong there, so the line is truthful); but
-   `scripts/regress.py` (`smoke_diff`, "new [RED] line kinds") marks any `[RED]` kind absent from
-   the baseline runs as REGRESSION, so the first `regress.py check` on a game that sets several
-   scissors or depth ranges goes red until that game's baseline is recorded again. Which games do
-   is not known here; if one does, re-record its baseline rather than soften the line; the
+   takes its depth range until the records carry the arrays. (Those two lines also print on the Apple
+   build and `scripts/regress.py` would count the new `[RED]` kind as a regression; moot now that Mac
+   validation is no longer required, §2 *Platforms*.) The
    `VK_KHR_multiview` fan-out for a
    viewport mask is designed, not written. The probe prints `multiViewport`, `multiview`,
    `shaderOutputViewportIndex`, `shaderOutputLayer` and `maxViewports` now, unmeasured on the
@@ -302,9 +318,9 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    read, not compiled; `DM_SECTION`'s ELF sections need `-z nostart-stop-gc` (present) and the
    weak `__start_*` references resolve only when at least one entry exists; the bare-symbol /
    `:lo12:` spellings of `HLE_FORCE_BIG` and `hle_bigstack.c` have not been through the NDK assembler; `dm_uc_ns`'s fpsimd
-   record walk and `dm_proc_start_ns` are untested on a device. **CMake (dev-vulkan's file):**
-   `dm/android/apple_stubs.c` must join `ANDROID_SRCS` and `dm/android/apple_stubs/include` the
-   include path for the host sources. `pthread_gettid_np` (used by `port_android.c` and compat's
+   record walk and `dm_proc_start_ns` are untested on a device. **CMake:**
+   `dm/android/apple_stubs.c` is in `ANDROID_SRCS` and `dm/android/apple_stubs/include` is on `dmcore`'s
+   include path (done after QA round F). `pthread_gettid_np` (used by `port_android.c` and compat's
    `mach.h`) does not exist on OHOS/musl. "`undef_scan` clean" means no dropped repository
    definition is still called, not a clean link.
 4a. **[CODE DONE, unverified on a device] The guest thread slots on bionic** (`docs/reference/android.md`,
@@ -355,7 +371,7 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    `front_android.c` (our `front.h`, no touch bridge), `vulkan_present.cpp`, `port_android.c`, the
    compat shims and `nvn_vk.c`; the D2R headers, overlay contract and touch sources are gone,
    SPIRV-Tools is optional and `libdm.so` waits for `jni_android.c`. The configure requires arm64
-   and `ANDROID_PLATFORM >= 28`, sets one build type and gives C and C++ the Makefile's `-O1 -g`,
+   and `ANDROID_PLATFORM >= 29` (28 before the guest thread slots, item 4a), sets one build type and gives C and C++ the Makefile's `-O1 -g`,
    keeps `DM_GAMES_DIR` in the cache (the first configure's environment, or `-DDM_GAMES_DIR=`) and
    gives that one value, or none, to every `game.py` call at configure and build, and runs
    `dm/android/tools/undef_scan.py` (ours): the names the kept sources use and only a dropped `.m`
@@ -378,7 +394,33 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    performance-critical path (4 KiB pages match the device exactly).
 7. **`address_space.md` §8's experiment** if the 128 MiB cap turns out to matter: it needs a SPIR-V
    shader the tree cannot currently produce (`dmsh_xlate_bin` is Mach-O and `dotnet` is not
-   installed here), so first get one translated shader from a Mac build.
+   installed here), so first get one translated shader from a Mac build. Note: with the Android-only
+   decision (§2 *Platforms*) a Mac will not be a routine tool; either keep a Mac for this one step or
+   build the translator for Linux.
+8. **The app shell** (not started): `jni_android.c` (the CMake leaves `libdm.so` waiting for it), the
+   Activity, touch input, the Gradle project, the Android packing path (which must call
+   `patch_nso.py --target=android` and add the target to the rewriter fingerprint, item 4a), audio and
+   AVC backends (the stubs of item 4 give silence and black frames) and a graphics layer for the Vulkan
+   and OpenGL games (item 5). Writable without an NDK, not compilable here.
+9. **Validation that needs an NDK and the device**, in the order that removes the most risk: the NDK
+   configure and build (§5; expect compile errors in the host files, item 4), link (`--no-undefined`;
+   "`undef_scan` clean" is not a clean link), then on the S23: the probe v2 (item 6), `RLIMIT_NICE` for
+   the QoS lends, `TLS_SLOT_APP` free and zero (item 4a), the viewport features (item 2), xattrs on
+   `/sdcard` and app storage, SIGTERM in the app process, then a first frame.
+10. **LAST: remove the Apple code** (owner's order: only after everything above). Scope: `*.m`, `*.S`
+    that only Mach-O uses, `front_*.m`, `dm/gfx/nvn/nvn_mtl.m` (but see below), the iOS tree and IPA
+    packing (`scripts/build_ipa_from_nsp.py`, `dm/ios`), `scripts/regress.py` and its baselines, the
+    Apple branch of `port.h` and the Apple-only parts of `dm/tools` (rewriter default target becomes
+    Android), `docs/development.md`, `docs/frontends.md`, `docs/playing.md` (keep the
+    `README.md#how-to-play` anchor or fix the link), `dm/games/README.md` and the per-game notes'
+    Mac / iPhone wording, the gallery (`docs/images/gallery.tsv`, `dm/tools/docs_gallery.py`: drop the IPA
+    sizes or re-measure on Android), the README's XcodeGen acknowledgement, and `AGENTS.md` (rewrite its
+    rules for Android-only, drop the `seedds` commit rule and the `regress.py` rule; the owner approves
+    the text before it is saved). Before deleting `nvn_mtl.m`, retire or re-base the gates that read it
+    (`opcode_map.py`, `abi_gaps.py`, the `nvn_mtl.m` line citations in `android.md` and in the tests),
+    and check `dm/tools/tests/test_docs.py` (links, anchors, notes and table rows) afterwards. The
+    `android_audit` baseline is the checklist: it should shrink to 0 as this lands. The git history
+    (`8e050e9`) keeps everything removed.
 
 ## 9. How to work in this tree
 
