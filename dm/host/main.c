@@ -1,9 +1,9 @@
 // Bootstrap: after loading the modules, initialize the SDK runtime in the real order of nn::init::Start (sdk+0x2b0470) in the SDK, then enter nnMain.
 #include "dm.h"
 #include "front.h"
+#include "port.h"
 #include <stdatomic.h>
 #include <sys/resource.h>
-#include <sys/sysctl.h>
 #include <sys/time.h>
 #include <unistd.h>
 void probe_install(void); void hid_keys_init(void); void stubs_report(void); void crash_install(void); void guest_thread_init(void); uint32_t svc_thread_main_init(void);
@@ -45,14 +45,8 @@ static void flags_init(void) {
     g_flag.bootprof = !!getenv("DM_BOOTPROF");
 }
 
-// Zero point of the boot timeline = process creation time (p_starttime from sysctl KERN_PROC_PID, wall clock) converted to the now_ns monotonic time base; same definition on Mac / iOS
-static uint64_t proc_start_mono_ns(void) {
-    struct kinfo_proc kp; size_t n = sizeof kp; int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()};
-    uint64_t mono = now_ns(); struct timeval tv; gettimeofday(&tv, NULL);
-    if (sysctl(mib, 4, &kp, &n, NULL, 0) || !n) return mono;
-    int64_t age = (int64_t)(tv.tv_sec - kp.kp_proc.p_starttime.tv_sec) * 1000000000ll + (tv.tv_usec - kp.kp_proc.p_starttime.tv_usec) * 1000ll;
-    return age > 0 ? mono - (uint64_t)age : mono;
-}
+// Zero point of the boot timeline = process creation time converted to the now_ns monotonic time base (port.h dm_proc_start_ns: p_starttime from sysctl on Mac / iOS, /proc/self/stat on Linux); same definition everywhere
+static uint64_t proc_start_mono_ns(void) { return dm_proc_start_ns(); }
 
 // Host loading (independent of UIKit / Metal): read the NSO, relocate, forced take-over, probes / tick gate / keys, start prefetch. By default it runs synchronously in main;
 // the iOS front end can call dm_host_preload_start(same arguments) at the very start of the App's main() so that it runs first on a background thread, in parallel with the UIKit startup chain (⓪ + ① ≈ max(UIKit chain, host loading)).

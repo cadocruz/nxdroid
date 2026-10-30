@@ -22,7 +22,7 @@ static _Atomic int g_ubc_sleeping;
 static pthread_mutex_t g_ubc_mu = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_t g_ubc_cv = PTHREAD_COND_INITIALIZER;
 static int ubc_on(void) { static int v = -1; if (v < 0) { const char *e = getenv("DM_NVN_UB_COPY_THREAD"); v = !(e && !strcmp(e, "0")); } return v; }
 static void *ubc_thread(void *arg) {
-    (void)arg; pthread_setname_np("dm-ub-copy"); pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    (void)arg; pthread_setname_np("dm-ub-copy"); dm_qos_set_self(QOS_CLASS_USER_INTERACTIVE);
     for (uint64_t t = 0;;) {
         uint64_t h = atomic_load_explicit(&g_ubc_head, memory_order_acquire);
         if (t == h) {
@@ -175,7 +175,7 @@ static void rec_exec(const rec_t *r) {
 }
 static void *rec_thread(void *arg) {
     (void)arg; pthread_setname_np("dm-encode");
-    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    dm_qos_set_self(QOS_CLASS_USER_INTERACTIVE);
     for (;;) {
         pthread_mutex_lock(&g_rb_mu);
         while (!g_rb_head) { g_rb_sleeping = 1; pthread_cond_wait(&g_rb_work, &g_rb_mu); g_rb_sleeping = 0; }

@@ -40,6 +40,21 @@ int xbg_game_initialize(const xbg_game_config *config,char *error,size_t error_b
  * or VkPhysicalDeviceVulkan12Features.samplerMirrorClampToEdge enabled (1.2+).
  * Supported-but-not-enabled is false. Default false; existing config ABI intact. */
 int xbg_game_set_sampler_mirror_clamp_to_edge(VkBool32 enabled);
+/* Call after initialize and before nnMain, as above. shader_output_viewport_index is
+ * true only if the logical device was created with
+ * VkPhysicalDeviceVulkan12Features.shaderOutputViewportIndex and shaderOutputLayer (1.2+)
+ * or VK_EXT_shader_viewport_index_layer enabled; multiview only if
+ * VkPhysicalDeviceVulkan11Features.multiview / VK_KHR_multiview was. Supported-but-not-
+ * enabled is false. Default false: a vertex or tessellation shader that writes
+ * ViewportIndex is then refused at load. Returns 0, -1 (bad value or too late), -2 (the
+ * device lacks it). Existing config ABI intact. */
+int xbg_game_set_viewport_features(VkBool32 shader_output_viewport_index,VkBool32 multiview);
+/* NVN's window origin (nvnDeviceSetWindowOriginMode; the host's mtl_set_origin_lower_left /
+ * mtl_set_queue_origin_lower_left). lower_left: the picture is stored bottom-up, so every
+ * viewport is flipped about its centre and the host flips the window image at present.
+ * queue_lower_left: the raster flip captured when the NVN queue was created, which decides
+ * the front face. Any time between submissions; the replay reads them at each draw. */
+void xbg_game_set_window_origin(VkBool32 lower_left,VkBool32 queue_lower_left);
 /* CPU访问事件前解析覆盖该地址的延后SignalEvent。
  * Resolve deferred SignalEvents covering this address before CPU event access. */
 void xbg_game_event_read(const void *addr);

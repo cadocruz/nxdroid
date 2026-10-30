@@ -174,7 +174,7 @@ static void md_defer_body(void *arg) {
             continue;
         }
         if (!next) pthread_cond_wait(&g_dfcv, &g_dfmu);
-        else { uint64_t w = next - now; struct timespec ts = { (time_t)(w / 1000000000u), (long)(w % 1000000000u) }; pthread_cond_timedwait_relative_np(&g_dfcv, &g_dfmu, &ts); }
+        else dm_cond_timedwait_ns(&g_dfcv, &g_dfmu, next - now);
     }
 }
 // log the first 12 calls one by one, then every 2^k-th (DM_MOVIE_TRACE=1: every call, with the calling thread and the decoder: Unity drives a movie's audio and video decoders from one thread)
@@ -389,7 +389,7 @@ static void md_close(mdec_t *d) { if (d->vpx_on) { vpx_codec_destroy(&d->vpx); d
 void dm_host_helper_qos(qos_class_t q);   // hle_thread.c
 static void *md_worker(void *arg) {
     mdec_t *d = arg;
-    pthread_setname_np("dm movie decoder");
+    dm_thread_name("dm movie decoder");
     dm_host_helper_qos(QOS_CLASS_USER_INITIATED);   // under DM_QOS_MAP: decodes ahead of playback, not on the frame's critical path
     dm_host_mutex_lock(&d->wmu);
     for (;;) {

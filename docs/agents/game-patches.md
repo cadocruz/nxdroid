@@ -185,7 +185,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
   - gate 21 at `+0x32758e4`: GCreateMalloc: the allocator object is in x19, before it is used: the host puts its vtable in; orig mov x0, x19
   - host [hle_fpslock.c:41](../../dm/host/hle_fpslock.c#L41): engine frame limit set to fps_target: Unreal t.MaxFPS
   - host [hle_fpslock.c:42](../../dm/host/hle_fpslock.c#L42): engine frame limit set to fps_target: Unreal rhi.SyncInterval
-  - host [hle_uemalloc.c:36](../../dm/host/hle_uemalloc.c#L36): Unreal's allocator on a host malloc zone
+  - host [hle_uemalloc.c:35](../../dm/host/hle_uemalloc.c#L35): Unreal's allocator on a host malloc zone
 
 ### DRAGON QUEST XI S: Echoes of an Elusive Age – Definitive Edition
 
@@ -221,7 +221,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
   - cut `+0x137f0`: nninitStartup: bl 0xae770 (FMallocBinned3 constructor, 38 GB of address space) → nop; the host allocator is in the object already (hle_uemalloc.c)
   - host [hle_fpslock.c:45](../../dm/host/hle_fpslock.c#L45): engine frame limit set to fps_target: Unreal t.MaxFPS
   - host [hle_fpslock.c:46](../../dm/host/hle_fpslock.c#L46): engine frame limit set to fps_target: Unreal rhi.SyncInterval
-  - host [hle_uemalloc.c:47](../../dm/host/hle_uemalloc.c#L47): Unreal's allocator on a host malloc zone
+  - host [hle_uemalloc.c:46](../../dm/host/hle_uemalloc.c#L46): Unreal's allocator on a host malloc zone
 
 ### FINAL FANTASY RESONANCE (Asian release)
 
@@ -232,7 +232,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
 - **1.0.1 `main`** `b7f965b9…` ([patches.py:7](../../dm/games/0100B8A026F14000/patches.py#L7))
   - cut `+0x137f0`: nninitStartup: bl 0xae770 (FMallocBinned3 constructor, 38 GB of address space) → nop; the host allocator is in the object already (hle_uemalloc.c)
   - host [hle_fpslock.c:48](../../dm/host/hle_fpslock.c#L48): engine frame limit set to fps_target: Unreal rhi.SyncInterval
-  - host [hle_uemalloc.c:49](../../dm/host/hle_uemalloc.c#L49): Unreal's allocator on a host malloc zone
+  - host [hle_uemalloc.c:48](../../dm/host/hle_uemalloc.c#L48): Unreal's allocator on a host malloc zone
 
 ### FINAL FANTASY TACTICS - The Ivalice Chronicles
 
@@ -373,7 +373,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
   - cut `+0x12e40`: nninitStartup: bl 0x9f480 (FMallocBinned3 constructor, 37 GB of address space) → nop; the host allocator is in the object already (hle_uemalloc.c)
   - host [hle_fpslock.c:31](../../dm/host/hle_fpslock.c#L31): engine frame limit set to fps_target: Unreal t.MaxFPS
   - host [hle_fpslock.c:32](../../dm/host/hle_fpslock.c#L32): engine frame limit set to fps_target: Unreal rhi.SyncInterval
-  - host [hle_uemalloc.c:34](../../dm/host/hle_uemalloc.c#L34): Unreal's allocator on a host malloc zone
+  - host [hle_uemalloc.c:33](../../dm/host/hle_uemalloc.c#L33): Unreal's allocator on a host malloc zone
 
 ### OCTOPATH TRAVELER II
 
@@ -386,7 +386,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
   - gate 21 at `+0xbecc0c`: GCreateMalloc: the allocator object is in x19, before it is used: the host puts its vtable in; orig mov x0, x19
   - host [hle_fpslock.c:52](../../dm/host/hle_fpslock.c#L52): engine frame limit set to fps_target: Unreal t.MaxFPS
   - host [hle_fpslock.c:53](../../dm/host/hle_fpslock.c#L53): engine frame limit set to fps_target: Unreal rhi.SyncInterval
-  - host [hle_uemalloc.c:42](../../dm/host/hle_uemalloc.c#L42): Unreal's allocator on a host malloc zone
+  - host [hle_uemalloc.c:41](../../dm/host/hle_uemalloc.c#L41): Unreal's allocator on a host malloc zone
 
 ### Paper Mario: The Thousand-Year Door
 
@@ -409,7 +409,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
   - cut `+0x353f578`: nninitStartup: AllocateAddressRegion size orr x1,xzr,#0xf80000000 (62 GB) → mov x1,#0xfe000000 (4064 MB)
   - cut `+0x353f788`: GCreateMalloc: bl 0x35ba610 (FMallocBinned3 constructor) → nop; the host allocator's vtable is put in at the gate after it (hle_uemalloc.c)
   - gate 21 at `+0x353f78c`: GCreateMalloc: the allocator object is in x19, before it is used: the host puts its vtable in; orig ldp x29, x30, [sp, #0x10]
-  - host [hle_uemalloc.c:39](../../dm/host/hle_uemalloc.c#L39): Unreal's allocator on a host malloc zone
+  - host [hle_uemalloc.c:38](../../dm/host/hle_uemalloc.c#L38): Unreal's allocator on a host malloc zone
 
 ### Pokémon Brilliant Diamond
 
@@ -438,7 +438,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
   - gate 21 at `+0x1f2f644`: GCreateMalloc: x19 is the allocator object; install the host vtable before use; orig mov x0, x19
   - host [hle_fpslock.c:57](../../dm/host/hle_fpslock.c#L57): engine frame limit set to fps_target: Unreal Project.FrameRateLimit
   - host [hle_fpslock.c:58](../../dm/host/hle_fpslock.c#L58): engine frame limit set to fps_target: Unreal rhi.SyncInterval
-  - host [hle_uemalloc.c:45](../../dm/host/hle_uemalloc.c#L45): Unreal's allocator on a host malloc zone
+  - host [hle_uemalloc.c:44](../../dm/host/hle_uemalloc.c#L44): Unreal's allocator on a host malloc zone
 
 ### Super Smash Bros. Ultimate
 

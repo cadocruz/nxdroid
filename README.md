@@ -1,66 +1,49 @@
-# nxnative
+# nxdroid
 
-Play your own Nintendo Switch games natively on iPhone and iPad. Bring your game (its NSP files) and your `prod.keys`; one script turns them into an IPA that you sideload.
+nxdroid is an Android-only port of [nxnative](https://github.com/seedds/nxnative), which runs Nintendo Switch games natively: the game's own AArch64 code runs, rewritten only where the platform requires it, on a host that answers Horizon's SVCs and the SDK's services (`dm/host`). The Switch's graphics (NVN) are replayed on Vulkan. The target device is a Samsung Galaxy S23 Ultra (Adreno 740). It is not an emulator, and nothing from any game is in this repository. The project is not affiliated with Nintendo or any game publisher.
 
-It is not an emulator: the game's own code runs directly on the Apple chip, with Switch graphics rebuilt on Metal. Nothing from any game is in this repository, and the project is not affiliated with Nintendo or any game publisher.
+## Status
+
+**The Android port has not been built or run.** No NDK build has been done, and nothing has run on a device. No game is known to run on Android. What exists:
+
+- The host and the game profiles from nxnative, with the Apple-only calls moved behind `dm/host/port.h` and bionic implementations in `dm/android/port_android.c`. These were read and syntax-checked only; no arm64 compile of the host files has been done.
+- A vendored Vulkan replay engine and its adapter (`dm/gfx/vulkan`), imported from [d2r-mobile](https://github.com/jhaizhou-ops/d2r-mobile) at a pinned commit. Its Vulkan device requirements were measured on the S23 Ultra with a probe, and the engine was compiled and initialized out of tree on desktop machines. No game frame has been drawn with it.
+- A CMake build for the host (`dm/android/CMakeLists.txt`), configured only with a desktop toolchain.
+
+The state in detail, with the open items and what is unverified, is in [HANDOFF.md](HANDOFF.md) and [docs/reference/android.md](docs/reference/android.md).
+
+Android is the only target. The Mac and iOS builds are not kept: the Apple code (Metal, the iOS app, the Mac app, the IPA packing scripts) is still in the tree and is to be removed, so parts of the documentation still describe it.
+
+## How the Android build is structured
+
+The build is `dm/android/CMakeLists.txt`:
+
+- **One game per build.** `-DGAME=<title id>` picks the profile in `dm/games/<id>/`, as `GAME=` does for `make -C dm/host`. There is no default: without it the configure stops and lists the profiles. `DM_GAMES_DIR` points it at a profile outside the repository.
+- **Target.** `arm64-v8a` only, with `ANDROID_PLATFORM` 28 or later (the configure stops below it). The Android NDK is required; `dm/android/docker/` pins one build environment (NDK 29.0.14206865).
+- **Sources.** The host sources are read from `dm/host/Makefile`. The graphics layer is `dm/gfx/vulkan` in place of the Metal replay (`dm/gfx/nvn/nvn_mtl.m`), presented through `dm/android/vulkan_present.cpp`.
+- **Output.** The target is `dmhost`. The app shell (`jni_android.c`, the Java activity, touch input, Gradle) does not exist yet, so there is no APK.
+
+The configure and build commands are in [HANDOFF.md](HANDOFF.md#5-gates-and-the-exact-commands); they have not been run with an NDK.
 
 ## How to play
 
-### With a Mac app
+There are no Android instructions yet: packing a game for Android, installing it and its controls are pending until a build exists. The Mac and iOS instructions (the IPA packing script, sideloading) are not valid for this port and are not repeated here.
 
-Community projects build on nxnative with Mac apps that turn your games into apps for your iPhone, iPad or Mac, with no command line, and keep them in a library. They are separate projects: questions and bugs about them go to their own pages.
+## Open
 
-- [NX2Apple](https://github.com/LNPANDY/NX2Apple)
-- [NX Play](https://github.com/varyform/nx-native-wrapper)
-- [NxNative Launcher](https://github.com/rennan101/nxnative_Launcher)
-
-### Build from the command line
-
-You need a Mac with macOS 26.6 or later, [Xcode](https://apps.apple.com/app/xcode/id497799835) 27.1, [Homebrew](https://brew.sh) and Python 3.12 or newer (an arm64 one, not an Intel Homebrew's). An iPhone build also needs Xcode's iOS platform (Xcode → Settings → Components).
-
-**1. Install the tools** (only once), in Terminal:
-
-```
-xcodebuild -downloadComponent MetalToolchain
-git clone https://github.com/seedds/nxnative.git && cd nxnative
-brew install xcodegen zstd glslang
-brew install --cask dotnet-sdk
-python3 -m pip install lz4 capstone fonttools nsz "backports.zstd; python_version < '3.14'"
-```
-
-**2. Put your game in a folder**: the game, plus its update and DLC if you have them (`.nsp`, `.xci`, `.nsz` or `.xcz`):
-
-```
-~/Games/MarioWonder/
-  Super Mario Bros. Wonder [010015100B514000][v0].nsp
-  Super Mario Bros. Wonder [010015100B514800][v327680].nsp
-```
-
-**3. Build**, with your game folder and your `prod.keys`:
-
-```
-python3 scripts/build_ipa_from_nsp.py ~/Games/MarioWonder -k ~/keys/prod.keys
-```
-
-The IPA appears in the game's folder. The first build takes 30–60 minutes and needs free disk space of about twice the game's size plus 10 GB; building again is much faster.
-
-To play on the Mac instead, add `--platform mac-app`: you get a Mac app of the game to open from Finder. All options: [The packing script in detail](docs/development.md#the-packing-script-in-detail).
-
-### Install
-
-Install the IPA on your iPhone or iPad with a sideloading tool such as AltStore, Sideloadly or LiveContainer. If your tool offers **Increased Memory Limit**, turn it on: the bigger games need it.
-
-Game too big to install? Build again with `--romfs separate`, and run the command the script prints once to copy the game files to your phone ([Quick reinstalls](docs/development.md#quick-reinstalls)).
-
-Controls, saves and settings: [Playing](docs/playing.md).
+- The NDK configure and build, and the compile errors the host files are expected to give on bionic.
+- The app shell: the JNI entry, the activity, touch input, packaging.
+- Graphics for the Vulkan and OpenGL games: `dm/gfx/vk/hle_vk.m` and `dm/gfx/gl/hle_gl.m` are Metal code, so a game that renders through them has no graphics layer on Android yet.
+- Guest memory: the Adreno 740 has no `VK_EXT_external_memory_host`, so the replay mirrors guest memory. Whether an `AHardwareBuffer` route can avoid the copy is not measured.
+- Shaders: the Adreno 740 limits a storage-buffer binding to 128 MiB and has no 64-bit integers in shaders; [the address-space decision](dm/gfx/vk/address_space.md) is written and not tested on a device.
+- Audio and movie decoding: the Apple audio and video APIs are stubs that log a `[RED]` line, so a game is silent where it uses AAC and shows black frames for AVC movies; no Android backend is designed.
+- Several viewports in one draw, and the other items listed in [the Android reference](docs/reference/android.md).
 
 ## Games
 
-Games tested on Mac or iPhone. See the [per-game notes](dm/games/README.md#games) for tested platforms, progress and known issues:
+The profiles are the games nxnative supports; see the [per-game notes](dm/games/README.md#games) for each game's build, SDK, engine and graphics API. Those notes and the screenshots and sizes below come from the Mac and iPhone builds of nxnative. They say nothing about Android: none of these games has been run on Android.
 
-Needs iOS / iPadOS 26 or later on an iPhone 15 Pro or newer (A17 Pro chip or later) or an iPad with an M1 chip or later: the games' textures are BC-compressed, and older iPhones can't read that format. Other games aren't supported yet. For them the script writes a survey and still tries its best to pack an IPA, guessing the game's settings; such an IPA may not start.
-
-Under each game: the IPA's size, and "60 fps with 1.2.0" where the game runs at 60 fps (30 on the Switch) with that update.
+The size under each game is its IPA size on iOS; "60 fps with 1.2.0" marks a game that nxnative runs at 60 fps (30 on the Switch) with that update.
 
 <!-- gallery: written by dm/tools/docs_gallery.py from docs/images/gallery.tsv; change the table, then run it -->
 <table>
@@ -224,11 +207,13 @@ Under each game: the IPA's size, and "60 fps with 1.2.0" where the game runs at 
 
 ### For developers
 
-<sub>[How it works](docs/development.md) · [Game notes](dm/games/README.md#games) · [Bring-up and debugging](docs/agents/README.md) · [Front ends](docs/frontends.md) · [Contributing](CONTRIBUTING.md)</sub>
+<sub>[Android port state](HANDOFF.md) · [Android reference](docs/reference/android.md) · [How it works](docs/development.md) · [Game notes](dm/games/README.md#games) · [Bring-up and debugging](docs/agents/README.md) · [Front ends](docs/frontends.md) · [Contributing](CONTRIBUTING.md)</sub>
+
+Part of that documentation (`docs/development.md`, `docs/playing.md`, `docs/frontends.md`) describes the Mac and iOS builds.
 
 ### Acknowledgements
 
-<sub>nxnative started from **[d2r-mobile](https://github.com/jhaizhou-ops/d2r-mobile)** (MIT), which developed this native-execution approach for Diablo II: Resurrected: its NSO rewriter, Horizon host, NVN-on-Metal layer and iOS app shell. Fixes go both ways. It also builds on **Ryujinx** (MIT; its shader translator, in `dm/third_party/ryujinx` with [a few fixes](dm/third_party/ryujinx/README.md), and a reference for system services), **[Atmosphère](https://github.com/Atmosphere-NX/Atmosphere)** (Horizon's synchronization semantics), **yuzu** (Maxwell encodings, kernel cross-checks), **[LibHac](https://github.com/Thealexbarney/LibHac)** and **hactool** (reading NSPs), **[SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross)** and **[glslang](https://github.com/KhronosGroup/glslang)** (shaders to Metal), **deko3d** (zlib; texture layout sizes), **libvpx**, **stb_vorbis**, the **Vulkan headers** and **NVIDIA FLIP** ([licenses](dm/third_party/README.md)), and **Capstone**, **lz4**, **fontTools** and **XcodeGen** in the build.</sub>
+<sub>nxdroid is a port of **[nxnative](https://github.com/seedds/nxnative)**, which started from **[d2r-mobile](https://github.com/jhaizhou-ops/d2r-mobile)** (MIT), which developed this native-execution approach for Diablo II: Resurrected: its NSO rewriter, Horizon host, NVN-on-Metal layer and iOS app shell. The Vulkan replay engine and the bionic compatibility layer in this repository are vendored from d2r-mobile. [nx2apk](https://github.com/ghostyshell/nx2apk) is a reference for the same approach on Android. The project also builds on **Ryujinx** (MIT; its shader translator, in `dm/third_party/ryujinx` with [a few fixes](dm/third_party/ryujinx/README.md), and a reference for system services), **[Atmosphère](https://github.com/Atmosphere-NX/Atmosphere)** (Horizon's synchronization semantics), **yuzu** (Maxwell encodings, kernel cross-checks), **[LibHac](https://github.com/Thealexbarney/LibHac)** and **hactool** (reading NSPs), **[SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross)** and **[glslang](https://github.com/KhronosGroup/glslang)** (shaders), **deko3d** (zlib; texture layout sizes), **libvpx**, **stb_vorbis**, the **Vulkan headers** and **NVIDIA FLIP** ([licenses](dm/third_party/README.md)), and **Capstone**, **lz4**, **fontTools** and **XcodeGen** in the build.</sub>
 
 ### License
 

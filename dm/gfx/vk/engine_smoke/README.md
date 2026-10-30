@@ -129,9 +129,10 @@ Shader bundles are needed lazily, at the first program bind, not at initializati
   `mtl_tex_cpu_written`, `mtl_tex_gpu_owned`, `mtl_tex_init`). An earlier count of 13 took
   `nvn_mtl.h`'s list plus `mtl_present_wait`, which the adapter does define (`nvn_vk.c:83`), and
   missed the fifteen.
-- `dm/gfx/vulkan/nvn_vk.c` also defines 12 `mtl_*` functions neither header declares (`abi_gaps.txt`,
-  "extra"), two of them D2R-specific (`mtl_ui_ghost`, `mtl_ui_ghost_rect`). Inert for linking, but
-  they mean the two sides were written against different headers.
+- `dm/gfx/vulkan/nvn_vk.c` also defines `mtl_*` functions neither header declares (`abi_gaps.txt`,
+  "extra": 12 at the import, two of them D2R-specific (`mtl_ui_ghost`, `mtl_ui_ghost_rect`); 29 now
+  that the adapter answers `hle_nvn.c`'s statistics calls). Inert for linking, but the first twelve
+  mean the two sides were written against different headers.
 - **One signature differs in its types**: `int mtl_link_wait_tick(int vsyncs, uint64_t timeout_ns)`
   here, `int mtl_link_wait_tick(uint64_t timeout)` in the adapter — the caller's `vsyncs` argument
   would land in `timeout`.
@@ -147,14 +148,14 @@ quoted below are all read, not remembered):
 - `opcode_map.txt` — one row per op: value, the writer call that emits it (`not emitted` when no
   game reaches it), the `case` in `xbg_game.cpp`'s `execute()` (`missing` when it falls into
   `default:`), the `nvn_mtl.m` case and section banner that implements it on Metal, a payload id,
-  and what the handler must do. Today: **51 ops, 39 handled, 12 missing, 2 payload-mismatched**,
+  and what the handler must do. Today: **51 ops, 51 handled, 0 missing, 1 payload-mismatched**,
   plus **11 fork-only rows** in a second block.
-- `payload_mismatch.txt` — the two ops both sides implement but read differently, `P6` (a record
-  with `first != 0` or `n > 1`, refused on purpose until the pipeline takes a viewport array) and
-  `P8` (barrier cache bits, benign), each with the writer line, the reader line, which side is right
-  (the writer: `hle_nvn.c` is what 93 profiles record through and what games size with
-  `GetCommandMemoryUsed`), the fix and what breaks. The six that were fixed here are recorded in
-  `opcode_map.txt`'s note column instead, with the reason.
+- `payload_mismatch.txt` — the one op both sides implement but read differently, `P8` (barrier
+  cache bits, benign), with the writer line, the reader line, which side is right (the writer:
+  `hle_nvn.c` is what 93 profiles record through and what games size with
+  `GetCommandMemoryUsed`), the fix and what breaks. The seven that were fixed (`P1`–`P5`, `P7`,
+  and `P6`, the viewport array) are recorded in `opcode_map.txt`'s note column instead, with the
+  reason.
 
 What the counts say, in the order it will hurt:
 
@@ -175,10 +176,12 @@ What the counts say, in the order it will hurt:
    copying). The compact draw lengths are pinned in `nvn_obj.h`
    (`DM_REC_DRAW_COMPACT` / `DM_REC_DRAW_IDX_COMPACT` and the assertions next to `draw_rec`), so
    moving a field inside `p_draw` fails the build instead of a game's first draw.
-3. **Two remain.** `P6`: a record with `first != 0` or `n > 1` is a loud fatal, because the pipeline
-   declares one viewport and the load optimization takes one; the record's `n` and `first` are read
-   and checked, and the state is already `viewport[16]`. `P8` is benign: the reader's one full
-   barrier is stronger than the bits ask for.
+3. **One remains.** `P8` is benign: the reader's one full barrier is stronger than the bits ask
+   for. `P6` is handled in the draw: the handler writes `viewport[first..first+n)`, and a draw
+   declares and sets the recorded array when its vertex / tessellation-evaluation / geometry shader
+   writes `ViewportIndex` (one viewport otherwise); the path is not reachable end to end until the
+   front end enables `shaderOutputViewportIndex` and the writer records per-viewport scissors, and
+   a viewport mask is refused (the multiview fan-out is open; see `docs/reference/android.md`).
 4. **Eleven fork-only rows** in the second block of `opcode_map.txt`: the engine's nine extension
    ops and its `OP_COPY_IMAGE_STRIDE` / `OP_COUNT_`. They are named `OP_XBG_*` in `nvn_obj.h` after
    our `OP_COUNT_` (52..62, this sprint), each row saying what the fork recorded it for and what

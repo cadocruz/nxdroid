@@ -2,7 +2,7 @@
 // (The former 136 HLE entries for nn::os/mem/lmem/C++ ABI have been deleted: the SDK brings its own nn::os, and at load time not one of these entries was resolved and used.)
 #include <pthread.h>
 #include "hle.h"
-#include <mach/mach_time.h>
+#include "port.h"
 #include <stdatomic.h>
 
 // ---------- Side table ----------
@@ -36,11 +36,7 @@ void *objmap_del(const void *k) {
     pthread_mutex_unlock(&g_om_lock);
     return r;
 }
-uint64_t now_ns(void) {
-    static mach_timebase_info_data_t tb;
-    if (!tb.denom) mach_timebase_info(&tb);
-    return mach_absolute_time() * tb.numer / tb.denom;
-}
+uint64_t now_ns(void) { return dm_clock_ns(); }   // the platform's monotonic clock that stops while the device sleeps (port.h)
 // Guest clock: the system counters the guest can read (mrs cntpct gate, svc GetSystemTick) all go through here. Default = now_ns().
 // Freeze (only for the test driver DM_TICK_HOLD): while frozen the guest clock does not advance ⇒ the game's next tick never comes due; after unfreezing the frozen duration is subtracted, the guest clock is continuous with no jump
 // DM_DETCLOCK=<step ns> (for replay / test runs; product runs do not set it = wall clock): from the first present on the guest clock becomes "advance a fixed step per present", not following the wall clock --

@@ -40,6 +40,11 @@ void mtl_queue_activate(uint64_t serial);              // submit lock held: rest
 void mtl_queue_forget(uint64_t serial);                // finalize: discard its state, including guest object pointers
 void mtl_sub_copy(uint64_t src, uint64_t dst, uint64_t n);               // Buffer copy in GPU ordering
 void mtl_sub_event(volatile uint32_t *val, uint32_t mode, uint32_t v);   // Write the event value after completion (0 write / 1 add)
+// Before the CPU reads, writes or hands back an event's storage (nvnEventGetValue / Signal / Initialize / Finalize, hle_nvn.c): a replay that holds GPU event writes back
+// past their completion publishes the ones aimed at val first. The Vulkan engine defers them until a slot retires (xbg_game_event_read), so without this a guest polling
+// the value with no further submit reads a stale one, and a CPU Signal is later overwritten by the older GPU write. The Metal replay writes at completion: hle_nvn.c's weak
+// default does nothing there
+void mtl_event_read(const volatile uint32_t *val);
 void mtl_sub_counter(uint64_t addr, uint32_t type);                       // Write the counter record after completion
 uint64_t mtl_sub_commit(void);
 

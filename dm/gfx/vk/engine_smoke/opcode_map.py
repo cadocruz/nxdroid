@@ -48,18 +48,18 @@ NOTES = {
     "OP_BEGIN": "OK and never emitted: BeginRecording writes no record (an empty recording is only its END).",
     "OP_CALL": "OK: recurses into the handle with depth+1; our CopyCommands records it.",
     "OP_SIGNAL_EVENT": "OK: writes the guest event, deferred behind its submission when defer_events is on.",
-    "OP_REPORT_COUNTER": "OK: timestamp and samples-passed queries with their writeback.",
+    "OP_REPORT_COUNTER": "OK: timestamp (bottom of pipe), TIMESTAMP_TOP (top of pipe) and samples-passed queries with their writeback; a pipeline statistic is written as counter 0 with one [RED], as nvn_mtl.m writes it.",
     "OP_COPY_B2B": "OK: guest buffer copy (GPU or CPU), 3 x uint64 payload.",
     "OP_UPDATE_UB": "OK: writes n bytes of the payload into the uniform buffer at the recorded address.",
     "OP_SET_RT": "OK: keeps the record (colour/depth view and has_* are read by create_pass).",
     "OP_CLEAR_COLOR": "OK: index/mask/rgba, load action or full-pass triangle.",
     "OP_CLEAR_DS": "OK: depth/stencil with the caller's write masks.",
-    "OP_VIEWPORTS": "MUST loop over n viewports from first (the handler asserts first==0 && n==1; we record up to 16).",
-    "OP_SCISSOR": "OK: one rectangle.",
-    "OP_DEPTH_RANGE": "OK: minDepth / maxDepth of the single viewport.",
+    "OP_VIEWPORTS": "FIXED in the draw (was P6): writes viewport[first..first+n) of the 16 and keeps viewport_n (highest index set + 1); a draw declares and sets that many viewports and scissors when the vertex / tessellation-evaluation / geometry shader writes ViewportIndex (draw_viewports; multiViewport and the enabled shaderOutputViewportIndex checked, validate_capabilities accepts 57 / 70 / 5254), one otherwise; a viewport mask (5255) is refused with [RED]. The front end enables shaderOutputViewportIndex and calls xbg_game_set_viewport_features (done, not measured on the device); the writer still records SetScissors / SetDepthRanges index 0 only, so a draw selecting viewport 1.. takes viewport 0's scissor and depth range (docs/reference/android.md).",
+    "OP_SCISSOR": "OK: one rectangle, set for every viewport the draw declares (the writer records SetScissors index 0 only).",
+    "OP_DEPTH_RANGE": "OK: minDepth / maxDepth of every viewport (the writer records SetDepthRanges index 0 only).",
     "OP_BIND_PROGRAM": "OK structurally (prog_t serial + sd[6]); resolving the stages is the shader sprint's job.",
     "OP_BIND_STATE": "OK: kind selects the state object to copy out of bytes[0x18].",
-    "OP_BIND_VATTR": "MUST accept first>0 (the handler asserts first==0) and 16 entries.",
+    "OP_BIND_VATTR": "OK: NVN's BindVertexAttribState(n, states) has no first, so the writer records first = 0 and n <= 16 (hle_nvn.c), which is what the handler requires; the n states replace the table (the Metal replay does the same).",
     "OP_BIND_VSTREAM": "OK: variable-length record, first + n streams.",
     "OP_BIND_VBUF": "OK: variable-length record of NVNbufferRange.",
     "OP_BIND_UBO": "OK: stage/index/address/size.",
@@ -80,11 +80,11 @@ NOTES = {
     "OP_COPY_T2B": "OK: reads the record's own texture snapshot; src holds the destination buffer.",
     "OP_BIND_IMG": "OK: image slots 0..15 (uint64_t img[6][16]).",
     "OP_COPY_T2T": "FIXED (was P7): branches on DM_COPY_RESOLVE, so a Downsample goes to resolve_texture() instead of a vkCmdCopyImage that cannot read a multisampled source.",
-    "OP_RESET_COUNTER": "OK: samples-passed reset, closes the open query run.",
+    "OP_RESET_COUNTER": "OK: samples-passed reset, closes the open query run; other types ignored (a statistic with one [RED]), as nvn_mtl.m does.",
     "OP_CLEAR_TEX": "OK: record's own snapshot, region, mask, float/uint constant.",
     "OP_CLEAR_BUF": "OK: fill the guest buffer at addr/size with value (Metal: mtl_sub_fill, in submission order).",
     "OP_DEPTH_CLAMP": "OK: a depth clamp toggle; wired to rs.depthClampEnable in the pipeline.",
-    "OP_RENDER_COND": "OK: skip following draws/clears while the two counters at addr / addr+16 compare (mode 0/1), or unconditionally (2/3).",
+    "OP_RENDER_COND": "OK: skip following draws/clears while the two counters at addr / addr+16 compare (mode 0/1), or unconditionally (2/3); a field under a pending timestamp report at that exact address is 0, under any other pending report or writeback unknown (drawn), as nvn_mtl.m rc_value (docs/reference/android.md).",
     "OP_FENCE_SYNC": "OK: fence the sync object with the submission that reaches this command (nvn_mtl.m sets fence/fenced at replay).",
     "OP_TF_BIND": "OK: transform-feedback buffer index 0..3 recorded to state.tf.",
     "OP_TF_STATE": "OK: begin/end/pause/resume of transform feedback recorded to state.tf_on.",
@@ -99,7 +99,6 @@ NOTES = {
 # Ops whose reader does not match the writer. The id is the heading of its account in payload_mismatch.txt;
 # "writer" is right by construction (it is what the games run through).
 PAYLOAD = {
-    "OP_VIEWPORTS": "P6",
     "OP_BARRIER": "P8",
 }
 
@@ -361,9 +360,9 @@ def table():
         print("opcode_map: up to date (%d ops: %d handled, %d missing, %d payload-mismatched; %d fork-only)"
               % (len(ours), len(ours) - len(missing), len(missing), len(mismatched), len(fork)))
         return 0
-    OUTPUT.write_text(text, encoding="utf-8")
+    OUTPUT.write_text(text, encoding="utf-8", newline="\n")   # LF on every platform; the file in git is LF
     print("opcode_map: %d ops (%d handled, %d missing, %d payload-mismatched), %d fork-only -> %s"
-          % (len(ours), len(ours) - len(missing), len(missing), len(mismatched), len(fork), OUTPUT.relative_to(ROOT)))
+          % (len(ours), len(ours) - len(missing), len(missing), len(mismatched), len(fork), OUTPUT.relative_to(ROOT).as_posix()))
     return 0
 
 

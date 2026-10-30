@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <time.h>
 extern "C" double dm_present_period(void);
+extern "C" int dm_vk_present_flip(void);   // nvn_vk.c: NVN's lower-left window origin, the game image is stored bottom-up and the blit flips it
 // 错过上屏节拍的帧数（晚于「上次期望时刻 + 周期」2 ms 以上）；自适应出图档按它降档 / 试升
 // Frames that missed their display slot (more than 2 ms later than "previous desired time + period"); the adaptive present tier steps down / probes up by it
 static std::atomic<uint64_t> dm_present_late{0};
@@ -261,6 +262,7 @@ int present(void*,void*,VkImage source,VkFormat source_format,uint32_t width,uin
         VkClearColorValue black{};vkCmdClearColorImage(cmd,images[index],VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,&black,1,&barrier.subresourceRange);
         barrier.oldLayout=barrier.newLayout;barrier.srcAccessMask=barrier.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;vkCmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,nullptr,0,nullptr,1,&barrier);}
     VkImageBlit blit{};blit.srcSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};blit.dstSubresource=blit.srcSubresource;blit.srcOffsets[0]={x,y,0};blit.srcOffsets[1]={x+w,y+h,1};blit.dstOffsets[0]={dx,dy,0};blit.dstOffsets[1]={dx+dw,dy+dh,1};
+    if(dm_vk_present_flip())std::swap(blit.srcOffsets[0].y,blit.srcOffsets[1].y);   // lower-left window origin: the image is stored bottom-up (xbg_game.cpp origin_ll), as nvn_mtl.m flips its present
     // 最近邻不要求额外线性过滤能力。鸿蒙：游戏出图比屏幕小、要放大，格式支持时用线性，不然像素发硬、斜边锯齿。
     // Nearest needs no extra linear-filter support. HarmonyOS: the game image is smaller than the screen and gets upscaled; use linear when the format supports it, otherwise pixels look blocky and diagonals jagged.
     VkFilter filter=VK_FILTER_NEAREST;
@@ -312,7 +314,12 @@ extern "C" int dm_android_vk_initialize(const char *path,char *error,size_t byte
     frame_rate_vote=120;
     {std::string dir=path;size_t cut=dir.find_last_of('/');if(FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-frame-rate").c_str(),"rb")){float v=0;frame_rate_vote=fscanf(m,"%f",&v)==1 && v>=0 && v<=240?v:0;fclose(m);}}
 
-    VkApplicationInfo ai{VK_STRUCTURE_TYPE_APPLICATION_INFO};ai.pApplicationName="dm-android";ai.apiVersion=VK_API_VERSION_1_1;
+    // The instance asks for 1.2 when the loader has it (Android 10+), so that the device can be created with VkPhysicalDeviceVulkan12Features
+    // (shaderOutputViewportIndex / shaderOutputLayer for the multi-viewport draw, xbg_game.cpp draw_viewports); an older loader stays at 1.1
+    // and the same feature comes from VK_EXT_shader_viewport_index_layer when the device lists it.
+    uint32_t loader_api=VK_API_VERSION_1_0;if(vkEnumerateInstanceVersion(&loader_api)!=VK_SUCCESS)loader_api=VK_API_VERSION_1_0;
+    const uint32_t instance_api=loader_api>=VK_API_VERSION_1_2?VK_API_VERSION_1_2:VK_API_VERSION_1_1;
+    VkApplicationInfo ai{VK_STRUCTURE_TYPE_APPLICATION_INFO};ai.pApplicationName="dm-android";ai.apiVersion=instance_api;
     const char *ext[]={VK_KHR_SURFACE_EXTENSION_NAME,VK_KHR_ANDROID_SURFACE_EXTENSION_NAME};VkInstanceCreateInfo ic{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};ic.pApplicationInfo=&ai;ic.enabledExtensionCount=2;ic.ppEnabledExtensionNames=ext;VkResult r=vkCreateInstance(&ic,nullptr,&instance);if(r)return fail("vkCreateInstance",r);
     uint32_t n=0;vkEnumeratePhysicalDevices(instance,&n,nullptr);std::vector<VkPhysicalDevice> devices(n);vkEnumeratePhysicalDevices(instance,&n,devices.data());if(!n)return fail("No Vulkan device",VK_ERROR_INITIALIZATION_FAILED);
     physical=devices[0];
@@ -321,8 +328,12 @@ extern "C" int dm_android_vk_initialize(const char *path,char *error,size_t byte
     for(;;){wait_window();r=VkResult(create_surface());if(r==VK_NOT_READY)continue;if(r==VK_ERROR_SURFACE_LOST_KHR){uint64_t bad=active_generation;destroy_swap();wait_window_change(bad);continue;}if(r)return fail("Android surface",r);break;}
     vkGetPhysicalDeviceQueueFamilyProperties(physical,&n,nullptr);std::vector<VkQueueFamilyProperties> q(n);vkGetPhysicalDeviceQueueFamilyProperties(physical,&n,q.data());bool found=false;
     for(uint32_t i=0;i<n;i++){VkBool32 p=0;vkGetPhysicalDeviceSurfaceSupportKHR(physical,i,surface,&p);if(p&&(q[i].queueFlags&(VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT))==(VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)){family=i;found=true;break;}}if(!found)return fail("No graphics/compute/present family",VK_ERROR_FEATURE_NOT_PRESENT);
-    VkPhysicalDeviceShaderDrawParametersFeatures draw{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES};VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};features.pNext=&draw;vkGetPhysicalDeviceFeatures2(physical,&features);
-    vkEnumerateDeviceExtensionProperties(physical,nullptr,&n,nullptr);std::vector<VkExtensionProperties> available(n);vkEnumerateDeviceExtensionProperties(physical,nullptr,&n,available.data());bool mirror=false;for(auto e:available)if(std::string(e.extensionName)==VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME)mirror=true;
+    // What the device supports, asked before the device is created: the core features, shaderDrawParameters, multiview (1.1) and, on a 1.2 device
+    // under a 1.2 instance, the 1.2 features the multi-viewport draw needs. Only a feature the device has is chained into vkCreateDevice.
+    VkPhysicalDeviceProperties props{};vkGetPhysicalDeviceProperties(physical,&props);const bool api12=instance_api>=VK_API_VERSION_1_2 && props.apiVersion>=VK_API_VERSION_1_2;
+    VkPhysicalDeviceShaderDrawParametersFeatures draw{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES};VkPhysicalDeviceMultiviewFeatures multiview_have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES};VkPhysicalDeviceVulkan12Features v12_have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};features.pNext=&draw;draw.pNext=&multiview_have;if(api12)multiview_have.pNext=&v12_have;vkGetPhysicalDeviceFeatures2(physical,&features);draw.pNext=nullptr;
+    vkEnumerateDeviceExtensionProperties(physical,nullptr,&n,nullptr);std::vector<VkExtensionProperties> available(n);vkEnumerateDeviceExtensionProperties(physical,nullptr,&n,available.data());bool mirror=false,viewport_index_ext=false;for(auto e:available){if(std::string(e.extensionName)==VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME)mirror=true;if(std::string(e.extensionName)==VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME)viewport_index_ext=true;}
     {std::string all;for(auto &e:available){all+=e.extensionName;all+=' ';}   // 诊断：设备扩展全表（每次启动一行）| Diagnostics: the full device extension list (one line per launch)
      for(size_t at=0;at<all.size();at+=900)vlog("Device extensions [%zu]: %s",at/900,all.substr(at,900).c_str());
      VkPhysicalDeviceExternalMemoryHostPropertiesEXT host{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT};VkPhysicalDeviceProperties2 pr{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};pr.pNext=&host;vkGetPhysicalDeviceProperties2(physical,&pr);
@@ -331,6 +342,19 @@ extern "C" int dm_android_vk_initialize(const char *path,char *error,size_t byte
     // Diagnostic (marker gfx-pipe-stats): the driver's per-pipeline statistics (VK_KHR_pipeline_executable_properties).
     VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR pef{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR};
     if(FILE *ps=[&]{std::string dir=path;size_t cut=dir.find_last_of('/');return fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-pipe-stats").c_str(),"rb");}()){fclose(ps);dext.push_back(VK_KHR_PIPELINE_EXECUTABLE_PROPERTIES_EXTENSION_NAME);pef.pipelineExecutableInfo=VK_TRUE;pef.pNext=draw.pNext;draw.pNext=&pef;}
+    // Multi-viewport (xbg_game.cpp draw_viewports, OP_VIEWPORTS with n > 1): multiViewport rides in the core features above; a vertex or tessellation
+    // stage writing ViewportIndex needs shaderOutputViewportIndex + shaderOutputLayer (1.2) or VK_EXT_shader_viewport_index_layer, multiview is kept
+    // for the viewport-mask fan-out. Chained only when the device has them; what was enabled is reported to the engine through dm_vk_config
+    // (xbg_game_set_viewport_features), since the engine cannot see vkCreateDevice's pNext.
+    VkPhysicalDeviceVulkan12Features v12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};VkPhysicalDeviceMultiviewFeatures multiview{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES};
+    bool viewport_index_on=false,multiview_on=false;
+    // With VkPhysicalDeviceVulkan12Features in the chain, every 1.2-promoted feature is enabled through it: VK_KHR_sampler_mirror_clamp_to_edge in
+    // ppEnabledExtensionNames then requires samplerMirrorClampToEdge = VK_TRUE here (VUID-VkDeviceCreateInfo-ppEnabledExtensionNames-02832, quoted
+    // from memory: no registry copy in the tree to check it against), so the mirror clamp the front end asks for is also stated in this struct.
+    if(api12 && v12_have.shaderOutputViewportIndex && v12_have.shaderOutputLayer){v12.shaderOutputViewportIndex=v12.shaderOutputLayer=VK_TRUE;v12.samplerMirrorClampToEdge=mirror && v12_have.samplerMirrorClampToEdge;v12.pNext=draw.pNext;draw.pNext=&v12;viewport_index_on=true;}
+    else if(viewport_index_ext){dext.push_back(VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME);viewport_index_on=true;}
+    if(multiview_have.multiview){multiview.multiview=VK_TRUE;multiview.pNext=draw.pNext;draw.pNext=&multiview;multiview_on=true;}
+    vlog("Vulkan instance %u.%u device %u.%u: shaderOutputViewportIndex=%d (%s) multiview=%d multiViewport=%u",VK_VERSION_MAJOR(instance_api),VK_VERSION_MINOR(instance_api),VK_VERSION_MAJOR(props.apiVersion),VK_VERSION_MINOR(props.apiVersion),int(viewport_index_on),api12 && v12.shaderOutputViewportIndex?"Vulkan12Features":viewport_index_ext?"VK_EXT_shader_viewport_index_layer":"not supported",int(multiview_on),unsigned(features.features.multiViewport));
     float priority=1;VkDeviceQueueCreateInfo qc{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};qc.queueFamilyIndex=family;qc.queueCount=1;qc.pQueuePriorities=&priority;VkDeviceCreateInfo dc{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};dc.pNext=&draw;dc.pEnabledFeatures=&features.features;dc.queueCreateInfoCount=1;dc.pQueueCreateInfos=&qc;dc.enabledExtensionCount=uint32_t(dext.size());dc.ppEnabledExtensionNames=dext.data();if((r=vkCreateDevice(physical,&dc,nullptr,&device)))return fail("vkCreateDevice",r);vkGetDeviceQueue(device,family,0,&queue);
     for(;;){
         wait_window();
@@ -358,6 +382,6 @@ extern "C" int dm_android_vk_initialize(const char *path,char *error,size_t byte
     if(overlap){if((r=vkCreateCommandPool(device,&cp,nullptr,&overlap_pool)))return fail("Present command pool",r);ca.commandPool=overlap_pool;if((r=vkAllocateCommandBuffers(device,&ca,&overlap_command)))return fail("Present command",r);
         if((r=vkCreateSemaphore(device,&sc,nullptr,&overlap_acquired)))return fail("Acquire semaphore",r);if((r=vkCreateFence(device,&fc,nullptr,&overlap_fence)))return fail("Present fence",r);}
     vlog("Present overlap=%d (marker gfx-present-overlap)",int(overlap));
-    shader_path=path;dm_vk_config config{};config.size=sizeof(config);config.game.size=sizeof(config.game);config.game.physical=physical;config.game.device=device;config.game.queue=queue;config.game.queue_family=family;config.game.enabled_core=features.features;config.game.enabled_shader_draw_parameters=draw.shaderDrawParameters;config.game.fence_timeout_ns=10000000000ull;config.game.shader_directory=shader_path.c_str();config.game.present=present;config.game.log=log_message;config.game.fatal=fatal;config.sampler_mirror_clamp_to_edge=mirror;config.has_window=has_window;config.display_hz=0; // Query actual display refresh in frontend; do not guess 60 Hz.
+    shader_path=path;dm_vk_config config{};config.size=sizeof(config);config.game.size=sizeof(config.game);config.game.physical=physical;config.game.device=device;config.game.queue=queue;config.game.queue_family=family;config.game.enabled_core=features.features;config.game.enabled_shader_draw_parameters=draw.shaderDrawParameters;config.game.fence_timeout_ns=10000000000ull;config.game.shader_directory=shader_path.c_str();config.game.present=present;config.game.log=log_message;config.game.fatal=fatal;config.sampler_mirror_clamp_to_edge=mirror;config.shader_output_viewport_index=viewport_index_on;config.multiview=multiview_on;config.has_window=has_window;config.display_hz=0; // Query actual display refresh in frontend; do not guess 60 Hz.
     int status=dm_vk_initialize(&config,error,bytes);if(!status)ready=true;else cleanup_initialization();return status;
 }

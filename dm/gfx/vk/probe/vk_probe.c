@@ -118,6 +118,13 @@ struct feature_set {
     int texture_compression_astc_ldr;
     int texture_compression_etc2;
     int sampler_mirror_clamp_to_edge;
+    // The replay's multi-viewport path (xbg_game.cpp draw_viewports): a pipeline with several viewports
+    // (multiViewport), ViewportIndex written from a vertex or tessellation stage (shaderOutputViewportIndex,
+    // core 1.2, else VK_EXT_shader_viewport_index_layer) and multiview for the viewport-mask fan-out.
+    int multi_viewport;
+    int multiview;
+    int shader_output_viewport_index;
+    int shader_output_layer;
 };
 
 // A [RED] line and exit 2: the probe cannot answer its questions.
@@ -550,6 +557,12 @@ static struct feature_set query_features(const struct api *api, VkPhysicalDevice
     out.texture_compression_bc = (int)features2.features.textureCompressionBC;
     out.texture_compression_astc_ldr = (int)features2.features.textureCompressionASTC_LDR;
     out.texture_compression_etc2 = (int)features2.features.textureCompressionETC2;
+    out.multi_viewport = (int)features2.features.multiViewport;
+    out.multiview = (int)v11.multiview;
+    out.shader_output_viewport_index = version >= VK_API_VERSION_1_2
+        ? (int)v12.shaderOutputViewportIndex : has_ext(exts, ext_count, "VK_EXT_shader_viewport_index_layer");
+    out.shader_output_layer = version >= VK_API_VERSION_1_2
+        ? (int)v12.shaderOutputLayer : has_ext(exts, ext_count, "VK_EXT_shader_viewport_index_layer");
 
     return out;
 }
@@ -615,6 +628,10 @@ static void print_features_block(const struct feature_set *f, const VkExtensionP
     printf("textureCompressionASTC_LDR = %s\n", bool_word(f->texture_compression_astc_ldr));
     printf("textureCompressionETC2 = %s\n", bool_word(f->texture_compression_etc2));
     printf("samplerMirrorClampToEdge = %s\n", bool_word(f->sampler_mirror_clamp_to_edge));
+    printf("multiViewport = %s\n", bool_word(f->multi_viewport));
+    printf("multiview = %s\n", bool_word(f->multiview));
+    printf("shaderOutputViewportIndex = %s\n", bool_word(f->shader_output_viewport_index));
+    printf("shaderOutputLayer = %s\n", bool_word(f->shader_output_layer));
 
     // Extension presence, asked for by the capability's Vulkan name: the literal extension name and
     // its specVersion are in # extensions, so the two questions stay separate.
@@ -662,6 +679,7 @@ static void print_limits(const struct caps *caps)
     printf("maxImageArrayLayers = %u\n", (unsigned)l->maxImageArrayLayers);
     printf("maxViewportDimensions.0 = %u\n", (unsigned)l->maxViewportDimensions[0]);
     printf("maxViewportDimensions.1 = %u\n", (unsigned)l->maxViewportDimensions[1]);
+    printf("maxViewports = %u\n", (unsigned)l->maxViewports);
     printf("maxComputeWorkGroupInvocations = %u\n", (unsigned)l->maxComputeWorkGroupInvocations);
     printf("maxComputeWorkGroupSize.0 = %u\n", (unsigned)l->maxComputeWorkGroupSize[0]);
     printf("maxComputeWorkGroupSize.1 = %u\n", (unsigned)l->maxComputeWorkGroupSize[1]);

@@ -16,7 +16,13 @@ struct XbgRasterFacts {
     uint32_t outputs=0;
     // Fragment: an Output variable is BuiltIn SampleMask.
     bool sample_mask=false;
+    // Vertex, tessellation evaluation or geometry: the shader writes BuiltIn ViewportIndex (it selects among the viewports
+    // SetViewports recorded), or BuiltIn ViewportMaskNV (VK_NV_viewport_array2: it fans one primitive out to several). The
+    // draw declares the recorded viewport array only for such a shader (xbg_game.cpp draw_viewports).
+    bool viewport_index=false;
+    bool viewport_mask=false;
 };
 
-// stage: 0 vertex, 4 fragment (the XGS stage numbers); other stages return the defaults.
+// stage: 0 vertex, 4 fragment (the XGS stage numbers) for the position and output facts; 0, 2 (tessellation evaluation) and
+// 3 (geometry) for the viewport facts; other stages return the defaults.
 XbgRasterFacts xbg_spirv_raster_facts(const uint32_t *words, size_t count, uint32_t stage);

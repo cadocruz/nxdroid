@@ -53,6 +53,7 @@ typedef struct {
     uint64_t image_size, file_image_len, patch_len;   // only with the patch area before the base: whole image (with bss and key page), length of the image part of the file, patch area length
     char build_id[33];         // First 16 bytes of the NSO build ID (hex); empty for older build outputs
     unsigned key_idx[4];       // key page index of each thread slot (K18, KTLS, KTLR, KGATE)
+    uint64_t kslot_tp_off;     // fixups KSLOT_TP_OFF: 0 = Darwin's TSD at tpidrro_el0 (patch_nso.py --target=apple), else the tpidr_el0 offset of the slot table (port.h DM_KSLOT_TP_OFF)
     const Elf64_Dyn *dyn;
     const Elf64_Sym *symtab;
     const char *strtab;
@@ -73,7 +74,9 @@ extern module_t *g_mod;         // allocated once from the NSO list and NRO mani
 extern int g_nmod;
 // main's build ID (empty if none): code with fixed addresses in a game's module runs only on the build they were found in
 static inline const char *dm_main_build(void) { for (int i = 0; i < g_nmod; i++) if (!strcmp(g_mod[i].name, "main")) return g_mod[i].build_id; return ""; }
-// Four thread-local slots: K18 = the Switch's x18, KTLS = tpidr_el0, KTLR = tpidrro_el0 (ThreadLocalRegion), KGATE = host gate entry; the actual key numbers are written into the key page by the loader
+// Four thread-local slots: K18 = the Switch's x18, KTLS = tpidr_el0, KTLR = tpidrro_el0 (ThreadLocalRegion), KGATE = host gate entry; the actual key numbers are written into the key page by the loader.
+// Read and written through port.h's dm_kslot_get / dm_kslot_set (pthread keys on Apple, a table in bionic's TLS_SLOT_APP on Android: the place rewritten code looks); only Apple's
+// tsd_check in loader.c calls pthread_setspecific itself
 extern pthread_key_t g_key18, g_keytls, g_keytlr, g_keygate;
 
 void load_modules(const char *dir, const char **names, int n);

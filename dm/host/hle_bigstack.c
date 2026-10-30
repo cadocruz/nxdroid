@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <sys/mman.h>
 #include "dm.h"
+#include "port.h"   // DM_ASM_SYM / DM_ASM_HIDDEN: the symbol spellings of the platform's object format for the assembly below
 
 int dm_guest_as_contains(uintptr_t a);   // hle_svc.c
 
@@ -40,9 +41,10 @@ uintptr_t dm_bigstack_top(uintptr_t sp) {
 __asm__(
     ".text\n"
     ".p2align 2\n"
-    ".globl _dm_bigstack_enter\n"
-    ".private_extern _dm_bigstack_enter\n"
-    "_dm_bigstack_enter:\n"
+    ".globl " DM_ASM_SYM("dm_bigstack_enter") "\n"
+    DM_ASM_HIDDEN " " DM_ASM_SYM("dm_bigstack_enter") "\n"
+    DM_ASM_FUNC(DM_ASM_SYM("dm_bigstack_enter"))
+    DM_ASM_SYM("dm_bigstack_enter") ":\n"
     "    sub sp, sp, #0xa0\n"
     "    stp x29, x30, [sp, #0x90]\n"
     "    add x29, sp, #0x90\n"
@@ -56,7 +58,7 @@ __asm__(
     "    stp d4, d5, [sp, #0x70]\n"
     "    stp d6, d7, [sp, #0x80]\n"
     "    mov x0, sp\n"
-    "    bl _dm_bigstack_top\n"
+    "    bl " DM_ASM_SYM("dm_bigstack_top") "\n"
     "    mov x17, x0\n"
     "    ldp x0, x1, [sp, #0x00]\n"
     "    ldp x2, x3, [sp, #0x10]\n"
@@ -80,4 +82,5 @@ __asm__(
     "1:\n"
     "    ldp x29, x30, [sp, #0x90]\n"
     "    add sp, sp, #0xa0\n"
-    "    br x16\n");
+    "    br x16\n"
+    DM_ASM_END(DM_ASM_SYM("dm_bigstack_enter")));

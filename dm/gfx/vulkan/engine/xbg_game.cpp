@@ -376,6 +376,18 @@ VkPhysicalDeviceProperties properties{};
 VkPhysicalDeviceMemoryProperties memories{};
 uint32_t timestamp_bits=0;
 VkPhysicalDeviceSubgroupProperties subgroup{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+// Multi-viewport capabilities (draw_viewports, validate_capabilities): a vertex or tessellation stage may write ViewportIndex
+// (shaderOutputViewportIndex, core 1.2, else VK_EXT_shader_viewport_index_layer), and multiview exists for the viewport-mask
+// fan-out that is still open. *_supported is what the physical device has, queried and logged at initialization; *_enabled is
+// what the host says it enabled at vkCreateDevice (xbg_game_set_viewport_features, the shape of the mirror-clamp setter;
+// default false), and only that gates a shader or a draw. multiViewport itself is a core feature, in cfg.enabled_core.
+bool viewport_index_supported=false,multiview_supported=false,viewport_index_enabled=false,multiview_enabled=false;
+// NVN's window origin (xbg_game_set_window_origin, from the host's mtl_set_origin_lower_left / mtl_set_queue_origin_lower_left): with the lower-left
+// (GL) origin the picture is stored bottom-up, as nvn_mtl.m does it, so every viewport is flipped about its centre at the draw and the front end
+// flips the window image at present; the raster flip that decides winding is queue state captured when the queue was created (queue_origin_ll),
+// independent of later device-origin changes (docs/reference/rendering.md, "Queue initialization captures the raster origin"). Atomics: the host
+// sets them between submissions, the replay reads them at every draw.
+std::atomic<int> origin_ll{0},queue_origin_ll{0};
 void need(bool condition,const char *text) { if (!condition) xbg_fatalf("%s",text); }
 void check(VkResult r,const char *call) { if(r!=VK_SUCCESS) xbg_fatalf("%s failed: %d",call,int(r)); }
 #define VK(call) check((call),#call)
@@ -473,6 +485,8 @@ struct EpochState{std::deque<EpochQuery> q;uint64_t base=0,known_upto=0,summed_u
 uint64_t counter_epoch=0;std::map<uint64_t,EpochState> epochs;
 struct PendingReport {uint64_t addr,type,epoch;size_t count;const void *slot;VkQueryPool ts;uint32_t ts_index;uint64_t ts_value;bool ts_known;};
 std::vector<PendingReport> pending_reports;
+// The two timestamp types write 0 into the counter field (write_report), as nvn_mtl.m's post_run does under render_cond.
+static bool xbg_counter_is_timestamp(uint64_t type){return type==NVN_COUNTER_TYPE_TIMESTAMP || type==NVN_COUNTER_TYPE_TIMESTAMP_TOP;}
 // Command-buffer SignalEvent (4 per frame in D2R) completes when the GPU reaches it. Completing all work at the signal stalls
 // the CPU on the GPU at every signal; marker file gfx-defer-events = '1' instead submits the work so far without waiting and
 // publishes the value when that submission's slot retires (as the Metal backend writes it from a completion handler).
@@ -1865,11 +1879,14 @@ struct State {
     // VkGraphicsPipelineCreateInfo, so each one is in PipeMemoKey (fixed2 below): a change must be a memo miss.
     // Only the swizzles themselves are also applied to the dynamic viewports.
     int32_t depth_clamp=0,rast_discard=0;uint32_t restart_on=0,restart_index=0;uint8_t vp_sw[16][4]{};
-    // NVN viewport 0 from a copy: the values the game recorded (x, y, width, height); minDepth / maxDepth come from
-    // DEPTH_RANGE, which overrides the record's near / far (p_viewports), as the Metal replay applies it to every viewport.
+    // NVN viewports 0..15 as the game recorded them (x, y, width, height; OP_VIEWPORTS writes first..first+n-1); minDepth /
+    // maxDepth come from DEPTH_RANGE, which overrides the record's near / far (p_viewports) for every viewport, as the Metal
+    // replay applies it. The writer records one depth range and one scissor (hle_nvn.c SetDepthRanges / SetScissors keep
+    // index 0), so a draw sets the same ones for each viewport it declares. An index above 0 the game never set, or zeroed,
+    // rasterizes nothing (draw(): a 1x1 viewport behind an empty scissor), as NVN's empty viewport does.
     VkViewport viewport[16]{{0,0,1,1,0,1}};float depth_range[2]{0,1};
     VkRect2D scissor{{0,0},{UINT32_MAX,UINT32_MAX}};float blend_color[4]{},bias[3]{};uint32_t stencil_compare[2]{~0u,~0u},stencil_write[2]{~0u,~0u},stencil_ref[2]{};int64_t copy_stride=0,copy_image_stride=0;uint32_t patch_size=3;
-    uint32_t viewport_n=0;   // how many viewports the last OP_VIEWPORTS recorded; NOT a pipeline input (the pipeline declares one dynamic viewport whatever the count), so it is not in PipeMemoKey, only the load optimization (nvn_cover) reads it
+    uint32_t viewport_n=0;   // the viewport array's length: the highest index an OP_VIEWPORTS set, plus one (0 before the first record). A pipeline input through draw_viewports(): the count the pipeline declares when the bound shaders select a viewport, so it is in PipeMemoKey (viewports); nvn_cover reads it the same way
     xbg_depth_bounds bounds{0,0,1};bool count_samples=false;uint64_t samples_passed=0;
     // A render-enable block evaluated false (SetRenderEnableConditional / SetRenderEnable): draws and clears are dropped
     // until the next OP_RENDER_COND, as nvn_mtl.m's g_rc_skip does. Transform feedback is recorded for completeness; the
@@ -1882,21 +1899,36 @@ struct State {
 // copies of the state fields, so differing padding can only cost a miss. Off unless the host asks (DM_GFX_PIPE_MEMO, which
 // the Android app sets to 1); marker gfx-pipe-memo = 1 / 0; A/B target pipememo.
 struct PipeMemoKey{const void *shader[5];const void *layout,*pass_def;VkRenderPass pass;VkPipelineLayout pipeline_layout;int32_t prim;uint32_t samples,rt_n,colors,depth,depth_format;
+    uint32_t viewports;                                                          // VkPipelineViewportStateCreateInfo::viewportCount (draw_viewports)
+    uint32_t origin;                                                             // queue_origin_ll: it decides rs.frontFace
     uint8_t fixed[offsetof(State,viewport)-offsetof(State,attrib)];               // attrib, stream, blend, color, mask, ms, poly, ds
     uint8_t restart[offsetof(State,viewport)-offsetof(State,depth_clamp)];        // depth_clamp, rast_discard, restart on / index, viewport swizzles
     uint8_t stencil[offsetof(State,copy_stride)-offsetof(State,blend_color)];      // blend_color, bias, stencil compare / write / reference
     uint8_t tail[offsetof(State,count_samples)-offsetof(State,patch_size)];};      // patch_size, bounds
 PipeMemoKey pipe_memo_key,pipe_memo_next;VkPipeline pipe_memo_pipeline=VK_NULL_HANDLE;bool pipe_memo=false;uint64_t pipe_memo_hits=0,pipe_memo_misses=0;
-void pipe_memo_fill(PipeMemoKey &k,const void *layout,const void *pass_def,VkRenderPass pass,VkPipelineLayout pipeline_layout,int prim,VkSampleCountFlagBits samples,uint32_t colors){
-    memset(&k,0,sizeof k);for(unsigned i=0;i<5;i++)k.shader[i]=state.shader[i];k.layout=layout;k.pass_def=pass_def;k.pass=pass;k.pipeline_layout=pipeline_layout;k.prim=prim;k.samples=uint32_t(samples);
+void pipe_memo_fill(PipeMemoKey &k,const void *layout,const void *pass_def,VkRenderPass pass,VkPipelineLayout pipeline_layout,int prim,VkSampleCountFlagBits samples,uint32_t colors,uint32_t viewports){
+    memset(&k,0,sizeof k);for(unsigned i=0;i<5;i++)k.shader[i]=state.shader[i];k.layout=layout;k.pass_def=pass_def;k.pass=pass;k.pipeline_layout=pipeline_layout;k.prim=prim;k.samples=uint32_t(samples);k.viewports=viewports;k.origin=uint32_t(queue_origin_ll.load(std::memory_order_relaxed));
     k.rt_n=uint32_t(state.rt.n);k.colors=colors;k.depth=state.rt.depth!=nullptr;k.depth_format=state.rt.depth?uint32_t(state.rt.depth->d.format):0;
     const uint8_t *b=reinterpret_cast<const uint8_t*>(&state);memcpy(k.fixed,b+offsetof(State,attrib),sizeof k.fixed);memcpy(k.restart,b+offsetof(State,depth_clamp),sizeof k.restart);memcpy(k.stencil,b+offsetof(State,blend_color),sizeof k.stencil);memcpy(k.tail,b+offsetof(State,patch_size),sizeof k.tail);
 }
 void validate_capabilities(const std::vector<uint32_t> &w,uint32_t stage){
     need(w.size()>=5 && w[0]==0x07230203,"Invalid packaged SPIR-V");bool group_operations=false;VkSubgroupFeatureFlags groups=0;
     for(size_t i=5;i<w.size();){uint32_t count=w[i]>>16,op=w[i]&65535;need(count && i+count<=w.size(),"Invalid SPIR-V instruction bounds");if(op>=333 && op<=366)group_operations=true;
-        if(op==17){uint32_t cap=w[i+1];bool ok=true;switch(cap){case 1:case 46:case 47:case 50:break;case 2:ok=cfg.enabled_core.geometryShader;break;case 3:ok=cfg.enabled_core.tessellationShader;break;case 10:ok=cfg.enabled_core.shaderFloat64;break;case 11:ok=cfg.enabled_core.shaderInt64;break;case 22:ok=cfg.enabled_core.shaderInt16;break;case 25:ok=cfg.enabled_core.shaderImageGatherExtended;break;case 32:ok=cfg.enabled_core.shaderClipDistance;break;case 33:ok=cfg.enabled_core.shaderCullDistance;break;case 35:ok=cfg.enabled_core.sampleRateShading;break;case 49:ok=cfg.enabled_core.shaderStorageImageExtendedFormats;break;case 55:ok=cfg.enabled_core.shaderStorageImageReadWithoutFormat;break;case 56:ok=cfg.enabled_core.shaderStorageImageWriteWithoutFormat;break;case 61:groups|=VK_SUBGROUP_FEATURE_BASIC_BIT;break;case 62:groups|=VK_SUBGROUP_FEATURE_VOTE_BIT;break;case 63:groups|=VK_SUBGROUP_FEATURE_ARITHMETIC_BIT;break;case 64:groups|=VK_SUBGROUP_FEATURE_BALLOT_BIT;break;case 65:groups|=VK_SUBGROUP_FEATURE_SHUFFLE_BIT;break;case 66:groups|=VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT;break;case 4427:ok=cfg.enabled_shader_draw_parameters;break;default:xbg_fatalf("Shader stage %u has unhandled capability %u",stage,cap);}if(!ok)xbg_fatalf("Shader stage %u requires disabled capability %u",stage,cap);}
-        if(op==10)xbg_fatalf("Shader stage %u declares extension requiring explicit backend support",stage);i+=count;
+        if(op==17){uint32_t cap=w[i+1];bool ok=true;switch(cap){case 1:case 46:case 47:case 50:break;case 2:ok=cfg.enabled_core.geometryShader;break;case 3:ok=cfg.enabled_core.tessellationShader;break;case 10:ok=cfg.enabled_core.shaderFloat64;break;case 11:ok=cfg.enabled_core.shaderInt64;break;case 22:ok=cfg.enabled_core.shaderInt16;break;case 25:ok=cfg.enabled_core.shaderImageGatherExtended;break;case 32:ok=cfg.enabled_core.shaderClipDistance;break;case 33:ok=cfg.enabled_core.shaderCullDistance;break;case 35:ok=cfg.enabled_core.sampleRateShading;break;case 49:ok=cfg.enabled_core.shaderStorageImageExtendedFormats;break;case 55:ok=cfg.enabled_core.shaderStorageImageReadWithoutFormat;break;case 56:ok=cfg.enabled_core.shaderStorageImageWriteWithoutFormat;break;case 61:groups|=VK_SUBGROUP_FEATURE_BASIC_BIT;break;case 62:groups|=VK_SUBGROUP_FEATURE_VOTE_BIT;break;case 63:groups|=VK_SUBGROUP_FEATURE_ARITHMETIC_BIT;break;case 64:groups|=VK_SUBGROUP_FEATURE_BALLOT_BIT;break;case 65:groups|=VK_SUBGROUP_FEATURE_SHUFFLE_BIT;break;case 66:groups|=VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT;break;case 4427:ok=cfg.enabled_shader_draw_parameters;break;
+            // The viewport-selecting capabilities (OP_VIEWPORTS with n > 1, draw_viewports): MultiViewport (57) is what a geometry shader
+            // writing ViewportIndex declares; ShaderViewportIndex (70, SPIR-V 1.5) and ShaderViewportIndexLayerEXT (5254) are a vertex or
+            // tessellation stage writing ViewportIndex or Layer, which need shaderOutputViewportIndex / shaderOutputLayer (or
+            // VK_EXT_shader_viewport_index_layer) enabled at device creation; ShaderViewportMaskNV (5255) is the viewport-mask fan-out of
+            // VK_NV_viewport_array2, which this device lacks and the replay does not emulate. The numbers are the SPIR-V unified
+            // registry's (no spirv.h in the tree to include; BuiltIn ViewportMaskNV = 5253 in xbg_spirv_raster.cpp is the same family).
+            case 57:ok=cfg.enabled_core.multiViewport;break;case 70:case 5254:ok=viewport_index_enabled;break;
+            case 5255:xbg_logf("[RED] Shader stage %u declares ShaderViewportMaskNV (capability 5255): the viewport-mask fan-out (OP_VIEWPORTS, P6) is not implemented, and this device has no VK_NV_viewport_array2",stage);ok=false;break;
+            default:xbg_fatalf("Shader stage %u has unhandled capability %u",stage,cap);}if(!ok)xbg_fatalf("Shader stage %u requires disabled capability %u",stage,cap);}
+        if(op==10){const char *name=reinterpret_cast<const char*>(&w[i+1]);std::string ext(name,strnlen(name,size_t(count-1)*4));   // OpExtension: one literal string
+            if(ext=="SPV_EXT_shader_viewport_index_layer"){if(!viewport_index_enabled)xbg_fatalf("Shader stage %u requires SPV_EXT_shader_viewport_index_layer, which the host did not enable at device creation (xbg_game_set_viewport_features)",stage);}
+            else if(ext=="SPV_NV_viewport_array2"){xbg_logf("[RED] Shader stage %u declares SPV_NV_viewport_array2: the viewport-mask fan-out (OP_VIEWPORTS, P6) is not implemented, and this device has no VK_NV_viewport_array2",stage);xbg_fatalf("Shader stage %u requires SPV_NV_viewport_array2",stage);}
+            else xbg_fatalf("Shader stage %u declares extension %s requiring explicit backend support",stage,ext.c_str());}
+        i+=count;
     }
     need((subgroup.supportedOperations&groups)==groups,"Required subgroup operations unavailable");if(group_operations)need(subgroup.supportedStages&(1u<<stage),"Actual subgroup operation unsupported in shader stage");
 }
@@ -2062,7 +2094,7 @@ extern "C" int xbg_device_integer(int p,int *out){
     case NVN_DEVICE_INFO_MAX_COMPUTE_WORK_GROUP_SIZE_X:case NVN_DEVICE_INFO_MAX_COMPUTE_WORK_GROUP_SIZE_Y:case NVN_DEVICE_INFO_MAX_COMPUTE_WORK_GROUP_SIZE_Z:*out=l.maxComputeWorkGroupSize[p-NVN_DEVICE_INFO_MAX_COMPUTE_WORK_GROUP_SIZE_X];break;
     case NVN_DEVICE_INFO_MAX_COMPUTE_WORK_GROUP_SIZE_THREADS:*out=l.maxComputeWorkGroupInvocations;break;
     case NVN_DEVICE_INFO_MAX_COMPUTE_DISPATCH_WORK_GROUPS_X:case NVN_DEVICE_INFO_MAX_COMPUTE_DISPATCH_WORK_GROUPS_Y:case NVN_DEVICE_INFO_MAX_COMPUTE_DISPATCH_WORK_GROUPS_Z:*out=l.maxComputeWorkGroupCount[p-NVN_DEVICE_INFO_MAX_COMPUTE_DISPATCH_WORK_GROUPS_X];break;
-    case NVN_DEVICE_INFO_MAX_VIEWPORTS:*out=1;break;
+    case NVN_DEVICE_INFO_MAX_VIEWPORTS:*out=cfg.enabled_core.multiViewport?int(std::min(16u,l.maxViewports)):1;break;   // NVN has 16; a draw declares them only through draw_viewports(). No caller today: the game reads the host's g_devinfo table (hle_nvn.c), where the value is still 16
     case NVN_DEVICE_INFO_MAX_TEXTURE_LAYERS:*out=l.maxImageArrayLayers;break;
     case NVN_DEVICE_INFO_MAX_TEXTURE_SIZE:case NVN_DEVICE_INFO_MAX_RECTANGLE_TEXTURE_SIZE:*out=l.maxImageDimension2D;break;
     case NVN_DEVICE_INFO_MAX_3D_TEXTURE_SIZE:*out=l.maxImageDimension3D;break;
@@ -3079,9 +3111,22 @@ VkStencilOpState stencil(bool back){VkStencilOpState s{};s.failOp=VkStencilOp((b
 // vertex buffers). Valid only within one command buffer recording; any other bind site (clear pipeline) and every
 // command-buffer begin reset it. files/gfx-no-bindcache disables.
 struct BindCache{VkCommandBuffer cmd=VK_NULL_HANDLE;VkPipeline pipe=VK_NULL_HANDLE;VkPipelineLayout layout=VK_NULL_HANDLE;VkDescriptorSet set=VK_NULL_HANDLE;
-    uint32_t noff=UINT32_MAX,off[32]{};bool has_vp=false,has_sc=false;VkViewport vp{};VkRect2D sc{};VkBuffer vb[16]{};VkDeviceSize vbo[16]{};
+    uint32_t noff=UINT32_MAX,off[32]{};uint32_t vpn=0,scn=0;VkViewport vp[16]{};VkRect2D sc[16]{};VkBuffer vb[16]{};VkDeviceSize vbo[16]{};   // vpn / scn: how many viewports / scissors were set (0: none)
     VkBuffer ib=VK_NULL_HANDLE;VkDeviceSize ibo=0;VkIndexType it=VK_INDEX_TYPE_MAX_ENUM;};
 BindCache bind_cache;bool bind_cache_enabled=true;uint64_t binds_skipped=0;
+// Viewports a draw rasterizes into (OP_VIEWPORTS with n > 1, payload P6). NVN keeps 16 viewports and the last pre-raster stage
+// picks one per primitive by writing gl_ViewportIndex, or fans a primitive out to several with a viewport mask; a shader that
+// writes neither rasterizes into viewport 0. So the pipeline declares, and the draw sets, the recorded array (state.viewport_n)
+// only when the geometry, tessellation-evaluation or vertex shader selects a viewport (XbgRasterFacts), and one viewport
+// otherwise: the count is a pipeline input (PipeMemoKey.viewports, and viewportCount in xbg_graphics_pipeline_key), needs the
+// multiViewport feature, and nvn_cover's one-viewport proof still holds for every non-selecting draw. ViewportIndex written
+// from a vertex or tessellation stage needs shaderOutputViewportIndex enabled at device creation (viewport_index_enabled; the
+// shader's capability 70 / 5254 is refused at load otherwise, validate_capabilities). A viewport mask (ViewportMaskNV) has no
+// core Vulkan form: its capability 5255 is refused at load with a [RED] line; on this device the fan-out would be a multiview
+// pass (VK_KHR_multiview with VK_QCOM_multiview_per_view_viewports, the mask lowered to ViewIndex in the SPIR-V) composited
+// back into the one target, which is not implemented. draw() keeps a second refusal for a mask over several viewports.
+const Shader *viewport_selector(){return state.shader[3]?state.shader[3]:state.shader[2]?state.shader[2]:state.shader[0];}
+uint32_t draw_viewports(){const Shader *s=viewport_selector();if(!s || !(s->raster.viewport_index || s->raster.viewport_mask))return 1;return state.viewport_n>1?state.viewport_n:1;}
 // Descriptor-set binds per frame (NVN PERF binds): how many, their dynamic offsets, and how many rebind the same set with new
 // offsets only.
 uint64_t set_binds=0,set_bind_offsets=0,set_binds_offsets_only=0;
@@ -3113,7 +3158,8 @@ bool first_draw_covers(const Pass &p,int prim,int first,int count,const p_draw_i
     if(state.rt.depth && ((state.ds.dt && state.ds.df!=8) || state.ds.st)){++noload_why[2];return false;}
     if(state.bounds.enable){++noload_why[2];return false;}
     if(state.ms.a2c || state.poly.mode!=2 || p.samples!=VK_SAMPLE_COUNT_1_BIT){++noload_why[3];return false;}
-    if(state.viewport_n>1){++noload_why[3];return false;}   // nvn_cover takes one viewport; a multi-viewport draw keeps its load
+    if(draw_viewports()>1){++noload_why[3];return false;}   // nvn_cover takes one viewport; a draw that selects among several keeps its load
+    {uint32_t sw;memcpy(&sw,state.vp_sw[0],4);if(sw || origin_ll.load(std::memory_order_relaxed) || queue_origin_ll.load(std::memory_order_relaxed)){++noload_why[3];return false;}}   // a swizzled viewport 0 or a lower-left origin (draw() flips the viewport, the queue origin the winding) keeps its load: the proof is not told about the flips
     if((prim!=NVN_COVER_TRIANGLES && prim!=NVN_COVER_TRIANGLE_STRIP) || count<3 || count>64){++noload_why[4];return false;}
     va_st a;memcpy(&a,&state.attrib[vs->raster.pos_input],4);
     const VkFormat f=a.fmt?format(a.fmt):VK_FORMAT_UNDEFINED;const int nc=f==VK_FORMAT_R32G32_SFLOAT?2:f==VK_FORMAT_R32G32B32_SFLOAT?3:f==VK_FORMAT_R32G32B32A32_SFLOAT?4:0;
@@ -3205,9 +3251,20 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
     }
     static std::vector<VkVertexInputBindingDescription> bindings;bindings.clear();for(uint32_t i=0;i<16;i++)if(binding_used&(1u<<i))bindings.push_back(binding_slots[i]);   // ascending binding order, as the former std::map
     VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};vi.vertexBindingDescriptionCount=bindings.size();vi.pVertexBindingDescriptions=bindings.data();vi.vertexAttributeDescriptionCount=attributes.size();vi.pVertexAttributeDescriptions=attributes.data();
-    VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};ia.topology=topology(prim);ia.primitiveRestartEnable=state.restart_on!=0;
-    VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};vp.viewportCount=vp.scissorCount=1;
-    VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};rs.depthClampEnable=state.depth_clamp!=0;need(!rs.depthClampEnable || cfg.enabled_core.depthClamp,"Depth clamp disabled");rs.rasterizerDiscardEnable=state.rast_discard!=0;rs.polygonMode=state.poly.mode==2?VK_POLYGON_MODE_FILL:state.poly.mode==1?VK_POLYGON_MODE_LINE:VK_POLYGON_MODE_POINT;need(rs.polygonMode==VK_POLYGON_MODE_FILL || cfg.enabled_core.fillModeNonSolid,"Non-solid polygon mode disabled");rs.cullMode=state.poly.cull;rs.frontFace=state.poly.front?VK_FRONT_FACE_COUNTER_CLOCKWISE:VK_FRONT_FACE_CLOCKWISE;rs.lineWidth=1;rs.depthBiasEnable=state.poly.offset_en!=0;rs.depthBiasConstantFactor=state.bias[1]*(state.rt.depth && state.rt.depth->d.format==0x32 && depth16_as_d24?256.0f:1.0f);
+    // Primitive restart (OP_PRIM_RESTART): Vulkan allows it only for strips and fans (a list topology with restart needs VK_EXT_primitive_topology_list_restart,
+    // which the host does not enable), so it is declared for the strip and fan topologies and off for lists and patches; a list draw whose indices held the
+    // restart value would differ from NVN there (such a draw is not expected: a list has no primitive to end early). The restart value is Vulkan's fixed
+    // all-ones of the index type; NVN's index (state.restart_index) is mapped onto it in the index data below when it is another value.
+    const bool restart_topology=prim==3 || prim==5 || prim==6 || prim==11 || prim==13;
+    VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};ia.topology=topology(prim);ia.primitiveRestartEnable=state.restart_on!=0 && restart_topology;
+    const uint32_t vpn=draw_viewports();   // see draw_viewports(): the recorded array for a viewport-selecting shader, else one
+    {const Shader *s=viewport_selector();
+     if(vpn>1 && s && s->raster.viewport_mask){xbg_logf("[RED] NVN draw fans a viewport mask (ViewportMaskNV) out over %u viewports: not implemented (OP_VIEWPORTS, P6; no VK_NV_viewport_array2 on this device, the multiview fan-out is open)",vpn);need(false,"Viewport-mask fan-out over several viewports unsupported");}
+     need(vpn==1 || (cfg.enabled_core.multiViewport && vpn<=properties.limits.maxViewports),"Multi-viewport draw needs the multiViewport feature");
+     need(vpn==1 || s==state.shader[3] || viewport_index_enabled,"ViewportIndex from a vertex or tessellation stage needs shaderOutputViewportIndex enabled at device creation (xbg_game_set_viewport_features)");}
+    VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};vp.viewportCount=vp.scissorCount=vpn;
+    // rs.frontFace: NVN's raster flip is the queue's captured origin, as nvn_mtl.m decides winding (the device origin flips the viewport instead)
+    VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};rs.depthClampEnable=state.depth_clamp!=0;need(!rs.depthClampEnable || cfg.enabled_core.depthClamp,"Depth clamp disabled");rs.rasterizerDiscardEnable=state.rast_discard!=0;rs.polygonMode=state.poly.mode==2?VK_POLYGON_MODE_FILL:state.poly.mode==1?VK_POLYGON_MODE_LINE:VK_POLYGON_MODE_POINT;need(rs.polygonMode==VK_POLYGON_MODE_FILL || cfg.enabled_core.fillModeNonSolid,"Non-solid polygon mode disabled");rs.cullMode=state.poly.cull;rs.frontFace=((state.poly.front!=0)!=(queue_origin_ll.load(std::memory_order_relaxed)!=0))?VK_FRONT_FACE_COUNTER_CLOCKWISE:VK_FRONT_FACE_CLOCKWISE;rs.lineWidth=1;rs.depthBiasEnable=state.poly.offset_en!=0;rs.depthBiasConstantFactor=state.bias[1]*(state.rt.depth && state.rt.depth->d.format==0x32 && depth16_as_d24?256.0f:1.0f);
     rs.depthBiasSlopeFactor=state.bias[0];rs.depthBiasClamp=state.bias[2];need(!rs.depthBiasClamp || cfg.enabled_core.depthBiasClamp,"Depth bias clamp disabled");   // constant bias units: 2^-16 for D16, 2^-24 for the X8_D24 stand-in; slope and clamp do not depend on the format
     VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};ms.rasterizationSamples=p.samples;ms.alphaToCoverageEnable=state.ms.a2c;need(!state.ms.sl_en,"Custom sample locations unsupported");need(!state.ms.samples || state.ms.samples==uint32_t(p.samples),"NVN sample count differs from attachments");need(p.samples==VK_SAMPLE_COUNT_1_BIT || state.ms.enable,"Disabled multisampling on multisample target needs coverage emulation");
     VkPipelineDepthStencilStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};ds.depthTestEnable=state.ds.dt;ds.depthWriteEnable=state.ds.dw;ds.depthCompareOp=VkCompareOp(state.ds.df-1);ds.stencilTestEnable=state.ds.st;ds.front=stencil(false);ds.back=stencil(true);ds.depthBoundsTestEnable=state.bounds.enable;ds.minDepthBounds=state.bounds.minimum;ds.maxDepthBounds=state.bounds.maximum;need(!ds.depthBoundsTestEnable || cfg.enabled_core.depthBounds,"Depth bounds feature disabled");
@@ -3220,7 +3277,7 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
     PipelineLease pipeline;{CPU_SCOPE(Pipeline);
         static std::vector<uint32_t> fast;fast.clear();bool use_fast=pipeline_fast_enabled && !ab_off("pipefast") && d.entry->definition.valid && p.definition->valid;
         bool memo=use_fast && pipe_memo && !ab_off("pipememo");
-        if(memo){pipe_memo_fill(pipe_memo_next,&d.entry->definition,p.definition,p.pass,d.pipeline_layout,prim,p.samples,active_colors);
+        if(memo){pipe_memo_fill(pipe_memo_next,&d.entry->definition,p.definition,p.pass,d.pipeline_layout,prim,p.samples,active_colors,vpn);
             if(pipe_memo_valid && !memcmp(&pipe_memo_next,&pipe_memo_key,sizeof pipe_memo_next)){pipeline.pipeline=pipe_memo_pipeline;++pipe_memo_hits;}else ++pipe_memo_misses;}
         if(use_fast && !pipeline.pipeline){uint64_t a=uint64_t(uintptr_t(&d.entry->definition)),b=uint64_t(uintptr_t(p.definition));uint32_t ids[4]={uint32_t(a),uint32_t(a>>32),uint32_t(b),uint32_t(b>>32)};
             static XbgPipelineKey fkey;fkey.count=0;fkey.valid=true;   // 16 KB: one static, graphics thread only
@@ -3237,7 +3294,19 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
     static std::vector<std::pair<uint32_t,Buffer*>> vertex_buffers;vertex_buffers.clear();
     Buffer *ib=nullptr;VkIndexType index_type=VK_INDEX_TYPE_UINT16;
     {DRAW_SCOPE(VertexPrepare);for(auto &b:bindings){if(int(b.binding)==zero_binding){const uint32_t zero[4]={0};vertex_buffers.push_back({b.binding,d.keep(stream_buffer(sizeof(zero),zero,sizeof(zero)))});continue;}auto r=state.vb[b.binding];need(r.address && r.size,"Unbound vertex buffer");snap_site=1;vertex_buffers.push_back({b.binding,d.keep(snapshot(r.address,r.size))});snap_site=0;}
-    if(indexed){need(indexed->itype>=0 && indexed->itype<=2 && indexed->instances>0 && indexed->base_instance>=0,"Invalid indexed draw");size_t bytes=size_t(count)*(1u<<indexed->itype);need(indexed->ibuf,"Unbound index buffer");if(indexed->itype==0){if(draw_detail)draw_timing.index(uint64_t(count));std::vector<uint16_t> expanded(count);const uint8_t *src=reinterpret_cast<const uint8_t*>(indexed->ibuf);for(int i=0;i<count;i++)expanded[i]=src[i];ib=d.keep(stream_buffer(expanded.size()*2,expanded.data(),expanded.size()*2));}else{index_type=indexed->itype==1?VK_INDEX_TYPE_UINT16:VK_INDEX_TYPE_UINT32;snap_site=2;ib=indexed==&quad_indexed?d.keep(stream_buffer(bytes,reinterpret_cast<void*>(indexed->ibuf),bytes)):d.keep(snapshot(uint64_t(indexed->ibuf),bytes));snap_site=0;}}
+    if(indexed){need(indexed->itype>=0 && indexed->itype<=2 && indexed->instances>0 && indexed->base_instance>=0,"Invalid indexed draw");size_t bytes=size_t(count)*(1u<<indexed->itype);need(indexed->ibuf,"Unbound index buffer");
+        // NVN's restart index against Vulkan's fixed all-ones: when restart is on for this draw and the game's value is another one, the indices are copied
+        // with that value mapped (an 8-bit stream is widened anyway, and its 0xff must become 0xffff to keep restarting); a real index equal to all-ones in
+        // such a stream would then restart, which NVN would not do: the residual difference, not expected in practice.
+        const bool restart=ia.primitiveRestartEnable!=0;const uint32_t all_ones=indexed->itype==2?0xffffffffu:0xffffu;
+        if(indexed->itype==0){if(draw_detail)draw_timing.index(uint64_t(count));std::vector<uint16_t> expanded(count);const uint8_t *src=reinterpret_cast<const uint8_t*>(indexed->ibuf);if(indexed!=&quad_indexed)cpu_access(uint64_t(indexed->ibuf),bytes,2);const uint32_t rv=state.restart_index&0xffu;for(int i=0;i<count;i++)expanded[i]=restart && src[i]==rv?0xffffu:src[i];ib=d.keep(stream_buffer(expanded.size()*2,expanded.data(),expanded.size()*2));}
+        else{index_type=indexed->itype==1?VK_INDEX_TYPE_UINT16:VK_INDEX_TYPE_UINT32;
+            // The index as the stream's width sees it: 0xffffffff on a 16-bit stream is 0xffff, the common case, which keeps the snapshot path
+            if(restart && (state.restart_index&all_ones)!=all_ones && indexed!=&quad_indexed){cpu_access(uint64_t(indexed->ibuf),bytes,2);std::vector<uint8_t> mapped(bytes);memcpy(mapped.data(),reinterpret_cast<const void*>(indexed->ibuf),bytes);
+                if(indexed->itype==1){uint16_t *w=reinterpret_cast<uint16_t*>(mapped.data());const uint16_t rv=uint16_t(state.restart_index);for(int i=0;i<count;i++)if(w[i]==rv)w[i]=0xffffu;}
+                else{uint32_t *w=reinterpret_cast<uint32_t*>(mapped.data());for(int i=0;i<count;i++)if(w[i]==state.restart_index)w[i]=0xffffffffu;}
+                ib=d.keep(stream_buffer(bytes,mapped.data(),bytes));}
+            else{snap_site=2;ib=indexed==&quad_indexed?d.keep(stream_buffer(bytes,reinterpret_cast<void*>(indexed->ibuf),bytes)):d.keep(snapshot(uint64_t(indexed->ibuf),bytes));snap_site=0;}}}
     } // VertexPrepare excludes capture, recording and storage writeback.
     if(capture.active){for(auto &v:vertex_buffers){char label[40];snprintf(label,sizeof(label),"vertex-stream%u",v.first);capture_log("VERTEX label=%s guest=%#llx bytes=%zu",label,(unsigned long long)state.vb[v.first].address,v.second->size);capture_data(label,v.second->mapped,v.second->size);}if(ib){capture_log("INDEX guest=%#llx vkType=%u bytes=%zu",(unsigned long long)indexed->ibuf,unsigned(index_type),ib->size);capture_data("index",ib->mapped,ib->size);}for(auto &input:d.capture_inputs)for(auto *output:p.images)if(input.image==output)capture_log("FEEDBACK input=%s serial=%llu",input.label.c_str(),(unsigned long long)output->source.serial);}
     VkQueryPool occlusion{};uint32_t occlusion_index=0;const bool counting=state.count_samples && !no_occlusion_queries && !ab_off("occ");
@@ -3260,13 +3329,24 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
         vkCmdBindDescriptorSets(c.command,VK_PIPELINE_BIND_POINT_GRAPHICS,d.pipeline_layout,0,1,&d.set,no,d.dynamic_offsets.data());
         if(no<=32){bc.layout=d.pipeline_layout;bc.set=d.set;bc.noff=no;if(no)memcpy(bc.off,d.dynamic_offsets.data(),no*4);}else bc.noff=UINT32_MAX;}
      else ++binds_skipped;}
-    VkViewport viewport{};need(xbg_nvn_viewport(&viewport,state.viewport[0].x,state.viewport[0].y,state.viewport[0].width,state.viewport[0].height*float(ui_vs),state.depth_range[0],state.depth_range[1])==0,"Invalid NVN viewport");
-    need(viewport.width<=properties.limits.maxViewportDimensions[0] && -viewport.height<=properties.limits.maxViewportDimensions[1] && viewport.x>=properties.limits.viewportBoundsRange[0] && viewport.x+viewport.width<=properties.limits.viewportBoundsRange[1] && viewport.y>=properties.limits.viewportBoundsRange[0] && viewport.y<=properties.limits.viewportBoundsRange[1] && viewport.y+viewport.height>=properties.limits.viewportBoundsRange[0],"NVN viewport exceeds device bounds");
-    if(!bc.has_vp || memcmp(&bc.vp,&viewport,sizeof viewport)){vkCmdSetViewport(c.command,0,1,&viewport);bc.vp=viewport;bc.has_vp=true;}else ++binds_skipped;
+    VkViewport viewports[16];bool empty[16];for(uint32_t i=0;i<vpn;i++){VkViewport &viewport=viewports[i];const VkViewport &r=state.viewport[i];
+        // An index above 0 the game zeroed or never set: NVN rasterizes nothing there, Vulkan wants a positive size, so the viewport is 1x1 and
+        // its scissor (below) empty. Viewport 0 keeps the strict check: every non-selecting draw goes through it.
+        empty[i]=i>0 && !(r.width>0 && r.height>0);
+        need(xbg_nvn_viewport(&viewport,r.x,r.y,empty[i]?1:r.width,(empty[i]?1:r.height)*float(ui_vs),state.depth_range[0],state.depth_range[1])==0,"Invalid NVN viewport");
+        // Viewport swizzle (OP_VP_SWIZZLE, XOR the identity): NEGATIVE_Y negates clip y, the same as the viewport flipped about its centre, as nvn_mtl.m
+        // applies it; facing is decided after the viewport transform on the GPU, so the winding stays. Other swizzles (axis exchanges, negated x / z / w)
+        // are no viewport change: one red line, drawn unswizzled.
+        if(origin_ll.load(std::memory_order_relaxed)){viewport.y+=viewport.height;viewport.height=-viewport.height;}   // lower-left window origin: the picture is stored bottom-up (origin_ll)
+        {uint32_t sw;memcpy(&sw,state.vp_sw[i],4);if(sw==0x100){viewport.y+=viewport.height;viewport.height=-viewport.height;}
+         else if(sw){static unsigned notes=0;if(notes++<1)xbg_logf("[RED] NVN viewport %u swizzle %d,%d,%d,%d not implemented (drawn unswizzled)",i,state.vp_sw[i][0],state.vp_sw[i][1]^2,state.vp_sw[i][2]^4,state.vp_sw[i][3]^6);}}
+        need(viewport.width<=properties.limits.maxViewportDimensions[0] && fabsf(viewport.height)<=properties.limits.maxViewportDimensions[1] && viewport.x>=properties.limits.viewportBoundsRange[0] && viewport.x+viewport.width<=properties.limits.viewportBoundsRange[1] && viewport.y>=properties.limits.viewportBoundsRange[0] && viewport.y<=properties.limits.viewportBoundsRange[1] && viewport.y+viewport.height>=properties.limits.viewportBoundsRange[0] && viewport.y+viewport.height<=properties.limits.viewportBoundsRange[1],"NVN viewport exceeds device bounds");}
+    if(bc.vpn!=vpn || memcmp(bc.vp,viewports,vpn*sizeof(VkViewport))){vkCmdSetViewport(c.command,0,vpn,viewports);memcpy(bc.vp,viewports,vpn*sizeof(VkViewport));bc.vpn=vpn;}else ++binds_skipped;
     VkRect2D sc=scissor(p);
     if(ui_uy>0 || ui_vs!=1){long so=g_ui_moff!=0?lround(ui_uy*p.height):0;int64_t y0=sc.offset.y<=0?0:sc.offset.y+so,y1=ui_vs!=1?int64_t(p.height):int64_t(sc.offset.y)+sc.extent.height+so;   // 剪裁跟着下移；从顶边起的不动（宿主上提的贴顶控件） | the scissor moves down with it; ones starting at the top edge stay (controls the host lifted to the top)
         if(y1>int64_t(p.height))y1=p.height;if(y1<y0)y1=y0;sc.offset.y=int32_t(y0);sc.extent.height=uint32_t(y1-y0);}
-    if(!bc.has_sc || memcmp(&bc.sc,&sc,sizeof sc)){vkCmdSetScissor(c.command,0,1,&sc);bc.sc=sc;bc.has_sc=true;}else ++binds_skipped;
+    VkRect2D scissors[16];for(uint32_t i=0;i<vpn;i++)scissors[i]=empty[i]?VkRect2D{{0,0},{0,0}}:sc;   // the one recorded scissor for every declared viewport; empty behind an unset one
+    if(bc.scn!=vpn || memcmp(bc.sc,scissors,vpn*sizeof(VkRect2D))){vkCmdSetScissor(c.command,0,vpn,scissors);memcpy(bc.sc,scissors,vpn*sizeof(VkRect2D));bc.scn=vpn;}else ++binds_skipped;
     for(auto &b:vertex_buffers){VkDeviceSize off=b.second->offset;if(b.first<16 && bc.vb[b.first]==b.second->buffer && bc.vbo[b.first]==off){++binds_skipped;continue;}
         vkCmdBindVertexBuffers(c.command,b.first,1,&b.second->buffer,&off);if(b.first<16){bc.vb[b.first]=b.second->buffer;bc.vbo[b.first]=off;}}
     pass_prof_draw(c.command);
@@ -3833,7 +3913,7 @@ void execute(const uint8_t *pc,unsigned depth,uint64_t &budget){
         case OP_CLEAR_COLOR:{if(state.render_cond_skip)break;auto a=payload<p_clear_color>(p,n);clear_attachment(&a,nullptr);break;}
         case OP_COUNT_+9:{auto a=payload<xbg_typed_clear>(p,n);clear_attachment(&a.color,nullptr,a.scalar);break;}
         case OP_CLEAR_DS:{if(state.render_cond_skip)break;auto a=payload<p_clear_ds>(p,n);clear_attachment(nullptr,&a);break;}
-        case OP_VIEWPORTS:{auto a=payload<p_viewports>(p,n);need(a.first==0 && a.n>=0 && a.n<=16,"Invalid viewport record");need(a.n<=1,"Multiple viewports unsupported");if(a.n){state.viewport[0].x=a.v[0][0];state.viewport[0].y=a.v[0][1];state.viewport[0].width=a.v[0][2];state.viewport[0].height=a.v[0][3];}state.viewport_n=uint32_t(a.n);break;}
+        case OP_VIEWPORTS:{auto a=payload<p_viewports>(p,n);need(a.n>=0 && a.n<=16 && a.first>=0 && a.first<=16-a.n,"Invalid viewport record");for(int i=0;i<a.n;i++){VkViewport &v=state.viewport[a.first+i];v.x=a.v[i][0];v.y=a.v[i][1];v.width=a.v[i][2];v.height=a.v[i][3];}if(uint32_t(a.first+a.n)>state.viewport_n)state.viewport_n=uint32_t(a.first+a.n);break;}
         case OP_SCISSOR:{auto a=payload<p_scissor>(p,n);need(a.w>=0 && a.h>=0,"Invalid scissor dimensions");state.scissor={{a.x,a.y},{uint32_t(a.w),uint32_t(a.h)}};break;}
         case OP_DEPTH_RANGE:{auto a=payload<p_depth_range>(p,n);state.depth_range[0]=a.n;state.depth_range[1]=a.f;break;}
         case OP_BIND_PROGRAM:{CPU_SCOPE(Program);auto a=payload<p_bind_program>(p,n);need(!a.prog || a.prog->nstage<=6,"Invalid bound program");for(unsigned st=0;st<6;st++)if(a.stages&(1u<<nvn_stage[st]))state.shader[st]=nullptr;if(!a.prog)break;const std::array<Shader*,6> &loaded=program_shaders(a.prog);for(unsigned i=0;i<a.prog->nstage;i++){Shader *s=loaded[i];if(a.stages&(1u<<nvn_stage[s->stage]))state.shader[s->stage]=s;}break;}
@@ -3889,16 +3969,29 @@ void execute(const uint8_t *pc,unsigned depth,uint64_t &budget){
             auto deadline=std::chrono::steady_clock::now()+std::chrono::nanoseconds(cfg.fence_timeout_ns);for(;;){uint32_t value=__atomic_load_n(reinterpret_cast<uint32_t*>(a.address),__ATOMIC_ACQUIRE);if(a.mode==0?value==a.value:int32_t(value-a.value)>=0)break;need(std::chrono::steady_clock::now()<deadline,"NVN event wait timeout");std::this_thread::yield();}break;}
         case OP_COUNT_+5:state.bounds=payload<xbg_depth_bounds>(p,n);break;
         case OP_COUNT_+6:resolve_texture(payload<p_copy_t2t>(p,n));break;
-        case OP_RESET_COUNTER:{uint64_t type=payload<uint64_t>(p,n);need(type==NVN_COUNTER_TYPE_SAMPLES_PASSED,"Unsupported pipeline counter reset");state.samples_passed=0;end_occlusion_query();++counter_epoch;state.count_samples=true;++counter_ops[0];break;}   // the open run belongs to the old epoch
-        case OP_REPORT_COUNTER:{need(n>=16,"Truncated counter report");uint64_t type,addr;memcpy(&type,p,8);memcpy(&addr,p+8,8);need(addr,"Null counter output");need(type==NVN_COUNTER_TYPE_TIMESTAMP || type==NVN_COUNTER_TYPE_SAMPLES_PASSED,"Unsupported pipeline statistics query");need(timestamp_bits,"Queue family does not support GPU timestamps");++counter_ops[type==NVN_COUNTER_TYPE_TIMESTAMP?1:2];if(type==NVN_COUNTER_TYPE_SAMPLES_PASSED)samples_report_seen=true;
+        case OP_RESET_COUNTER:{uint64_t type=payload<uint64_t>(p,n);
+            // Only samples passed is a counter this replay keeps. A reset of a timestamp has nothing to reset; a reset of a pipeline statistic is
+            // ignored, as nvn_mtl.m ignores it (it only counts the call), since its reports are written as 0 (OP_REPORT_COUNTER below).
+            if(type!=NVN_COUNTER_TYPE_SAMPLES_PASSED){if(!xbg_counter_is_timestamp(type)){static bool noted=false;if(!noted){noted=true;xbg_logf("[RED] NVN ResetCounter type %#llx (pipeline statistic) not implemented: ignored, as nvn_mtl.m does",(unsigned long long)type);}}break;}
+            state.samples_passed=0;end_occlusion_query();++counter_epoch;state.count_samples=true;++counter_ops[0];break;}   // the open run belongs to the old epoch
+        case OP_REPORT_COUNTER:{need(n>=16,"Truncated counter report");uint64_t type,addr;memcpy(&type,p,8);memcpy(&addr,p+8,8);need(addr,"Null counter output");need(timestamp_bits,"Queue family does not support GPU timestamps");
+            // NVN's counter types, as nvn_mtl.m writes them (post_run, rep_ticks): TIMESTAMP (0) is the time the GPU finishes the earlier work and TIMESTAMP_TOP
+            // (0x10) the time it reaches the report without waiting for that work (Metal: its segment's GPU start against its end), both with 0 in the counter
+            // field (write_report; Tears of the Kingdom reports TIMESTAMP_TOP after each conditional clear, see OP_RENDER_COND). SAMPLES_PASSED sums the
+            // occlusion run. The pipeline statistics (2..0xf) and any other type are not implemented here or in nvn_mtl.m, which writes them as counter 0
+            // with the end time and does not stop: the same here, with one [RED] line.
+            const bool timestamp=xbg_counter_is_timestamp(type);
+            if(!timestamp && type!=NVN_COUNTER_TYPE_SAMPLES_PASSED){static bool noted=false;if(!noted){noted=true;xbg_logf("[RED] NVN ReportCounter type %#llx (pipeline statistic) not implemented: written as counter 0 with the GPU end time, as nvn_mtl.m does",(unsigned long long)type);}}
+            if(timestamp)++counter_ops[1];else if(type==NVN_COUNTER_TYPE_SAMPLES_PASSED){++counter_ops[2];samples_report_seen=true;}   // ops= reset / timestamp / samples
+            const VkPipelineStageFlagBits stage=type==NVN_COUNTER_TYPE_TIMESTAMP_TOP?VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT:VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
             PendingReport r{addr,type,counter_epoch,epochs[counter_epoch].size(),nullptr,VK_NULL_HANDLE,0,0,false};
-            if(type==NVN_COUNTER_TYPE_TIMESTAMP && !heavy_timestamps && !ab_off("timestamps")){
-                // A bottom-of-pipe timestamp already waits for all earlier work and may be written inside a render pass: no pass
-                // end and no full barriers, so a timestamp report no longer splits a pass on a tiling GPU (4 per D2R frame).
+            if(type!=NVN_COUNTER_TYPE_SAMPLES_PASSED && !heavy_timestamps && !ab_off("timestamps")){
+                // A bottom-of-pipe timestamp already waits for all earlier work, a top-of-pipe one waits for none, and either may be written inside a
+                // render pass: no pass end and no full barriers, so a timestamp report no longer splits a pass on a tiling GPU (4 per D2R frame).
                 // Samples reports keep the pass end below: it closes the occlusion run they sum.
                 timestamp_query(r.ts,r.ts_index,r.slot);   // a new pool is reset outside the pass first
-                Slot &ts=recording_slot();++ts.ops;++perf.ops;vkCmdWriteTimestamp(ts.cmd,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,r.ts,r.ts_index);}
-            else{Commands c;timestamp_query(r.ts,r.ts_index,r.slot);vkCmdWriteTimestamp(c.command,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,r.ts,r.ts_index);c.finish();}
+                Slot &ts=recording_slot();++ts.ops;++perf.ops;vkCmdWriteTimestamp(ts.cmd,stage,r.ts,r.ts_index);}
+            else{Commands c;timestamp_query(r.ts,r.ts_index,r.slot);vkCmdWriteTimestamp(c.command,stage,r.ts,r.ts_index);c.finish();}
             pending_reports.push_back(r);break;}
         case OP_CLEAR_BUF:{auto a=payload<p_clear_buf>(p,n);need(a.addr && a.size<=256ull*1024*1024,"Invalid buffer clear");need(!(a.addr&3),"Unaligned buffer clear address");if(!a.size)break;
             invalidate_cpu_range(a.addr,a.size);
@@ -3914,16 +4007,30 @@ void execute(const uint8_t *pc,unsigned depth,uint64_t &budget){
         case OP_RENDER_COND:{auto a=payload<p_render_cond>(p,n);
             if(a.mode>=2)state.render_cond_skip=(a.mode==3);
             else if(a.addr){
-                uint64_t x=*reinterpret_cast<const volatile uint64_t*>(a.addr);
-                uint64_t y=*reinterpret_cast<const volatile uint64_t*>(a.addr+16);
-                state.render_cond_skip=(a.mode?x==y:x!=y);
+                // The two 64-bit counter fields at addr and addr + 16 are compared. A report replayed earlier and still pending (written when its fence
+                // completes, in order: resolve_known_reports) decides a field it is the last pending report over: a timestamp report (TIMESTAMP or
+                // TIMESTAMP_TOP) at exactly that address will write 0 there, so the field is known 0, as nvn_mtl.m's rc_value counts a timestamp report
+                // of the same submission (Tears of the Kingdom: rec = 1 from the CPU, ReportCounter(TIMESTAMP_TOP, rec) after the first conditional clear,
+                // and the next conditional clear of that target is skipped). Any other pending report over the field (samples passed, a statistic, or a
+                // report at another address that reaches it) or a pending writeback over it leaves the value unknown, and the draws are kept, as
+                // rc_value's "unknown, drawn": resolving the pending work here (cpu_access) would be a full GPU wait in the middle of the replay. Not
+                // the same as nvn_mtl.m: it keeps every address a samples-passed report ever wrote unknown for good (rc_occ), where this reads the
+                // settled value once the report has been written.
+                auto field=[&](uint64_t f,uint64_t &v){
+                    for(auto &w:pending_writebacks)if(xbg_wb_overlaps(f,8,w.addr,w.bytes))return false;
+                    for(size_t i=pending_reports.size();i--;){const PendingReport &r=pending_reports[i];if(!xbg_wb_overlaps(f,8,r.addr,sizeof(NVNcounterData)))continue;
+                        if(r.addr==f && xbg_counter_is_timestamp(r.type)){v=0;return true;}
+                        return false;}
+                    v=*reinterpret_cast<const volatile uint64_t*>(f);return true;};
+                uint64_t x=0,y=0;const bool known=field(a.addr,x) && field(a.addr+16,y);
+                state.render_cond_skip=known && (a.mode?x==y:x!=y);
             }else state.render_cond_skip=false;
             break;}
         case OP_FENCE_SYNC:{need(n>=8,"Truncated fence sync");sync_t *s=nullptr;memcpy(&s,p,8);if(s){s->fence=submitted+1;s->fenced=1;}break;}
         case OP_TF_BIND:{auto a=payload<p_tf_bind>(p,n);need(a.index>=0 && a.index<4,"Invalid TF buffer index");state.tf[a.index]=a;break;}
         case OP_TF_STATE:{auto a=payload<p_tf_state>(p,n);state.tf_on=(a.what==0 || a.what==3);break;}
         case OP_RAST_DISCARD:state.rast_discard=payload<p_rast_discard>(p,n).on;break;
-        case OP_VP_SWIZZLE:{auto a=variable_payload<p_vp_swizzle>(p,n);need(a.first>=0 && a.n>=0 && a.first+a.n<=16 && n>=offsetof(p_vp_swizzle,sw)+size_t(a.n)*4,"Invalid viewport swizzle record");memcpy(state.vp_sw+a.first,a.sw,a.n*4);break;}
+        case OP_VP_SWIZZLE:{auto a=variable_payload<p_vp_swizzle>(p,n);need(a.n>=0 && a.n<=16 && a.first>=0 && a.first<=16-a.n && n>=offsetof(p_vp_swizzle,sw)+size_t(a.n)*4,"Invalid viewport swizzle record");memcpy(state.vp_sw+a.first,a.sw,a.n*4);break;}
         case OP_BIND_TEX1:{need(n>=sizeof(p_bind_tex1),"Truncated bind texture record");p_bind_handles tmp;const p_bind_handles *a=bind_rec(h.op,p,&tmp);need(a->stage>=0 && a->stage<6 && a->first>=0 && a->first<256,"Invalid descriptor binding record");state.tex[a->stage][a->first]=a->h[0];++tex_gen[a->stage];break;}
         case OP_PRIM_RESTART:{auto a=payload<p_prim_restart>(p,n);state.restart_on=a.on;state.restart_index=a.index;break;}
         case OP_BIND_UBO_SMALL:{need(n>=sizeof(p_bind_ubo_small),"Truncated uniform buffer binding");p_bind_buf tmp;const p_bind_buf *a=bind_buf_rec(h.op,p,&tmp);need(a->stage>=0 && a->stage<6 && a->index>=0 && a->index<16,"Invalid shader buffer slot");state.ub[a->stage][a->index]={a->addr,a->size};++buf_gen[a->stage];break;}
@@ -4005,6 +4112,18 @@ extern "C" int xbg_game_initialize(const xbg_game_config *c,char *error,size_t b
      {FILE *b=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-noload").c_str(),"rb");noload_enabled=false;if(b){noload_enabled=fgetc(b)!='0';fclose(b);}else if(const char *e=getenv("DM_GFX_NOLOAD"))noload_enabled=atoi(e)!=0;xbg_logf("NVN proven full-overwrite first draws skip the color load=%d (marker gfx-noload; A/B target noload)",int(noload_enabled));}{FILE *q=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-bright").c_str(),"rb");bright::enabled=true;if(q){bright::enabled=fgetc(q)!='0';fclose(q);}else if(const char *e=getenv("DM_GFX_BRIGHT"))bright::enabled=atoi(e)!=0;xbg_logf("NVN 3D brightening=%d (marker gfx-bright; A/B target bright)",int(bright::enabled));}{FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-perf-sample").c_str(),"rb");perf_sample=32;if(m){if(fscanf(m,"%u",&perf_sample)!=1)perf_sample=32;fclose(m);}else if(const char *e=getenv("DM_GFX_PERF_SAMPLE"))perf_sample=unsigned(atoi(e));perf_frame_timed=perf_sample!=0;perf_timed_frames=0;xbg_logf("NVN perf timing every %u frames (marker gfx-perf-sample; 0 = off)",perf_sample);}}
     for(auto &sl:slots)sl=Slot{};slot_index=0;pass_prof_enabled=false;pass_prof_next=300;pass_prof_period=600;pass_prof_until=UINT64_MAX;pass_prof_frame=UINT64_MAX;pass_prof_draws=0;pass_prof_queries=pass_prof_slots=pass_prof_skipped_slots=0;perf=Perf{};for(auto &c:perf_timing_before)c=XbgCpuTiming::Counter{};static_arena.cached=false;support_static.clear();format_property_cache.clear();for(auto &k:format_flat_known)k=false;
     VkPhysicalDeviceShaderDrawParametersFeatures draw_parameters{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES};VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};features.pNext=&draw_parameters;vkGetPhysicalDeviceFeatures2(cfg.physical,&features);if(cfg.enabled_shader_draw_parameters && !draw_parameters.shaderDrawParameters){if(error&&bytes)snprintf(error,bytes,"shaderDrawParameters unsupported");return -1;}
+    {VkPhysicalDeviceMultiviewFeatures mv{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES};VkPhysicalDeviceVulkan12Features v12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};f2.pNext=&mv;
+     // The 1.2 feature struct is asked for only when the loader and the device are 1.2: the front end (dm/android/vulkan_present.cpp) creates the instance at
+     // 1.2 exactly when the loader has it (vkEnumerateInstanceVersion), so this is the instance version it chose; the engine itself is handed no instance.
+     // Validation target: a front end that asks 1.1 on a 1.2 loader would make this query a 1.2 struct under a 1.1 instance.
+     uint32_t loader_api=VK_API_VERSION_1_0;if(vkEnumerateInstanceVersion(&loader_api)!=VK_SUCCESS)loader_api=VK_API_VERSION_1_0;const bool api12=loader_api>=VK_API_VERSION_1_2 && properties.apiVersion>=VK_API_VERSION_1_2;
+     mv.pNext=api12?&v12:nullptr;vkGetPhysicalDeviceFeatures2(cfg.physical,&f2);
+     // The same two routes the front end takes at vkCreateDevice: the 1.2 features (both, as the front end enables both) on a 1.2 device under a 1.2 instance,
+     // or the extension when the device lists it; so what the host reports enabled is always something seen here.
+     multiview_supported=mv.multiview!=0;viewport_index_supported=api12 && v12.shaderOutputViewportIndex && v12.shaderOutputLayer;
+     {uint32_t ext_count=0;if(vkEnumerateDeviceExtensionProperties(cfg.physical,nullptr,&ext_count,nullptr)==VK_SUCCESS){std::vector<VkExtensionProperties> ext(ext_count);if(vkEnumerateDeviceExtensionProperties(cfg.physical,nullptr,&ext_count,ext.data())==VK_SUCCESS)for(const auto &e:ext)if(!strcmp(e.extensionName,VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME))viewport_index_supported=true;}}
+     viewport_index_enabled=multiview_enabled=false;
+     xbg_logf("NVN viewports maxViewports=%u multiViewport=%u (enabled) shaderOutputViewportIndex=%u multiview=%u (supported by the device; enabled only through xbg_game_set_viewport_features; draw_viewports)",properties.limits.maxViewports,unsigned(cfg.enabled_core.multiViewport),unsigned(viewport_index_supported),unsigned(multiview_supported));}
     VkCommandPoolCreateInfo cp{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};cp.queueFamilyIndex=cfg.queue_family;cp.flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;VkResult r=vkCreateCommandPool(cfg.device,&cp,nullptr,&command_pool);if(r!=VK_SUCCESS){if(error&&bytes)snprintf(error,bytes,"vkCreateCommandPool=%d",r);return r;}
     VkPipelineCacheCreateInfo cache{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};std::vector<uint8_t> cache_data=load_pipeline_cache();cache.initialDataSize=cache_data.size();cache.pInitialData=cache_data.empty()?nullptr:cache_data.data();r=vkCreatePipelineCache(cfg.device,&cache,nullptr,&pipeline_cache);if(r!=VK_SUCCESS){vkDestroyCommandPool(cfg.device,command_pool,nullptr);command_pool=VK_NULL_HANDLE;if(error&&bytes)snprintf(error,bytes,"vkCreatePipelineCache=%d",r);return r;}
     {std::string dir=cfg.shader_directory;size_t cut=dir.find_last_of('/');std::string base=cut==std::string::npos?dir:dir.substr(0,cut);
@@ -4080,6 +4199,21 @@ extern "C" int xbg_game_set_sampler_mirror_clamp_to_edge(VkBool32 enabled){
         if(!supported)return -2;
     }
     sampler_mirror_clamp_enabled=enabled;xbg_logf("NVN sampler mirror-clamp-to-edge actualEnabled=%u",enabled);return 0;
+}
+// NVN's window origin, from the host at any time between submissions (the replay reads the atomics at the draw): see origin_ll above
+extern "C" void xbg_game_set_window_origin(VkBool32 lower_left,VkBool32 queue_lower_left){
+    if(origin_ll.exchange(lower_left!=0)!=(lower_left!=0))xbg_logf("NVN window origin: %s",lower_left?"lower left (GL: viewports flipped, the window image stored bottom-up and flipped at present)":"upper left");
+    queue_origin_ll.store(queue_lower_left!=0);
+}
+// The viewport features the host enabled at vkCreateDevice (the mirror-clamp setter's shape): shaderOutputViewportIndex (with
+// shaderOutputLayer, or VK_EXT_shader_viewport_index_layer) lets a vertex or tessellation stage write ViewportIndex, multiview
+// is reserved for the viewport-mask fan-out. Before the first shader load: validate_capabilities reads them.
+extern "C" int xbg_game_set_viewport_features(VkBool32 shader_output_viewport_index,VkBool32 multiview){
+    if((shader_output_viewport_index!=VK_FALSE && shader_output_viewport_index!=VK_TRUE) || (multiview!=VK_FALSE && multiview!=VK_TRUE))return -1;
+    std::lock_guard<std::recursive_mutex> lock(mutex);if(!initialized || failed || stats.submissions || stats.draws || stats.dispatches || stats.shader_loads)return -1;
+    if((shader_output_viewport_index && !viewport_index_supported) || (multiview && !multiview_supported))return -2;
+    viewport_index_enabled=shader_output_viewport_index!=VK_FALSE;multiview_enabled=multiview!=VK_FALSE;
+    xbg_logf("NVN viewport features shaderOutputViewportIndex=%u multiview=%u (enabled at device creation, as the host reports)",unsigned(viewport_index_enabled),unsigned(multiview_enabled));return 0;
 }
 
 extern "C" int xbg_game_provenance(const char *path){

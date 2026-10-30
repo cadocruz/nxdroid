@@ -5,7 +5,7 @@
 #include "hle.h"
 #include <AudioToolbox/AudioToolbox.h>
 #include <TargetConditionals.h>
-#include <dispatch/dispatch.h>
+// semaphores: port.h dm_sem (GCD on Apple)
 #include <stdatomic.h>
 #include <unistd.h>
 
@@ -27,9 +27,9 @@ typedef struct {
     AudioUnit au;
     int backend;                       // BK_*: the running consumer. Start, Stop and the background suspend change it only under g_aos_lock and act on it rather than re-deriving it from state and g_suspended
     pthread_t null_th; _Atomic int null_run;
-    dispatch_semaphore_t notify_sem;
+    dm_sem_t notify_sem;
     pthread_t notify_th; _Atomic int notify_run, notify_pending, notify_armed;
-    dispatch_semaphore_t rel_sem;      // Host outputs only (dm_pcmout_open): signaled for each release, so the in-process audio renderer blocks instead of polling (dm_pcmout_wait)
+    dm_sem_t rel_sem;      // Host outputs only (dm_pcmout_open): signaled for each release, so the in-process audio renderer blocks instead of polling (dm_pcmout_wait)
     int id;                            // open sequence number (#N in the log; tells simultaneous outputs apart, e.g. Engage's Wwise and Unity's built-in FMOD)
     int nlog;                          // Start / Stop / Close lines logged so far (at most 32 per output)
     _Atomic uint64_t under_n, under_b; // underruns: times the pending queue was empty when the callback needed data / zero-filled bytes
@@ -62,21 +62,21 @@ static void au_note(aout *a, const char *what, void *lr) {
 static void notify_release(aout *a) {
     atomic_store_explicit(&a->notify_pending, 1, memory_order_release);
     if (atomic_exchange_explicit(&a->notify_armed, 1, memory_order_acq_rel) == 0)
-        dispatch_semaphore_signal(a->notify_sem);
+        dm_sem_signal(a->notify_sem);
 }
 
 void dm_host_helper_qos(qos_class_t q);   // hle_thread.c: under DM_QOS_MAP a helper thread sets its own class instead of inheriting its creator's
 static void *event_notify(void *p) {
     aout *a = p; dm_host_helper_qos(QOS_CLASS_USER_INTERACTIVE);   // the game's audio thread waits on the release event it signals
     for (;;) {
-        dispatch_semaphore_wait(a->notify_sem, DISPATCH_TIME_FOREVER);
+        dm_sem_wait(a->notify_sem, -1);
         if (atomic_exchange_explicit(&a->notify_pending, 0, memory_order_acq_rel) && a->event)
             hle_signal_system_event(a->event);
         atomic_store_explicit(&a->notify_armed, 0, memory_order_release);
         if (!atomic_load_explicit(&a->notify_run, memory_order_acquire)) break;
         if (atomic_load_explicit(&a->notify_pending, memory_order_acquire) &&
             atomic_exchange_explicit(&a->notify_armed, 1, memory_order_acq_rel) == 0)
-            dispatch_semaphore_signal(a->notify_sem);
+            dm_sem_signal(a->notify_sem);
     }
     return NULL;
 }
@@ -113,7 +113,7 @@ static void pull(aout *a, uint8_t *dst, uint64_t n) {
     }
     if (released) {
         if (a->event) notify_release(a);   // the notify thread only signals the guest's event: outputs without one (the host's renderer output, games that poll) need no wake-up
-        if (a->rel_sem) dispatch_semaphore_signal(a->rel_sem);
+        if (a->rel_sem) dm_sem_signal(a->rel_sem);
     }
 }
 
@@ -160,7 +160,7 @@ static OSStatus au_render(void *ctx, AudioUnitRenderActionFlags *f, const AudioT
       if (mute) memset(bl->mBuffers[0].mData, 0, bl->mBuffers[0].mDataByteSize); }
     return noErr;
 }
-#if !TARGET_OS_IPHONE
+#if TARGET_OS_OSX   // the CoreAudio HAL device (buffer size, device change): the Mac only
 // Mac DefaultOutput's default 512 device frames can exceed the PCM a game has queued, producing zero-filled gaps.
 // Request about 5 ms of device frames, as front_ios.m asks of the iOS audio session; reapply on device or output-rate changes within the supported range.
 // DM_DBG_AU_FRAMES=N asks N frames instead (1024 = the iOS default, which reproduces the crackling)
@@ -192,7 +192,7 @@ static void au_device_changed(void *ctx, AudioUnit au, AudioUnitPropertyID id, A
 }
 #endif
 static void au_dispose(AudioUnit au) {
-#if !TARGET_OS_IPHONE
+#if TARGET_OS_OSX   // the CoreAudio HAL device (buffer size, device change): the Mac only
     // Disposal clears CurrentDevice and notifies listeners. Remove them before the unit tears down its device.
     AudioUnitRemovePropertyListenerWithUserData(au, kAudioOutputUnitProperty_CurrentDevice, au_device_changed, NULL);
     AudioUnitRemovePropertyListenerWithUserData(au, kAudioUnitProperty_StreamFormat, au_device_changed, NULL);
@@ -215,7 +215,7 @@ static OSStatus au_create(aout *a) {
                                      .mBytesPerPacket = 2u * ch, .mFramesPerPacket = 1, .mBytesPerFrame = 2u * ch,
                                      .mChannelsPerFrame = ch, .mBitsPerChannel = 16};
     AURenderCallbackStruct cb = {au_render, a};
-#if !TARGET_OS_IPHONE
+#if TARGET_OS_OSX   // the CoreAudio HAL device (buffer size, device change): the Mac only
     const AudioUnitPropertyID props[] = {kAudioOutputUnitProperty_CurrentDevice, kAudioUnitProperty_StreamFormat};
     for (unsigned i = 0; i < sizeof props / sizeof *props; i++) {
         OSStatus st = AudioUnitAddPropertyListener(a->au, props[i], au_device_changed, NULL);
@@ -325,7 +325,7 @@ static Result au_open_at(void *g, void *ev, const char *name, const uint8_t *par
     atomic_init(&a->rel_head, 0); atomic_init(&a->rel_tail, 0);
     atomic_init(&a->null_run, 0); atomic_init(&a->notify_run, 1);
     atomic_init(&a->notify_pending, 0); atomic_init(&a->notify_armed, 0);
-    a->notify_sem = dispatch_semaphore_create(0); a->id = atomic_fetch_add(&nopen, 1);
+    a->notify_sem = dm_sem_new(0); a->id = atomic_fetch_add(&nopen, 1);
     pthread_create(&a->notify_th, NULL, event_notify, a);
     if (ev) hle_bind_system_event(ev, 1);   // Buffer release event: bind a kernel event on the guest thread (auto-clear), afterwards signaled by the audio thread
     char sb[64]; int use_au = real_audio();
@@ -377,7 +377,7 @@ static void au_release_pending(aout *a) {
     atomic_store_explicit(&a->rel_tail, rw, memory_order_release);
     atomic_store_explicit(&a->q_head, qh, memory_order_release); a->pos = 0;
     pthread_mutex_unlock(&a->m);
-    if (released) { if (a->event) notify_release(a); if (a->rel_sem) dispatch_semaphore_signal(a->rel_sem); }
+    if (released) { if (a->event) notify_release(a); if (a->rel_sem) dm_sem_signal(a->rel_sem); }
 }
 static void au_stop_at(void *g, void *lr) {   // lr NULL: the stop inside Close, not logged separately
     aout *a = ao(g);
@@ -394,14 +394,14 @@ static void au_close(void *g, void *lr) {
     au_stop_at(g, NULL);
     aout *a = objmap_del(g);
     atomic_store_explicit(&a->notify_run, 0, memory_order_release);
-    dispatch_semaphore_signal(a->notify_sem);
+    dm_sem_signal(a->notify_sem);
     pthread_join(a->notify_th, NULL);
     pthread_mutex_lock(&g_aos_lock);
     for (int i = 0; i < AOMAX; i++) if (g_aos[i] == a) g_aos[i] = NULL;
     pthread_mutex_unlock(&g_aos_lock);
     if (a->au) au_dispose(a->au);
-    dispatch_release(a->notify_sem);
-    if (a->rel_sem) dispatch_release(a->rel_sem);
+    dm_sem_free(a->notify_sem);
+    if (a->rel_sem) dm_sem_free(a->rel_sem);
     pthread_mutex_destroy(&a->m); int ch = a->ch; free(a);
     au_info(g, ch, STATE_STOPPED);
 }
@@ -481,11 +481,11 @@ HLE_FORCE("_ZN2nn5audio22GetAudioInSampleFormatEPKNS0_7AudioInE", "recording sam
 void *dm_pcmout_open(int ch) {
     void *key = calloc(1, 64); uint8_t param[8] = {0}; *(uint16_t *)(param + 4) = (uint16_t)ch;
     if (au_open_at(key, NULL, "AudioRenderer", param, NULL)) die("host PCM output cannot be opened");
-    ao(key)->rel_sem = dispatch_semaphore_create(0);
+    ao(key)->rel_sem = dm_sem_new(0);
     return key;
 }
 // Wait until the output releases a block, at most ms milliseconds (spurious returns are fine: the caller checks dm_pcmout_released again)
-void dm_pcmout_wait(void *k, int ms) { dispatch_semaphore_wait(ao(k)->rel_sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)ms * 1000000)); }
+void dm_pcmout_wait(void *k, int ms) { dm_sem_wait(ao(k)->rel_sem, (int64_t)ms * 1000000); }
 void dm_pcmout_start(void *k) { au_start_at(k, NULL); }
 void dm_pcmout_close(void *k) { au_close(k, NULL); free(k); }   // stop, take it out of the registry (frees its AOMAX slot), free it and its key
 int dm_pcmout_append(void *k, void *b) { return (int)h_au_Append(k, b); }

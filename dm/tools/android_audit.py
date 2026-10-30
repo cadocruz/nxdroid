@@ -4,7 +4,8 @@
 #   apple-api       the Mach kernel and Darwin libc extensions bionic does not have: mach_* (Mach-O symbol decoration _mach_* included, which assembly links against),
 #                   <mach/*> and <mach-o/*>, vm_*, os_unfair_lock, dispatch_* (GCD), pthread_[set|get]_qos_class*, sysctl, clonefile, CommonCrypto, <TargetConditionals.h> and
 #                   TARGET_OS_* / TARGET_CPU_*, <libkern/*> and sys_icache_invalidate, <os/proc.h> (os_proc_available_memory), and Darwin's ucontext register layout
-#                   (_STRUCT_ARM_THREAD_STATE64, ->__ss / ->__ns), which bionic lays out differently
+#                   (_STRUCT_ARM_THREAD_STATE64, ->__ss / ->__ns), which bionic lays out differently, and an mrs of tpidrro_el0 / tpidr_el0 (Darwin's TSD base, or
+#                   bionic's thread control block: a thread layout either way)
 #   objc-framework  Objective-C: an #import/#include of an Apple framework, an @-keyword, or an NS*/CF*/MTL*/... type or id<protocol>. In a .m file the type tokens are
 #                   left out: an Objective-C implementation file is Apple-only as a whole (see --summary), and itemising 1,800 MTL lines of nvn_mtl.m adds nothing
 #   page-assumption a 16384 / 0x4000 / 1 << 14 / 16 KiB literal on a line that also talks about pages, mmap, mprotect or getpagesize: a host page size written into the
@@ -44,14 +45,17 @@ APPLE_API = [
     ('section-lookup', r'\bgetsectiondata\b'),
     ('os_unfair_lock', r'\bos_unfair_lock\b'),
     ('dispatch', r'\bdispatch_(?:async|sync|after|once|apply|queue|group|semaphore|source|time\b|data|get_main|get_global|release|retain|set_|qos)'),
-    ('qos-class', r'\bpthread_(?:set|get)_qos_class[A-Za-z_]*'),
+    ('qos-class', r'\bpthread_(?:set|get|override)_qos_class[A-Za-z_]*|\bpthread_override_t\b'),
     ('sysctl', r'\bsysctl\b'),
     ('clonefile', r'\bclonefile\b'),
-    ('commoncrypto', r'CommonCrypto|\bCC_(?:SHA1|SHA256|MD5)\b'),
+    ('commoncrypto', r'CommonCrypto|\bCC_(?:SHA1|SHA256|MD5)(?:_[A-Za-z_]+)?\b|\bCC_LONG\b'),   # the one-shot call, and the streaming CTX / Init / Update / Final and the length constants
     ('target-conditionals', r'\bTARGET_(?:OS|CPU|IPHONE|SIMULATOR)[A-Z_]*\b|TargetConditionals'),
     ('libkern', r'#\s*(?:include|import)\s*<libkern/[^>]*>|\bsys_(?:i|d)cache_(?:invalidate|flush)\b'),
     ('os-proc', r'#\s*(?:include|import)\s*<os/proc\.h>|\bos_proc_available_memory\b'),
     ('ucontext', r'_STRUCT_ARM_[A-Z0-9_]+|->__ss\b|->__ns\b'),
+    # a read of a thread register (inline or .S assembly): tpidrro_el0 is Darwin's pthread TSD array and reads 0 in a Linux task; tpidr_el0 is bionic's thread control block,
+    # whose words are bionic's (patch_nso.py emit_thread_base, port.h dm_kslot_*). Either way the code assumes one platform's thread layout
+    ('thread-register', r'\bmrs\s+[^,"\n]+,\s*tpidr(?:ro)?_el0\b'),
 ]
 OBJC = [
     ('framework-header', r'#\s*(?:import|include)\s*<(?:Metal|MetalFX|AppKit|UIKit|Foundation|CoreAudio|AudioToolbox|AVFAudio|VideoToolbox|'
@@ -118,7 +122,7 @@ def scan(roots):
     # Hits keyed by (file, category, sha1 of the normalised line): identical lines of one file and category collapse into one row and one baseline entry.
     hits = {}
     for path, p in walk(roots):
-        for n, line in enumerate(p.read_text(errors='replace').split('\n'), 1):
+        for n, line in enumerate(p.read_text(encoding='utf-8', errors='replace').split('\n'), 1):   # the sources are UTF-8 whatever the platform's locale
             text = norm(line)
             for cat, label, match in detect(path, line):
                 hits.setdefault((path, cat, digest(text)), {'path': path, 'line': n, 'category': cat, 'match': match, 'text': text})
@@ -128,7 +132,7 @@ def scan(roots):
 def load():
     base = {}
     if BASELINE.exists():
-        for line in BASELINE.read_text().split('\n'):
+        for line in BASELINE.read_text(encoding='utf-8').split('\n'):
             if not line or line.startswith('#'): continue
             path, cat, sha, text = line.split('\t', 3)
             base[(path, cat, sha)] = text
@@ -138,7 +142,7 @@ def load():
 def write(base):
     BASELINE.parent.mkdir(parents=True, exist_ok=True)
     rows = [f'{path}\t{cat}\t{sha}\t{shown(text)}\n' for (path, cat, sha), text in sorted(base.items())]
-    BASELINE.write_text(HEADER + ''.join(rows))
+    BASELINE.write_text(HEADER + ''.join(rows), encoding='utf-8', newline='\n')   # UTF-8 and LF on every platform: the file is the gate's record, and a run under another locale or line convention must change only the rows that changed
 
 
 def main():

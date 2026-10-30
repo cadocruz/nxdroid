@@ -89,10 +89,10 @@ static void cap_iface(NvProg *o, uint64_t out[6]) {
     for (int st = 0; st < 6; st++) {
         NvShader *sh = o ? o->sh[st] : nil; out[st] = 0; if (!sh) continue;
         const nvn_refl *r = &sh->rf; int nb = MAX(0, MIN(r->nb, NVN_REFL_MAXB)), nv = MAX(0, MIN(r->nv, NVN_REFL_MAXV));
-        CC_SHA256_CTX c; uint8_t md[32]; CC_SHA256_Init(&c);
-        CC_SHA256_Update(&c, &nb, sizeof nb); CC_SHA256_Update(&c, r->b, (CC_LONG)(nb * sizeof *r->b));
-        CC_SHA256_Update(&c, &nv, sizeof nv); CC_SHA256_Update(&c, r->v, (CC_LONG)(nv * sizeof *r->v)); CC_SHA256_Update(&c, r->tg, sizeof r->tg);
-        CC_SHA256_Final(md, &c); memcpy(&out[st], md, 8); out[st] |= 1;
+        dm_sha256_t c; uint8_t md[32]; dm_sha256_init(&c);
+        dm_sha256_update(&c, &nb, sizeof nb); dm_sha256_update(&c, r->b, nb * sizeof *r->b);
+        dm_sha256_update(&c, &nv, sizeof nv); dm_sha256_update(&c, r->v, nv * sizeof *r->v); dm_sha256_update(&c, r->tg, sizeof r->tg);
+        dm_sha256_final(&c, md); memcpy(&out[st], md, 8); out[st] |= 1;
     }
 }
 // ---------- Objects ----------
@@ -397,7 +397,7 @@ static int cap_digest(const tex_t *t, uint8_t md[32], uint64_t *bytes, uint32_t 
     id<MTLCommandBuffer> cb = q_cb(); id<MTLBlitCommandEncoder> e = [cb blitCommandEncoder];
     [e copyFromTexture:mt sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0) sourceSize:MTLSizeMake(mt.width, mt.height, 1) toBuffer:b destinationOffset:0 destinationBytesPerRow:row destinationBytesPerImage:n];
     [e endEncoding]; [cb commit]; [cb waitUntilCompleted];
-    CC_SHA256(b.contents, (CC_LONG)n, md);
+    dm_sha256(b.contents, n, md);
     if (pix) cap_buf_put(pix, b.contents, n);
     *bytes = n; *w = (uint32_t)mt.width; *hh = (uint32_t)mt.height; *pf = (uint32_t)mt.pixelFormat;
     if (png) shot(mt, png, 0, NULL);

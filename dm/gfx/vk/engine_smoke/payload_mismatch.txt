@@ -17,22 +17,6 @@
 #   sizeof(p_bind_tex1)=24  sizeof(p_copy_stride)=16  sizeof(p_bind_ubo_small)=16
 #   sizeof(p_bind_vbuf1)=16  sizeof(p_viewports)=392  sizeof(tex_t)=128
 
-== P6 OP_VIEWPORTS (11): first and n are not read - PARTLY FIXED
-writer:  hle_nvn.c:952 records first/n and up to 16 viewports (NVN allows 16).
-reader:  was requiring first == 0 && n == 1 ("Multiple viewports unsupported") over a single
-         state.viewport, so the record's n was not even read.
-right:   the writer.
-fixed:   the state is now viewport[16] plus depth_range[2] and viewport_n (the count), the handler reads
-         first/n and checks both against the record, the record's near/far are left to DEPTH_RANGE (as
-         the Metal replay applies it to every viewport), and every consumer uses index 0.
-open:    n > 1 is still a fatal on purpose, because the pipeline declares one viewport and the load
-         optimization (nvn_cover) takes one. Adreno is not the reason: Vulkan allows 16 viewports
-         (maxViewportDimensions.0 = 16384, and the probe's viewport bounds range covers them). Doing it
-         properly means a viewport array as dynamic state, a pipeline built for that count, and
-         VK_KHR_multiview only where the record wants one pass over several viewports.
-bites:   only games that set more than one viewport (or a non-zero first), so lower priority than P1-P5;
-         when it happens it is a loud fatal, not corruption.
-
 == P8 OP_BARRIER (28): the cache bits are ignored (benign)
 writer:  hle_nvn.c:1047 records NVN's int bits (which caches the barrier orders).
 reader:  xbg_game.cpp:3815 records one full VkMemoryBarrier regardless, which is stronger, so nothing
@@ -43,6 +27,16 @@ right:   the writer, but the reader is conservative enough to be correct.
 fix:     nothing for correctness; if passes are to be merged as nvn_mtl.m merges them, the bits are
          needed to know where a pass may not be merged.
 
+# Fixed, recorded in opcode_map.txt's note column: P1-P5, P7 (the first sprint) and P6 (OP_VIEWPORTS, in the
+# draw: the handler writes viewport[first..first+n) and keeps the array's length; the draw declares that many
+# viewports as dynamic state, with the one recorded scissor and depth range for each, only when the last
+# pre-raster shader writes ViewportIndex, and one otherwise, which keeps nvn_cover's one-viewport proof for
+# every non-selecting draw; multiViewport / maxViewports / the enabled shaderOutputViewportIndex are checked
+# and validate_capabilities accepts the viewport capabilities; a viewport mask (ViewportMaskNV) is refused
+# with a [RED] line). Still unreachable end to end: the front end does not enable shaderOutputViewportIndex,
+# the writer collapses SetScissors / SetDepthRanges to index 0, the multiview fan-out is open; see
+# docs/reference/android.md, "The replay refused a record of more than one viewport".
+#
 # Not mismatches, checked and left alone:
 #  - Texture-carrying records (OP_SET_RT, OP_COPY_B2T / T2B, OP_COPY_T2T, OP_CLEAR_TEX) carry a tex_t
 #    snapshot after the struct (hle_nvn.c REC_SNAP, SNAP_OFF). The engine reads payload<...> of the

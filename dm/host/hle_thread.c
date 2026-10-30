@@ -16,7 +16,7 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <mach/mach.h>
-#include <pthread/qos.h>
+#include "port.h"
 #include <dlfcn.h>
 #include <stdatomic.h>
 
@@ -279,25 +279,24 @@ static qos_class_t prio_qos(int prio) {
 }
 static void qos_apply(thr_t *t) {   // on the thread itself, holding G (prio and qos are shared with scheduler readers)
     qos_class_t q = prio_qos(t->prio);
-    if ((uint32_t)q != t->qos && !pthread_set_qos_class_self_np(q, 0)) t->qos = (uint32_t)q;
+    if ((uint32_t)q != t->qos && !dm_qos_set_self(q)) t->qos = (uint32_t)q;
 }
 // A host helper thread (audio notify / silent sink, vsync, movie decode) created from a guest thread inherits that thread's class; under DM_QOS_MAP it sets its own instead
-void dm_host_helper_qos(qos_class_t q) { if (g_qos_map) pthread_set_qos_class_self_np(q, 0); }
+void dm_host_helper_qos(qos_class_t q) { if (g_qos_map) dm_qos_set_self(q); }
 static const char *thr_name(thr_t *t, char *buf, size_t n);
 static void *thread_main(void *p) {
     thr_t *t = p;
     pthread_setspecific(g_keythr, t);
     // CreateThread may already have linked t into g_all: readers and SetThreadPriority hold G.
     pthread_mutex_lock(&G);
-    pthread_set_qos_class_self_np(prio_qos(t->prio), 0);
-    qos_class_t qc = QOS_CLASS_UNSPECIFIED; int rp = 0;
-    pthread_get_qos_class_np(pthread_self(), &qc, &rp); t->qos = (uint32_t)qc;
+    dm_qos_set_self(prio_qos(t->prio));
+    t->qos = (uint32_t)dm_qos_self();
     t->mport = pthread_mach_thread_np(pthread_self()); t->host_work = &dm_host_work;
     pthread_mutex_unlock(&G);
     crash_thread_init();
     guest_thread_init();
     pthread_mutex_lock(&G); while (!t->started) pthread_cond_wait(&t->cv, &G); pthread_mutex_unlock(&G);
-    { char nb[48], hn[64]; snprintf(hn, sizeof hn, "%#x %s", t->handle, thr_name(t, nb, sizeof nb)); pthread_setname_np(hn); }   // the guest's name (set before StartThread) for sample / Instruments
+    { char nb[48], hn[64]; snprintf(hn, sizeof hn, "%#x %s", t->handle, thr_name(t, nb, sizeof nb)); dm_thread_name(hn); }   // the guest's name (set before StartThread) for sample / Instruments
     dm_thread_enter(t->entry, t->arg, t->stack_top);   // Does not return: the guest must exit through ExitThread
     die("guest thread entry returned");
 }
@@ -313,6 +312,7 @@ static void thread_exit(thr_t *t) {
     // No logging here: the exit happens on the guest thread's own stack (some are only a dozen or so KiB), and a printf with floating point would blow the stack (real-device smoke test: SIGBUS when LibcurlResolver exits, backtrace fprintf → __dtoa). Only the time is recorded, and it is printed later in the state dump
     pthread_mutex_lock(&G);
     t->exited = 1;
+    dm_qos_thread_exit();   // port.h: no lend (ArbitrateLock's class loan) outlives the thread; nothing on Apple
     wake_sync_waiters(t);   // Synchronization waiters on this thread re-check
     pthread_setspecific(g_keythr, NULL);
     if (t->closed) thr_free(t);
@@ -331,7 +331,7 @@ static void on_pause_sig(int sig, siginfo_t *si, void *uc_) {
     (void)sig; (void)si;
     thr_t *t = pthread_getspecific(g_keythr);
     if (!t || !atomic_load(&t->pause_req) || atomic_load(&t->svc_regs)) return;
-    ucontext_t *uc = uc_; const struct __darwin_arm_thread_state64 *ss = &uc->uc_mcontext->__ss;
+    ucontext_t *uc = uc_; const arm_thread_state64_t *ss = dm_uc_ss(uc);
     if (!module_of((void *)__darwin_arm_thread_state64_get_pc(*ss))) return;   // in host code: do not stop; the requester resends
     pthread_mutex_lock(&G);
     if (t->pause_req) {
@@ -339,10 +339,11 @@ static void on_pause_sig(int sig, siginfo_t *si, void *uc_) {
         // x18 is the Apple platform register: the rewriter keeps the guest's x18 in its thread slot (patch_nso.py K18), and compiled game code may hold an object pointer there,
         // which a collector scanning this context (IL2CPP's, through GetThreadContext3) would otherwise not see. The rewriter's x18 sequences also park two registers up to 24 bytes
         // below sp for a few instructions, so the reported sp is 32 bytes lower: the collector scans the stack upward from it, and a few extra words cost a conservative scan nothing
-        t->ctx_x[18] = (uint64_t)(uintptr_t)pthread_getspecific(g_key18);
+        t->ctx_x[18] = (uint64_t)(uintptr_t)dm_kslot_get(g_key18);   // async-signal-safe on both platforms (port.h)
         t->ctx_fp = __darwin_arm_thread_state64_get_fp(*ss); t->ctx_lr = __darwin_arm_thread_state64_get_lr(*ss);
         t->ctx_sp = __darwin_arm_thread_state64_get_sp(*ss) - 32; t->ctx_pc = __darwin_arm_thread_state64_get_pc(*ss); t->ctx_pstate = ss->__cpsr;
-        memcpy(t->ctx_v, uc->uc_mcontext->__ns.__v, sizeof t->ctx_v); t->ctx_fpcr = uc->uc_mcontext->__ns.__fpcr; t->ctx_fpsr = uc->uc_mcontext->__ns.__fpsr;
+        dm_neon_t nsb; const dm_neon_t *ns = dm_uc_ns(uc, &nsb);   // NULL when the kernel saved no SIMD state in this context (Linux: no fpsimd record)
+        if (ns) { memcpy(t->ctx_v, ns->__v, sizeof t->ctx_v); t->ctx_fpcr = ns->__fpcr; t->ctx_fpsr = ns->__fpsr; } else { memset(t->ctx_v, 0, sizeof t->ctx_v); t->ctx_fpcr = t->ctx_fpsr = 0; }
         t->ctx_ok = 1; t->paused = 1; pthread_cond_broadcast(&t->pcv);
         while (t->pause_req) pthread_cond_wait(&t->pcv, &G);
         t->paused = 0; t->ctx_ok = 0;
@@ -352,7 +353,7 @@ static void on_pause_sig(int sig, siginfo_t *si, void *uc_) {
 // called by the gate on SVC entry / exit (gate_dispatch in hle.c)
 void thr_svc_enter(uint64_t *regs, uint64_t pc) {
     thr_t *t = pthread_getspecific(g_keythr); if (!t) return;
-    t->svc_pc = pc; t->svc_x18 = (uint64_t)(uintptr_t)pthread_getspecific(g_key18); atomic_store(&t->svc_regs, regs); atomic_fetch_or(&t->svc_state, 1);
+    t->svc_pc = pc; t->svc_x18 = (uint64_t)(uintptr_t)dm_kslot_get(g_key18); atomic_store(&t->svc_regs, regs); atomic_fetch_or(&t->svc_state, 1);
     if (atomic_load_explicit(&t->qos_pending, memory_order_relaxed) && atomic_exchange(&t->qos_pending, 0)) {
         pthread_mutex_lock(&G); qos_apply(t); pthread_mutex_unlock(&G);
     }
@@ -444,7 +445,7 @@ static void hitch_log(const hitch_t *h) {
         (unsigned long long)(m ? h->lr - (uint64_t)m->base : h->lr), w);
 }
 static void *hitch_main(void *arg) {
-    pthread_setname_np("dm hitch dump");
+    dm_thread_name("dm hitch dump");
     const char *e = arg; uint64_t lim = (uint64_t)atoi(e) * 1000000ull, seen = 0, skip = 0; int n = 0;
     if (strchr(e, ':')) skip = (uint64_t)atoi(strchr(e, ':') + 1) * 1000000000ull;
     extern uint64_t g_t0_ns;
@@ -479,11 +480,10 @@ uint32_t svc_thread_main_init(void) {
     // The iOS boot pthread inherits default QoS. Apply the guest policy before
     // publishing the main thread, just as workers do before running guest code.
     qos_apply(t);
-    qos_class_t qc = QOS_CLASS_UNSPECIFIED; int rp = 0;
-    pthread_get_qos_class_np(pthread_self(), &qc, &rp); t->qos = (uint32_t)qc;
+    t->qos = (uint32_t)dm_qos_self();
     pthread_mutex_lock(&G); t->handle = h_new(O_THREAD, t); t->id = g_next_id++; t->all = g_all; g_all = t; pthread_mutex_unlock(&G);
     pthread_setspecific(g_keythr, t);
-    pthread_setname_np("0x1001 main thread");
+    dm_thread_name("0x1001 main thread");
     LOG("main guest thread QoS %#x (priority %d)", t->qos, t->prio);
     return t->handle;
 }
@@ -652,7 +652,7 @@ void svc_thread_dump(void) {
         // Read page by page up to the first unreadable one: a thread waiting near its stack top (a shallow worker) has PROT_NONE stack region above it, and one read would fail whole
         uint64_t *sr = atomic_load(&t->svc_regs);
         if (sr && t->wkind) { uint64_t stk[160]; size_t got = 0; vm_address_t sa = (vm_address_t)((uint8_t *)sr + 800);
-            while (got < sizeof stk) { vm_size_t n = sizeof stk - got, g4 = 0, room = vm_page_size - ((sa + got) & (vm_page_size - 1)); if (n > room) n = room;
+            while (got < sizeof stk) { vm_size_t n = sizeof stk - got, g4 = 0, room = (vm_size_t)getpagesize() - ((sa + got) & ((vm_size_t)getpagesize() - 1)); if (n > room) n = room;
                 if (vm_read_overwrite(mach_task_self(), sa + got, n, (vm_address_t)((uint8_t *)stk + got), &g4) || g4 != n) break;
                 got += n; }
             if (got >= 16 && atomic_load(&t->svc_regs) == sr) {   // still in that SVC: the words are its stack, not a later frame's
@@ -938,9 +938,9 @@ static int svc_thread_impl(int num, uint64_t *regs) {
             // Under DM_QOS_MAP the owner runs at least at this thread's class until the lock is handed over (the Horizon kernel lends the waiter's priority the same way): a user-interactive
             // waiter is never held up by a utility-class owner on a slow core
             thr_t *o = g_qos_map ? h_peek((uint32_t)regs[0], O_THREAD) : NULL;
-            pthread_override_t ov = o && o->pt && !o->exited && t->qos > o->qos ? pthread_override_qos_class_start_np(o->pt, (qos_class_t)t->qos, 0) : NULL;
+            dm_qos_boost_t ov = o && o->pt && !o->exited && t->qos > o->qos ? dm_qos_boost_start(o->pt, (qos_class_t)t->qos) : NULL;
             r = block(t, 1, -1);
-            if (ov) pthread_override_qos_class_end_np(ov); }
+            dm_qos_boost_end(ov); }
         pthread_mutex_unlock(&G);
         regs[0] = (uint64_t)r; return 1;
     }

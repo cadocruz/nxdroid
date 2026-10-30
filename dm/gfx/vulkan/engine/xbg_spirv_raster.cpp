@@ -17,7 +17,7 @@ enum : uint32_t {
     OpStore = 62, OpCopyMemory = 63, OpCopyMemorySized = 64, OpAccessChain = 65, OpInBoundsAccessChain = 66, OpDecorate = 71,
     OpMemberDecorate = 72, OpCompositeConstruct = 80, OpCompositeExtract = 81, OpCopyObject = 83, OpLabel = 248,
     DecBuiltIn = 11, DecLocation = 30, BuiltInPosition = 0, BuiltInClipDistance = 3, BuiltInCullDistance = 4,
-    BuiltInSampleMask = 20, StorageInput = 1, StorageOutput = 3,
+    BuiltInViewportIndex = 10, BuiltInSampleMask = 20, BuiltInViewportMaskNV = 5253, StorageInput = 1, StorageOutput = 3,
 };
 // A value as the proof sees it: kind 1 = component comp of the input at location loc, 2 = the float constant 1.0,
 // 3 = the whole input vector at loc, 0 = anything else.
@@ -26,7 +26,22 @@ struct Src { int kind = 0, loc = -1, comp = -1; };
 
 XbgRasterFacts xbg_spirv_raster_facts(const uint32_t *in, size_t n, uint32_t stage) {
     XbgRasterFacts f;
-    if (!in || n < 5 || in[0] != 0x07230203u || (stage != 0 && stage != 4)) return f;
+    if (!in || n < 5 || in[0] != 0x07230203u) return f;
+    // The viewport facts, for the stages that may select a viewport (vertex, tessellation evaluation, geometry). In those
+    // stages ViewportIndex and ViewportMaskNV exist only as outputs (a fragment shader reads ViewportIndex, which is why the
+    // scan is not run for it), so the decoration alone says the shader writes one.
+    if (stage == 0 || stage == 2 || stage == 3) {
+        for (size_t i = 5; i < n;) {
+            uint32_t wc = in[i] >> 16, op = in[i] & 0xffff;
+            if (!wc || i + wc > n) return f;
+            const uint32_t *a = in + i + 1;
+            uint32_t b = op == OpDecorate && wc >= 4 && a[1] == DecBuiltIn ? a[2] : op == OpMemberDecorate && wc >= 5 && a[2] == DecBuiltIn ? a[3] : ~0u;
+            if (b == BuiltInViewportIndex) f.viewport_index = true;
+            if (b == BuiltInViewportMaskNV) f.viewport_mask = true;
+            i += wc;
+        }
+    }
+    if (stage != 0 && stage != 4) return f;
     const uint32_t bound = in[3];
     std::vector<int> loc(bound, -1), builtin(bound, -1), var_sc(bound, -1), var_type(bound, 0), ptr_pointee(bound, 0);
     std::vector<int> pos_member(bound, -1), clip_member(bound, 0);

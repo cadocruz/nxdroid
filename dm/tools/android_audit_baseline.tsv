@@ -1,53 +1,26 @@
 # file	category	sha1	text   (dm/tools/android_audit.py; --write-baseline regenerates it, and it should only shrink)
-dm/gfx/nvn/hle_nvn.c	apple-api	030cce446c4073807166b808c2469eff64725c88	mach_wait_until(mach_absolute_time() + (dl - now) * tb.denom / tb.numer);
-dm/gfx/nvn/hle_nvn.c	apple-api	0507a7eb8903836980decbc1d9751c598025a45c	vm_prot_t cur, max;
 dm/gfx/nvn/hle_nvn.c	apple-api	0b0035eb9c1008d2308c67e6996145688fe04992	thread_basic_info_data_t bi; mach_msg_type_number_t n = THREAD_BASIC_INFO_COUNT; mach_port_t me = mach_thread_self(); uint64_t r = 0;
 dm/gfx/nvn/hle_nvn.c	apple-api	0fc986d3760c2fdd175354f1a74f6c93f95c54bf	vm_address_t to = (vm_address_t)(v->base + r->voff);
-dm/gfx/nvn/hle_nvn.c	apple-api	1532d92388ed393d7111ca16c5b0cd3a04d82d55	static unsigned isub = ~0u; static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
-dm/gfx/nvn/hle_nvn.c	apple-api	217820272a4306fe7bbb70a9dad2c25066987fdb	kern_return_t kr = vm_remap(mach_task_self(), &to, r->size, 0, VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE, mach_task_self(), (vm_address_t)from, FALSE, &cur, &max, VM_INHERIT_NONE);
 dm/gfx/nvn/hle_nvn.c	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
 dm/gfx/nvn/hle_nvn.c	apple-api	4556b41437400e61a898e9aa239d9e0b8a2cee59	mach_port_deallocate(mach_task_self(), me); return r;
-dm/gfx/nvn/hle_nvn.c	apple-api	4699cfed4d2ef35107bbabda558b286a38689516	#include <mach-o/ldsyms.h>
-dm/gfx/nvn/hle_nvn.c	apple-api	4716e5c708bc4c8a0c2025c6af4b9124a033af95	task_power_info_v2_data_t pw; mach_msg_type_number_t n = TASK_POWER_INFO_V2_COUNT;
 dm/gfx/nvn/hle_nvn.c	apple-api	47e9bc41ffdfa722c3dbd22a0787379473bb28bb	#if TARGET_OS_OSX
-dm/gfx/nvn/hle_nvn.c	apple-api	4ec809e4799ec5ba489823d186865bf4ee1ee1d5	static uint64_t pt, pe, pcpu, pp, piw, ppw, pg, pf, pld, pst, pfu, pudc; static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
-dm/gfx/nvn/hle_nvn.c	apple-api	52d30259ed05e49428d4a6040973380ba1a682d7	if (kr != KERN_SUCCESS || to != (vm_address_t)(v->base + r->voff)) { LOG("[RED] virtual pool remap %#lx → %p (%#llx bytes) failed: %d", (unsigned long)from, (void *)(v->base + r->voff), (unsigned long ...
-dm/gfx/nvn/hle_nvn.c	apple-api	52e462d339a9ce9d2fdc3841115ca25d6bf19418	static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
 dm/gfx/nvn/hle_nvn.c	apple-api	5d61e9ebad17ee79031c0169437a0776904e9bb6	if (a_ > 0) trow(f - 8, "@pres_at_ms", a_ * 1e3 - g_t0_ns / 1e6); // on-screen present time (ms since process start; presentedTime shares a time base with mach_absolute_time)
-dm/gfx/nvn/hle_nvn.c	apple-api	6fde255e6fdb7b06de1f4a4076f800f6568142bc	const nvn_impl *im = (const nvn_impl *)getsectiondata(&_mh_execute_header, "__DATA", "swnvn", &sz);
+dm/gfx/nvn/hle_nvn.c	apple-api	6f46a5c68ceb754c070903a532abc3680db9671e	if (!dm_vm_alias((void *)to, (const void *)from, r->size)) { LOG("[RED] virtual pool remap %#lx → %p (%#llx bytes) failed: errno %d", (unsigned long)from, (void *)(v->base + r->voff), (unsigned long l ...
 dm/gfx/nvn/hle_nvn.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
-dm/gfx/nvn/hle_nvn.c	apple-api	787bf9a156915679db8fccd4070d43c22d782621	#include <mach/thread_policy.h>
-dm/gfx/nvn/hle_nvn.c	apple-api	7d11c9f541e66f63c070341aca926ff773def222	if (task_info(mach_task_self(), TASK_POWER_INFO_V2, (task_info_t)&pw, &n) != KERN_SUCCESS) return;
-dm/gfx/nvn/hle_nvn.c	apple-api	87bf1acd22262ca7ef075682c93ea18cbfe3f343	#include <sys/sysctl.h>
-dm/gfx/nvn/hle_nvn.c	apple-api	96811458fbbea3bf8267a4c00366591ab3423fb5	if (task_info(mach_task_self(), TASK_POWER_INFO_V2, (task_info_t)&pw, &n) != KERN_SUCCESS) return slowed;
-dm/gfx/nvn/hle_nvn.c	apple-api	98f9b5d59dd1589d0e8a1360f24d931046bcf6b4	thread_time_constraint_policy_data_t tp; mach_msg_type_number_t tc = THREAD_TIME_CONSTRAINT_POLICY_COUNT; boolean_t def = 0; int rt_live = thread_policy_get(pthread_mach_thread_np(pthread_self()), THR ...
 dm/gfx/nvn/hle_nvn.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
 dm/gfx/nvn/hle_nvn.c	apple-api	af195540156b38008d486589c94312787a65fdb3	if (g_frame % 300 == 0) { task_vm_info_data_t vi; mach_msg_type_number_t cnt = TASK_VM_INFO_COUNT;
 dm/gfx/nvn/hle_nvn.c	apple-api	b6412a9077ceb653c0147abd7191dfa573de006b	task_vm_info_data_t vi; mach_msg_type_number_t vc = TASK_VM_INFO_COUNT; double fp = task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vi, &vc) == KERN_SUCCESS ? vi.phys_footprint / 1048576.0 : - ...
 dm/gfx/nvn/hle_nvn.c	apple-api	bdaf483486d7240d1c6f49cbcf6ae0aaf007544f	if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vi, &cnt) == KERN_SUCCESS) { unsigned long long mb = (unsigned long long)(vi.phys_footprint >> 20); void mtl_mem_stat(unsigned long long, un ...
-dm/gfx/nvn/hle_nvn.c	apple-api	c477e7ec8e71c1561cd9f89138919d50da14d105	if (frame % 300 == 0) { unsigned wn = 0; uint32_t wq = dm_guest_work_qos(&wn); thread_extended_info_data_t xi; mach_msg_type_number_t xc = THREAD_EXTENDED_INFO_COUNT; int okx = thread_info(pthread_mac ...
-dm/gfx/nvn/hle_nvn.c	apple-api	d08dad2c324561d98f2831fd51bacf6453d76b66	#include <CommonCrypto/CommonDigest.h>
-dm/gfx/nvn/hle_nvn.c	apple-api	d5e2985fcad422496777b277b8f18695d5ccecf2	qos_class_t qc = QOS_CLASS_UNSPECIFIED; int rp = 0; pthread_get_qos_class_np(pthread_self(), &qc, &rp);
 dm/gfx/nvn/hle_nvn.c	apple-api	e3f14c920006c7469d0d8cad8a49cb7ad2debeb5	// and every mapping request vm_remaps the physical pool's pages over its part of that range: the virtual addresses then read and write the same memory as the physical pool, as the GPU page table does
 dm/gfx/nvn/hle_nvn.c	apple-api	ea9615479910fe95b8eabd885620a449ceafec92	uint32_t mg = 0; vm_size_t got = 0; // the value the client gives is not necessarily a pointer: test-read first
 dm/gfx/nvn/hle_nvn.c	apple-api	ee1a3ee0d3712e5068fda5d92ee3bf5e19e54479	#if TARGET_OS_IPHONE // 1 GB: Monster Hunter Rise's buffers stay under 0x20100000 through its opening, its textures (32 GB in) are read through the page table, and 4 GB guest + 1 GB stays near the 5 G ...
 dm/gfx/nvn/hle_nvn.c	apple-api	f98b15ecfe0df3b679dbc9b78f0d0495ad81476a	if (!t || (uintptr_t)t & 7 || vm_read_overwrite(mach_task_self(), (vm_address_t)t, 4, (vm_address_t)&mg, &got) != KERN_SUCCESS || got != 4) return -1;
-dm/gfx/nvn/hle_nvn.c	apple-api	ffed6bbb855c554334c87b822125c59335f1df05	#include <mach-o/getsect.h>
-dm/gfx/nvn/hle_nvn.c	macho-section	9588a4224f9f70314ab105f5c595bc9b398e18d6	__attribute__((used, section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
-dm/gfx/nvn/hle_nvn.c	objc-framework	09bb5f0d90c675d5d0e17828ce284e123f7bc4d2	#include <CoreFoundation/CoreFoundation.h>
 dm/gfx/nvn/hle_nvn.c	objc-framework	17dde2445b67616be472574d2ac9ee511845bd91	// Thermal cap (iOS): while the device is thermally serious or worse (NSProcessInfo thermalState >= 2) the frame step holds 30 fps, and it goes back to the cap after the device
-dm/gfx/nvn/hle_nvn.c	objc-framework	1d354b6887e4429acc72cb3b1cc65a26a9a965ae	static pthread_mutex_t g_pk_mu = PTHREAD_MUTEX_INITIALIZER; static CFMutableDictionaryRef g_pk; // a dedicated table (keys not shared with other side tables)
-dm/gfx/nvn/hle_nvn.c	objc-framework	70c1711f537f8d15013eae0c186106b082390002	if (!k && make) { k = calloc(1, sizeof *k); CFDictionarySetValue(g_pk, p, k); }
-dm/gfx/nvn/hle_nvn.c	objc-framework	771b75fef90a0e2ab65da4ba676db20e9f1df316	if (k) { CFDictionaryRemoveValue(g_pk, p); free(k); }
 dm/gfx/nvn/hle_nvn.c	objc-framework	78bf2eed00c242cc78a4704d889929e31ee4977d	// Clears of integer targets (Paper Mario: The Thousand-Year Door): recorded as floats, which both replay paths convert to the attachment's integer type (the load action's MTLClearColor,
 dm/gfx/nvn/hle_nvn.c	objc-framework	838f58d97ff714867f47633ea1032a1e8af70b1c	// GPU address = CPU address (memory pools use the real memory given by the game, also built as zero-copy MTLBuffer). Commands are recorded into the command memory given by the game and replayed at su ...
-dm/gfx/nvn/hle_nvn.c	objc-framework	ad004a092c36d45dcee3d038e573570b44c7dfef	if (!g_pk) g_pk = CFDictionaryCreateMutable(NULL, 0, NULL, NULL);
-dm/gfx/nvn/hle_nvn.c	objc-framework	b0df77c9130553fc417269ed9c98dcbb1a55a988	prog_keys_t *k = g_pk ? (prog_keys_t *)CFDictionaryGetValue(g_pk, p) : NULL;
-dm/gfx/nvn/hle_nvn.c	objc-framework	b42b17388f685185ceb1d090f0fe047047a032d5	prog_keys_t *k = (prog_keys_t *)CFDictionaryGetValue(g_pk, p);
 dm/gfx/nvn/hle_nvn.c	objc-framework	b7d766ecd60ee6b6930ed1c230536414417a8181	// CPU texture read (NVN ReadTexels): for packaged textures the pool memory is the ground truth (de-layout and read directly); GPU-written textures are read back from the MTLTexture (nvn_mtl.m)
 dm/gfx/nvn/hle_nvn.c	objc-framework	f13ee94dc407985c4d72226994618c1d8a5a2fae	// previously every init created a new private MTLTexture and the old one stayed in the serial table forever, so GPU memory grew about 13 MB per frame (killed by the memory watchdog at 24 GB)
 dm/gfx/nvn/hle_nvn.c	page-assumption	92f9086a55c06c64d0f4fdf84702743f07f88ba0	// NVN maps at 4 KB, the host aliases at its 16 KB page: a request that is not 16 KB aligned (Monster Hunter Rise's ASTC 6x6 textures, whose mip tail starts 0x81000 into the texture),
-dm/gfx/nvn/nvn_capture.inc	apple-api	416a3d43898b3326b8efdc7b4e62090717c1dbdf	CC_SHA256(b.contents, (CC_LONG)n, md);
 dm/gfx/nvn/nvn_capture.inc	objc-framework	04711bcf5caac0f41c45c981553a531aa4b6e0d4	uint32_t slices = (uint32_t)(t.textureType == MTLTextureTypeCube || t.textureType == MTLTextureTypeCubeArray ? 6 * t.arrayLength : t.arrayLength), np = (uint32_t)cap_tex_planes(t.pixelFormat);
 dm/gfx/nvn/nvn_capture.inc	objc-framework	07a26eaa4c019e06448f760bbe268ca5c966c9a6	static int cap_pf_bpp(MTLPixelFormat f, int plane) { // bytes per pixel of a plane (0 = not readable as plain texels)
 dm/gfx/nvn/nvn_capture.inc	objc-framework	1a29b9e68ed79f1b0e34656b155bc3c871e4e680	static int cap_tex_planes(MTLPixelFormat f) { return f == MTLPixelFormatDepth32Float_Stencil8 ? 2 : 1; }
@@ -78,14 +51,6 @@ dm/gfx/nvn/nvn_capture.inc	objc-framework	c69c54b5df715d60d13a97e797d699d5d1fd48
 dm/gfx/nvn/nvn_capture.inc	objc-framework	ee18cd29e62138bebea5b9cb08eac489c1efa376	if (f == MTLPixelFormatBC1_RGBA || f == MTLPixelFormatBC1_RGBA_sRGB || f == MTLPixelFormatBC4_RUnorm || f == MTLPixelFormatBC4_RSnorm) return 8;
 dm/gfx/nvn/nvn_capture.inc	objc-framework	f4ba25ba696007fa376b3968e6b43c732856a286	id<MTLBuffer> b = [g_dev newBufferWithLength:MAX(total, 16u) options:MTLResourceStorageModeShared];
 dm/gfx/nvn/nvn_capture.inc	objc-framework	f6f188b18f9eaba80ae3fe696dfd6d81e8e68983	if (mt.buffer || mt.storageMode == MTLStorageModeMemoryless) return; // reads pool memory in place, or has no content
-dm/gfx/nvn/nvn_dirty.c	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
-dm/gfx/nvn/nvn_dirty.c	apple-api	52e462d339a9ce9d2fdc3841115ca25d6bf19418	static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
-dm/gfx/nvn/nvn_dirty.c	apple-api	583d94af68087ef2b478193cd8a24d7595f47629	atomic_fetch_add(&g_mp_ticks, mach_absolute_time() - t); atomic_fetch_add(&g_mp_calls, 1); atomic_fetch_add(&g_mp_pages, len >> g_shift);
-dm/gfx/nvn/nvn_dirty.c	apple-api	7958007c7f1762fd6aaa90b710f616c3aabe5200	uint64_t now = mach_absolute_time(); if (!t0) t0 = now;
-dm/gfx/nvn/nvn_dirty.c	apple-api	ab2aeb68ade99b556b9f746c2ad36471cb1a20ef	if (!inited) { inited = 1; g_pg = (uintptr_t)getpagesize(); g_shift = __builtin_ctzl(g_pg); mach_timebase_info(&g_tb); dm_fault_hook_register(on_fault); dm_guest_write_prep_register(prep_write); }
-dm/gfx/nvn/nvn_dirty.c	apple-api	b34a3403cbd49e8e5de509dd62a04aa0fec96b75	static mach_timebase_info_data_t g_tb; // obtained when the first pool is registered (the fault path only multiplies and divides)
-dm/gfx/nvn/nvn_dirty.c	apple-api	b62a4c91cc566ffb2a62f4708148fdbe040f6add	// Wait for this page to leave BUSY. Returns 1 = it has left; 0 = waited past the limit (reported red once). Usable in a signal handler: only atomic reads, mach_absolute_time and sched_yield
-dm/gfx/nvn/nvn_dirty.c	apple-api	d3050de5558ca2f3e2ef82b485e915ee8dfa0312	uint64_t t = mach_absolute_time(); mprotect((void *)a, len, prot);
 dm/gfx/nvn/nvn_dirty.c	page-assumption	171539d26bbaecef2352a116173a471668eb21c4	// Unprotect pages p..q of a range with one mprotect per run of protected pages (a host write over a whole texture, e.g. WriteTexels, used to make one system call per 16 KB page:
 dm/gfx/nvn/nvn_dirty.c	page-assumption	51f8a6d0847b848c4d49c096518c5ea2a662748a	// Ranges are rounded to host pages (16 KB) but guest memory pools are only 4 KB aligned: adjacent pools share their first / last pages, so one address can fall in several registered ranges.
 dm/gfx/nvn/nvn_entry.S	apple-api	63da5b009788b1cb085d944e74231cb7068ba25e	// Save x0-x7 / q0-q7 (NVN functions pass no arguments on the stack, verified by the generator), take mach_absolute_time -> call the real implementation (nvn_real[i]) -> take it again,
@@ -197,7 +162,6 @@ dm/gfx/nvn/nvn_mtl.m	apple-api	20a50e8683143322c88cc5baa1f35aaceab1aa7a	static s
 dm/gfx/nvn/nvn_mtl.m	apple-api	21909ebdc2254ade1c6025372439a14e76ce0f0d	static dispatch_group_t g_arch_pending; // periods handed over and not written yet
 dm/gfx/nvn/nvn_mtl.m	apple-api	2629732d42ce7febd4b18e57e3a525211c096ff2	#include <os/proc.h> // os_proc_available_memory: for the memory readout line
 dm/gfx/nvn/nvn_mtl.m	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
-dm/gfx/nvn/nvn_mtl.m	apple-api	2e12c57467c3975f028ede995e0ad4798784c2f7	uint64_t g = guest_ns(), now = tb.denom ? mach_absolute_time() * tb.numer / tb.denom : 0, at = (uint64_t)(s * 1e9);
 dm/gfx/nvn/nvn_mtl.m	apple-api	3687fe81ba9b1b40f4e84ebcfad21c7f354a3392	#include <libkern/OSByteOrder.h>
 dm/gfx/nvn/nvn_mtl.m	apple-api	388b49ac5949fcadd633310cc12a011a23ea43ce	#include <mach-o/fat.h>
 dm/gfx/nvn/nvn_mtl.m	apple-api	39407e9f7c58307de98472599833ebb5a6570a3c	dispatch_apply(n, DISPATCH_APPLY_AUTO, ^(size_t i) { @autoreleasepool {
@@ -210,7 +174,6 @@ dm/gfx/nvn/nvn_mtl.m	apple-api	4e5e4884550546227bdeffc2cb635678fbb1213f	ep->busy
 dm/gfx/nvn/nvn_mtl.m	apple-api	4f59653f6fedb9d1996118297fedf10767bee2db	pso_pend_start(slot, gen, pso_desc(k, vs, fs, nil, 0), dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0));
 dm/gfx/nvn/nvn_mtl.m	apple-api	4f81ec8b94567a7a574c0dc97f221a5571c55ec2	if (fresh) { g_hy_kicked++; dispatch_async(pp_bg_queue(), ^{ NSError *be = nil; (void)pso_build(d, &be); }); }
 dm/gfx/nvn/nvn_mtl.m	apple-api	51bd0f56a6d1f0e2ce9fb444fd69e4099ef26ce6	static dispatch_once_t once;
-dm/gfx/nvn/nvn_mtl.m	apple-api	52e462d339a9ce9d2fdc3841115ca25d6bf19418	static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
 dm/gfx/nvn/nvn_mtl.m	apple-api	5b4105ce3a20bf9bc5ede5f3ca829c0d3f5f065b	static dispatch_queue_t g_feedback_q;
 dm/gfx/nvn/nvn_mtl.m	apple-api	5e27be317a71fe108855282bf59f127e15d9c863	dispatch_queue_attr_t feedback_attr = dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0);
 dm/gfx/nvn/nvn_mtl.m	apple-api	6624d2751eaa3bfaa160d4b0a9acbb2e2fda8097	dispatch_async(q, ^{
@@ -219,7 +182,6 @@ dm/gfx/nvn/nvn_mtl.m	apple-api	7309cbc70f95e293cc685521193a79836ad28560	static i
 dm/gfx/nvn/nvn_mtl.m	apple-api	749dc937f808d9157c688c753f599dd57ea6a8f6	static NSHashTable *g_up_lost; static os_unfair_lock g_up_lost_lk = OS_UNFAIR_LOCK_INIT; static _Atomic int g_up_lost_n; static _Atomic uint64_t g_up_lost_redo; // Weak-reference table: if a texture i ...
 dm/gfx/nvn/nvn_mtl.m	apple-api	7600150845798c6bb0485074337ff09627060990	g_arch_pending = dispatch_group_create();
 dm/gfx/nvn/nvn_mtl.m	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
-dm/gfx/nvn/nvn_mtl.m	apple-api	764b598d959e6a47d964a4f2ea618c4be9071245	#import <CommonCrypto/CommonDigest.h>
 dm/gfx/nvn/nvn_mtl.m	apple-api	770d9c61545517ca686349772274d9641ac2310e	static NSString *dir; static dispatch_once_t once;
 dm/gfx/nvn/nvn_mtl.m	apple-api	78bcf7d1c4399371ddb63c1debeb892c8170ed13	g_feedback_q = dispatch_queue_create("dm.nvn.mtl4-feedback", feedback_attr);
 dm/gfx/nvn/nvn_mtl.m	apple-api	79cf5bce300e863affd9408e0de01f6a83131d83	while (dispatch_group_wait(g, dispatch_time(DISPATCH_TIME_NOW, 50 * (int64_t)NSEC_PER_MSEC))) {
@@ -229,7 +191,6 @@ dm/gfx/nvn/nvn_mtl.m	apple-api	85d8de9505c93a25abe2d761c8d011cf1f24f1d3	dispatch
 dm/gfx/nvn/nvn_mtl.m	apple-api	87bf1acd22262ca7ef075682c93ea18cbfe3f343	#include <sys/sysctl.h>
 dm/gfx/nvn/nvn_mtl.m	apple-api	89df961ea9b4f30ffc0f0098df55403272cf91dc	if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC))) { MLOG("[RED] offscreen present: the GPU did not finish within 10 s"); return 0; }
 dm/gfx/nvn/nvn_mtl.m	apple-api	89f3bb710545e0c1f26d618d0fa3eb499a1fbd51	if (vm_region_64(mach_task_self(), &r, &rs, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&vi, &cnt, &obj) != KERN_SUCCESS) { MLOG("[RED] no VM region at or after %#llx", (unsigned long long)r); break; }
-dm/gfx/nvn/nvn_mtl.m	apple-api	8e5237b5e6428ae4833be82a402b2dd8aa9da26f	pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
 dm/gfx/nvn/nvn_mtl.m	apple-api	92cfa62b711617742c31f3a54b62bc999a5c8200	for (int w = 0; w < workers; w++) dispatch_group_async(g, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
 dm/gfx/nvn/nvn_mtl.m	apple-api	949c41dae33976b796c58b8ea232366334239ce4	// They used to come from CLOCK_MONOTONIC, which keeps running while the Mac sleeps while the guest clock (mach_absolute_time) does not, so the two differed by the sleep time; once timestamps were con ...
 dm/gfx/nvn/nvn_mtl.m	apple-api	95d8f53e316640695c40df59c482775744c7b5d0	hm_rel(nvn_hm_del(&g_pbase_pending, &bk)); dispatch_group_leave(job->done);
@@ -239,7 +200,6 @@ dm/gfx/nvn/nvn_mtl.m	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include
 dm/gfx/nvn/nvn_mtl.m	apple-api	9fa7e6cf903726d2e0c29333e7daf4ba3fa42536	struct mach_header_64 h;
 dm/gfx/nvn/nvn_mtl.m	apple-api	9ffb091e45ca21ece1cf9943f88808514cb94c0e	static os_unfair_lock g_c1_lock = OS_UNFAIR_LOCK_INIT;
 dm/gfx/nvn/nvn_mtl.m	apple-api	a1e89a88a20db11d30a621f22ecac25cf81e7589	dispatch_group_t g = dispatch_group_create();
-dm/gfx/nvn/nvn_mtl.m	apple-api	a50a043d805156a8957d6ec1d315597b6a8b29ca	qos_class_t qc = QOS_CLASS_UNSPECIFIED; int rp = 0; pthread_get_qos_class_np(pthread_self(), &qc, &rp); atomic_store(&g_present_qos, (uint32_t)qc);
 dm/gfx/nvn/nvn_mtl.m	apple-api	a61ea1bc1cc07ff2be2bd3593363b751060c403b	static os_unfair_lock g_rmu = OS_UNFAIR_LOCK_INIT;
 dm/gfx/nvn/nvn_mtl.m	apple-api	a8830d55e8b702ea1bc551cac4e759312fd9f563	static dispatch_queue_t pp_bg_queue(void) {
 dm/gfx/nvn/nvn_mtl.m	apple-api	ad8c0aedaebede933178056ef87a5635eef70bb0	dispatch_async(q, ^{ @autoreleasepool { long lines = 0; for (WarmTask *t in warm_parse(paths, &lines)) warm_task(t); warm_finish(); } });
@@ -258,7 +218,6 @@ dm/gfx/nvn/nvn_mtl.m	apple-api	d48cadf98c48a741165e198a312e4208d143ea6c	vm_size_
 dm/gfx/nvn/nvn_mtl.m	apple-api	db6f0cdc7ec317a93d058dfb6fbbae69e6990401	@interface ArchEpoch : NSObject { @public id<MTL4Compiler> comp; id<MTL4PipelineDataSetSerializer> ser; dispatch_group_t busy; _Atomic int active, n, vd; int compacting; } @end
 dm/gfx/nvn/nvn_mtl.m	apple-api	e0b951be1055b5accd63ba519b5bcc2696b2466d	for (int i = 0; i < n; i++) q[i] = dispatch_queue_create("dm.nvn.pso-bg", dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_UTILITY, 0)); });
 dm/gfx/nvn/nvn_mtl.m	apple-api	e28c3a55c63fb922729cf20537488c28ec4f3ca1	// under way across a write came back with both nil and crashed there (dispatch_data_create_map on nil); eight threads compiling into one serializer written every 150 ms
-dm/gfx/nvn/nvn_mtl.m	apple-api	e711b7241ee7b4fc471c2a2930d9c7e158926724	NSData *d = [txt dataUsingEncoding:NSUTF8StringEncoding]; uint8_t h[CC_SHA256_DIGEST_LENGTH]; CC_SHA256(d.bytes, (CC_LONG)d.length, h);
 dm/gfx/nvn/nvn_mtl.m	apple-api	e7b0ab917197a55d59e4ce5ad96b9d99e1278f93	static os_unfair_lock g_vin_lock = OS_UNFAIR_LOCK_INIT;
 dm/gfx/nvn/nvn_mtl.m	apple-api	e9606ab639a62f8372da2c42213c4c69a578207e	if (old.count) dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
 dm/gfx/nvn/nvn_mtl.m	apple-api	ee4779049c7451d08e48e76d9deb8cc8d7493d53	dispatch_group_notify(old->busy, g_arch_q, ^{ @autoreleasepool { arch_write(old); } dispatch_group_leave(g_arch_pending); });
@@ -330,8 +289,6 @@ dm/gfx/nvn/nvn_mtl.m	page-assumption	e8145daf2ba64fe65faa22e808ca5a8679aba894	//
 dm/gfx/nvn/nvn_obj.h	objc-framework	0625ba4f08c20102742632f7ccbe1c4ba6b02f61	uint64_t serial; // Initialization serial: the replay layer uses it to find the MTLTexture in the host table (the game may copy the object by value, so object pointers cannot be stored)
 dm/gfx/nvn/nvn_obj.h	objc-framework	21ccb1f07f1ce9ca115100ade0822229b5f9cf7d	// Present: draw the swapchain texture to the front-end CAMetalLayer (only counts when there is no window)
 dm/gfx/nvn/nvn_pso_skey.h	objc-framework	49e71aa68ebbb07389b43cb0eba5210d4abf09cd	// so physical formats cannot decide which logical targets to drop. Depth / stencil formats stay for MTLDevice pipelines. Normalize both live keys and old prewarm rows.
-dm/gfx/nvn/nvn_rec.h	apple-api	8e5237b5e6428ae4833be82a402b2dd8aa9da26f	pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
-dm/gfx/nvn/nvn_rec.h	apple-api	b1ea916b14723053d73afb295730a26c4df64ee4	(void)arg; pthread_setname_np("dm-ub-copy"); pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
 dm/gfx/nvn/nvn_rec.h	apple-api	fe0069c5e001afb8e532c6ff0d4469d9f1ffa2fd	#if TARGET_OS_IPHONE
 dm/gfx/nvn/nvn_rec.h	objc-framework	09378ae67b4dffc65ae873c02aa9f2ad77e7fc27	- (void)setSamplerState:(MTLResourceID)t atIndex:(NSUInteger)i { rec_table_op(RO_T_SAMP, self, t._impl, i); }
 dm/gfx/nvn/nvn_rec.h	objc-framework	0dc2e6332c1e80ad70d71569fc797c05e54d2aa6	@autoreleasepool { for (int i = 0; i < b->n; i++) rec_exec(&b->r[i]); }
@@ -464,23 +421,15 @@ dm/gfx/nvn/rt_range_check.inc	objc-framework	bc1fdab8d81a03cbac9f6a8d0351ee8df5e
 dm/gfx/nvn/rt_range_check.inc	objc-framework	dc09803e9d2c6f64e595f1d8fa8f2bbdbfc32f53	unsigned long long av[2],rv[2];int as[2]={slot0,slot1},rs[2]={refslot0,refslot1};for(int k=0;k<2;k++){id<MTLBuffer> a=actualvis[k],r=referencevis[k];av[k]=((uint64_t *)a.contents)[as[k]];rv[k]=((uint6 ...
 dm/gfx/nvn/rt_range_check.inc	objc-framework	f0d98551cab91870758b399a34ab0cbd902d7375	id<MTLTexture> color=tex_mtl(R.rt.color[0]),depth=tex_mtl(R.rt.depth);
 dm/host/crash.c	apple-api	0d40e1a2be3a67b2c53b0372b4c408cfb3ba929e	uint64_t w[2]; vm_size_t got = 0;
-dm/host/crash.c	apple-api	1647f48bf52d3bdff4cd199908c0d3c907101c40	fprintf(stderr, " sp=%#llx\n", uc->uc_mcontext->__ss.__sp);
-dm/host/crash.c	apple-api	2324eb865dfee2f4789f844d8bad40649a4b6cc8	uint64_t at[2] = {uc->uc_mcontext->__ss.__pc, uc->uc_mcontext->__ss.__lr};
-dm/host/crash.c	apple-api	2e5e9f33b690fbaa584d96e3acfbbdc412c43ad2	for (int i = 0; i < 29; i++) fprintf(stderr, "x%d=%#llx%s", i, uc->uc_mcontext->__ss.__x[i], i % 6 == 5 ? "\n" : " ");
-dm/host/crash.c	apple-api	36bea5901293f4ccb69664127e6d3f6b8614c034	{ uint64_t sp = uc->uc_mcontext->__ss.__sp; // The frame just popped (when a return address was overwritten, the bad value and the leftovers of whatever overwrote it sit below sp)
 dm/host/crash.c	apple-api	40efea6345828594a7aed0edf979e342b3f13036	// What the registers point at: the first six words of each readable target (read with vm_read_overwrite, which fails instead of faulting); a word inside a module prints as a module offset, so an obje ...
 dm/host/crash.c	apple-api	47e9bc41ffdfa722c3dbd22a0787379473bb28bb	#if TARGET_OS_OSX
-dm/host/crash.c	apple-api	4d2f85f814af9449315b3c92418b1bd96b07415c	{ uint64_t sp = uc->uc_mcontext->__ss.__sp; int n = 0;
-dm/host/crash.c	apple-api	60fd03468e6add7fb103710bea67f92918e04907	fprintf(stderr, "[dm] fp=%#llx 0x100 bytes below sp:", (unsigned long long)uc->uc_mcontext->__ss.__fp);
 dm/host/crash.c	apple-api	68a053ff4ce97f9b80cf12190a9bf516e0fa2cf1	if (a < 0x100000000ull || (a & 7) || vm_read_overwrite(mach_task_self(), (vm_address_t)a, sizeof w, (vm_address_t)w, &got) != KERN_SUCCESS || got != sizeof w) continue;
-dm/host/crash.c	apple-api	74e2e0f07be817f50178e429cb03689824d6e2ac	dm_backtrace(uc->uc_mcontext->__ss.__fp);
 dm/host/crash.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
 dm/host/crash.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
 dm/host/crash.c	apple-api	af2dbbd7f7c714a7a3322f68a79d9a4d58d0e0e7	#include <libkern/OSCacheControl.h>
 dm/host/crash.c	apple-api	c113d17405c24541d51d05a1fadabcefad7fc2b4	// Each frame is read with vm_read_overwrite, which fails instead of faulting: code built without frame pointers keeps data in x29 (STEINS;GATE RE:BOOT's main+0x38921c: x29 = 0x430),
 dm/host/crash.c	apple-api	c15e31e539e7b545137ae3c3c7abbb7b19a228b3	if (vm_read_overwrite(mach_task_self(), (vm_address_t)fp, sizeof w, (vm_address_t)w, &got) != KERN_SUCCESS || got != sizeof w) break;
-dm/host/crash.c	apple-api	c44f8762f744a3e9f93b16f0f1cc8d2616aee106	uint64_t a = uc->uc_mcontext->__ss.__x[i], w[6]; vm_size_t got = 0;
-dm/host/crash.c	apple-api	cc7b04c2916b2736c78acda6dd50ab9ce43b6343	off("addr", (uint64_t)si->si_addr); off("pc", uc->uc_mcontext->__ss.__pc); off("lr", uc->uc_mcontext->__ss.__lr);
+dm/host/crash.c	apple-api	f94941c1a9a30385fcba6e4b8bc2ce058775e9b6	uint64_t a = dm_uc_ss(uc)->__x[i], w[6]; vm_size_t got = 0;
 dm/host/front.h	objc-framework	1e41930fad0146647eceee77d29d7b84ef2ec634	setenv("MTL_HUD_ENABLED", "1", 0);
 dm/host/front.h	objc-framework	4906672d1c69b07e76743623a7b74c222b6d7b70	// Early start of host loading (main.c): reading the NSO / relocation / forced takeover / prefetch start are moved to a background thread, in parallel with the front end (UIKit launch chain, Metal vie ...
 dm/host/front.h	objc-framework	a52e24bf97d5036622882104469cabf8c0876195	setenv("MTL_HUD_HIDE_METALFX_METRICS", "1", 0);
@@ -545,26 +494,9 @@ dm/host/haptics_apple.m	objc-framework	e74b4ae61e222a4549286bc076440caff931b922	
 dm/host/haptics_apple.m	objc-framework	e7c5c0b313235549a09613398b56964b862276fd	@property(nonatomic) id<CHHapticPatternPlayer> previous; // the pulse before the scheduled one, still playing
 dm/host/haptics_apple.m	objc-framework	ef2d91ddc18a6744f56aa34618bd6f2f913648d5	controller.vendorName.UTF8String ?: "unknown", [[localities.allObjects sortedArrayUsingSelector:@selector(compare:)] componentsJoinedByString:@", "].UTF8String ?: "none", (unsigned long)channels[p].co ...
 dm/host/haptics_apple.m	objc-framework	ffabf83a18505e815ff47b046cda105f587e5b81	@property(nonatomic) BOOL simple; // the engine's server offers no advanced players: plain players play the effect in pulses
-dm/host/hle.c	apple-api	4699cfed4d2ef35107bbabda558b286a38689516	#include <mach-o/ldsyms.h>
-dm/host/hle.c	apple-api	f4d30297022b963eada4390ee9febd0044c7a91b	g_hle_sec = (const hle_ent *)getsectiondata(&_mh_execute_header, "__DATA", "swhle", &secsz);
-dm/host/hle.c	apple-api	ffed6bbb855c554334c87b822125c59335f1df05	#include <mach-o/getsect.h>
-dm/host/hle.h	macho-section	421f8ce8d829cbb73b886e7441b7ab533b645cdb	__attribute__((used, section("__DATA,swforce"))) static const hle_force_ent hle_force_##cname = {mangled, (void *)(uintptr_t)cname##_bs, why}; \
-dm/host/hle.h	macho-section	849923e792ffa9e66a130ccd644ab986ab9dde9e	__attribute__((used, section("__DATA,swhle"))) static const hle_ent hle_ent_##cname = {mangled, (void *)cname}; \
-dm/host/hle.h	macho-section	b98f6dc3f8c008311579bf8bc770654d88af90c9	__attribute__((used, section("__DATA,swforce"))) static const hle_force_ent hle_force_##cname = {mangled, (void *)cname, why}; \
-dm/host/hle_audio.c	apple-api	22fe01481077df720138a7e450a60084f60773a1	if (released) { if (a->event) notify_release(a); if (a->rel_sem) dispatch_semaphore_signal(a->rel_sem); }
-dm/host/hle_audio.c	apple-api	3ff88a8b96f340e322fc95290087a9b7758c6320	a->notify_sem = dispatch_semaphore_create(0); a->id = atomic_fetch_add(&nopen, 1);
-dm/host/hle_audio.c	apple-api	44a77623f729d832391009e1cdea176d0f981f77	#if !TARGET_OS_IPHONE
-dm/host/hle_audio.c	apple-api	4938325debde336d4bfa99e9921ac90116b9f9ba	dispatch_semaphore_signal(a->notify_sem);
-dm/host/hle_audio.c	apple-api	6094d0a97604a5b8a4b0dc5fb6363fb525880c0a	if (a->rel_sem) dispatch_release(a->rel_sem);
-dm/host/hle_audio.c	apple-api	66de4bba4e91d131e191797579bbcbc41aa5ac93	dispatch_semaphore_wait(a->notify_sem, DISPATCH_TIME_FOREVER);
+dm/host/hle_audio.c	apple-api	66cbbc14544e18ab68ba1d4046bea1457fbd6fbe	#if TARGET_OS_OSX // the CoreAudio HAL device (buffer size, device change): the Mac only
 dm/host/hle_audio.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
-dm/host/hle_audio.c	apple-api	a721afc7ea802044a3410f26bdcc4e4777dcc750	void dm_pcmout_wait(void *k, int ms) { dispatch_semaphore_wait(ao(k)->rel_sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)ms * 1000000)); }
-dm/host/hle_audio.c	apple-api	b1baa7be4627f08103cc8233a6b09b38d25c9696	dispatch_semaphore_t notify_sem;
 dm/host/hle_audio.c	apple-api	b63044a64d34b09923e5879f41bb42dcb5e3828c	static int real_audio(void) { const char *e = getenv("DM_AUDIO"); return e ? atoi(e) != 0 : TARGET_OS_IPHONE; }
-dm/host/hle_audio.c	apple-api	ba5fe3b26073e1b20740b2fc43f5b5b926e4066a	ao(key)->rel_sem = dispatch_semaphore_create(0);
-dm/host/hle_audio.c	apple-api	c0bcf4829e7f13c4058d76dc6f5ffd461fa0c196	dispatch_semaphore_t rel_sem; // Host outputs only (dm_pcmout_open): signaled for each release, so the in-process audio renderer blocks instead of polling (dm_pcmout_wait)
-dm/host/hle_audio.c	apple-api	c6872c35f8006a43184bae0fa67ad3d6b913880c	if (a->rel_sem) dispatch_semaphore_signal(a->rel_sem);
-dm/host/hle_audio.c	apple-api	dbb76e2224fb5c48123f514578d9d3e3ea2240a2	dispatch_release(a->notify_sem);
 dm/host/hle_audio.c	apple-api	fe0069c5e001afb8e532c6ff0d4469d9f1ffa2fd	#if TARGET_OS_IPHONE
 dm/host/hle_audio.c	objc-framework	9111c4f88b39e4eb7b60bbd08a4d82111418bcc3	#include <AudioToolbox/AudioToolbox.h>
 dm/host/hle_count.c	apple-api	1c9633ee24a288b55e285d3c020341bfc443536e	sys_icache_invalidate(g_hcode, HC_MAX * 48);
@@ -572,20 +504,7 @@ dm/host/hle_count.c	apple-api	44a77623f729d832391009e1cdea176d0f981f77	#if !TARG
 dm/host/hle_count.c	apple-api	af2dbbd7f7c714a7a3322f68a79d9a4d58d0e0e7	#include <libkern/OSCacheControl.h>
 dm/host/hle_fpslock.c	apple-api	63e7c11534f1ec519a01afc41b6f9854964ccc1f	static int rd(uint64_t a, void *out, size_t n) { vm_size_t got = 0; return a >= 0x1000 && vm_read_overwrite(mach_task_self(), (vm_address_t)a, n, (vm_address_t)out, &got) == KERN_SUCCESS && got == n;  ...
 dm/host/hle_fpslock.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
-dm/host/hle_fs.c	apple-api	4b93f79f2ac7ee831e0364cbba299a8d054dfa77	kern_return_t kr = vm_region_64(mach_task_self(), &ra, &rs, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&vi, &cnt, &obj);
-dm/host/hle_fs.c	apple-api	552c31cfde8d13b37d012c07a691640d0d7e2e89	// clonefile preserves xattr, so save Commit/remount needs no separate mapping table; enumeration must not leak physical aliases.
 dm/host/hle_fs.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
-dm/host/hle_fs.c	apple-api	afa5638deff04b740ba798d426ac6f246bd2d690	#include <sys/clonefile.h>
-dm/host/hle_fs.c	apple-api	b55ed4dd0eab84ae15a20238406612d3f309c846	else if (dm_fs_test_fail("mountclone") || clonefile(dir, work, 0)) why = "cloning the work directory failed";
-dm/host/hle_fs.c	apple-api	b68f652b8625b62418f558aa605a285de65fd4a2	int e = errno; vm_address_t ra = (vm_address_t)((uint8_t *)buf + got); vm_size_t rs = 0; vm_region_basic_info_data_64_t vi; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj  ...
-dm/host/hle_fs.c	apple-api	c2969ca626b1c371cdff7dfa9744a7a556d157c6	// all game reads and writes happen in the working directory; Commit = clonefile(work → <commit>.new), then renamex_np(RENAME_SWAP) swaps it atomically with commit, then the swapped-out old version is ...
-dm/host/hle_fs.c	apple-api	cf3b4502c970ab2398ece6990c0c505c9d90fc59	if (clonefile(g_mnt[i].dir, neu, 0)) { LOG("[RED] save commit: clonefile %s failed errno=%d (committed version unchanged)", neu, errno); r = RES_FAIL; }
-dm/host/hle_fs.c	apple-api	d2d3a77e66467daf26494c95606dda8028e448a4	else if (dm_fs_test_fail("reclone") || clonefile(g_mnt[i].commit, re, 0)) { rerr = errno ? errno : EIO; rm_tree(re); }
-dm/host/hle_fs.c	apple-api	e209721c3bb344929c326bcd00ff504b8fd3ba1f	// Host: at mount, the committed directory commit (= $DM_SAVE) is clonefile'd as a whole tree into the working directory <commit>.work (APFS copy-on-write, nearly zero cost), and the mount points at t ...
-dm/host/hle_lifecycle.c	apple-api	3cff5b69f44204aee105dca86087c29873570746	dispatch_source_set_event_handler(src, ^{ dm_host_shutdown("SIGTERM"); });
-dm/host/hle_lifecycle.c	apple-api	5a5a72da49546036341dfeb14aeefc62d9fdbb75	src = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGTERM, 0, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0));
-dm/host/hle_lifecycle.c	apple-api	928e7eb90235f7eab6ffeb574989f1d47c00e40d	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1500 * NSEC_PER_MSEC), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-dm/host/hle_lifecycle.c	apple-api	ae59d656bb6531b93f2f8bf4ec2831c0a52bcc06	static dispatch_source_t src;
 dm/host/hle_movie.c	apple-api	4514209dfbdaffcade92da217779d990f37465ef	if (d->evc && (vm_read_overwrite(mach_task_self(), (vm_address_t)&d->evc[i], sizeof p, (vm_address_t)&p, &got) != KERN_SUCCESS || got != sizeof p)) p = NULL;
 dm/host/hle_movie.c	apple-api	6adb1f7925b52823c2f67ad448028ecfc2657e96	uint64_t w; vm_size_t got = 0; uintptr_t a = (uintptr_t)p;
 dm/host/hle_movie.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
@@ -626,33 +545,22 @@ dm/host/hle_movie_avc.c	objc-framework	e16d43e2a1e49d3d79bfbd5c6838059798be9951	
 dm/host/hle_movie_avc.c	objc-framework	e2fe95a4b8e90cd2e2a766d0e2baeb1701dc5765	if (a->fd) { CFRelease(a->fd); a->fd = NULL; }
 dm/host/hle_movie_avc.c	objc-framework	e9514e746af0794c0cfbb272b9729b9596b31a63	if (!st) st = VTDecompressionSessionDecodeFrame(a->vs, sb, 0, NULL, NULL); // flags 0: synchronous, the picture is queued before this returns
 dm/host/hle_movie_avc.c	objc-framework	f2848bce24ed9e6e062abab85498a1e6fdaa4eb6	const uint8_t *y = CVPixelBufferGetBaseAddressOfPlane(pb, 0), *uv = CVPixelBufferGetBaseAddressOfPlane(pb, 1);
-dm/host/hle_os.c	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
-dm/host/hle_os.c	apple-api	4e16ada75764d0a75690a7a3618ffda133390eb5	return mach_absolute_time() * tb.numer / tb.denom;
-dm/host/hle_os.c	apple-api	8ee53fb64003b55b893ad035ebf7560abddb469b	if (!tb.denom) mach_timebase_info(&tb);
-dm/host/hle_os.c	apple-api	c88abb3917204d8b6af08a423c63d9028d3c7b08	static mach_timebase_info_data_t tb;
-dm/host/hle_ro.c	apple-api	a408e72dcd5ace5a259bee82439825b30b197fd5	uint8_t sha[32]; CC_SHA256(h, n, sha);
-dm/host/hle_ro.c	apple-api	d08dad2c324561d98f2831fd51bacf6453d76b66	#include <CommonCrypto/CommonDigest.h>
 dm/host/hle_svc.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
 dm/host/hle_svc.c	apple-api	ea705d6daf27d62f241e0767836746f3f57b6e7e	uint64_t rec[2]; vm_size_t got = 0; // read safely: static constructors run on the host's main thread, whose stack is outside the guest block
 dm/host/hle_svc.c	apple-api	eeaf44f10f7a88c275195feb55f5fce4e0d57c57	if (!fp || (fp & 15) || vm_read_overwrite(mach_task_self(), (vm_address_t)fp, sizeof rec, (vm_address_t)rec, &got) || got != sizeof rec) break;
 dm/host/hle_svc.c	page-assumption	4acd4eee1b31464d88c4d0e041091c65c3265c66	// Loader text/patch seals use 16 KiB boundaries, independently of host page size.
 dm/host/hle_svc.c	page-assumption	adf290c07f30472d29c8e375e2b1ddd64360e403	// Host pages are 16 KB, Horizon pages 4 KB: a map is rounded out to host pages (the extra neighboring 4K pages are inside the alias region and merely become writable early, harmless);
-dm/host/hle_table.c	macho-section	a2bf2cd969a33199377bbccd7073090b6a460486	#define L(n) __attribute__((used, section("__DATA,swhle"))) static const hle_ent hle_lib_##n = { #n, (void *)n };
-dm/host/hle_thread.c	apple-api	0991f555e854a91e93e81c8354c8ca310a8091bf	memcpy(t->ctx_v, uc->uc_mcontext->__ns.__v, sizeof t->ctx_v); t->ctx_fpcr = uc->uc_mcontext->__ns.__fpcr; t->ctx_fpsr = uc->uc_mcontext->__ns.__fpsr;
+dm/host/hle_thread.c	apple-api	0332a594531c06f71e2efac0fc86c14d2a9c3634	while (got < sizeof stk) { vm_size_t n = sizeof stk - got, g4 = 0, room = (vm_size_t)getpagesize() - ((sa + got) & ((vm_size_t)getpagesize() - 1)); if (n > room) n = room;
 dm/host/hle_thread.c	apple-api	0a3e2fd80f16cc1b4157d20c66f5a8610d3d5f6d	if (sr && t->wkind) { uint64_t stk[160]; size_t got = 0; vm_address_t sa = (vm_address_t)((uint8_t *)sr + 800);
 dm/host/hle_thread.c	apple-api	18b3d12d449cf6f26cd53a5ad2e783afe3268aaf	for (mach_msg_type_number_t i = 0; i < nth; i++) {
 dm/host/hle_thread.c	apple-api	197ad23524501086d92bfec3a48f3eeefdc4bf0f	int have_raw = (t->wkind == 1 || t->wkind == 2 || t->wkind == 3) && t->waddr && !vm_read_overwrite(mach_task_self(), t->waddr & ~0xfull, 64, (vm_address_t)raw, &g3) && g3 == 64;
-dm/host/hle_thread.c	apple-api	19e4236be8faaca42c20a0df5ee1f6d782523a47	while (got < sizeof stk) { vm_size_t n = sizeof stk - got, g4 = 0, room = vm_page_size - ((sa + got) & (vm_page_size - 1)); if (n > room) n = room;
 dm/host/hle_thread.c	apple-api	23de6cbe4a717cead47f08567777432d1d25ec7c	// Sleep until dl (host monotonic ns) on time: macOS nanosleep / mach_wait_until carry timer slack; measured, 33 ms sleeps take about 36.4 ms, 5 ms take 6.1 ms, 1 ms take 1.26 ms (the same at any QoS) ...
 dm/host/hle_thread.c	apple-api	2899629e833ff55f18f7b88b2d15bedb748e20bf	if (t->wkind == 2 && t->waddr) { uint32_t w = 0, k = 0; vm_size_t g2 = 0; // Condition wait: current values of the associated lock word and the condition key (the deadlock dump lacked this item)
 dm/host/hle_thread.c	apple-api	2ffab4628fd7fd942787f02a326c7b40ad628ab3	thread_act_array_t ths; mach_msg_type_number_t nth = 0;
-dm/host/hle_thread.c	apple-api	3d1aa6717f97a8390b60b0ee0d9bb69044e8e0d1	pthread_set_qos_class_self_np(prio_qos(t->prio), 0);
 dm/host/hle_thread.c	apple-api	452febef7b42511442c12530b22a5c9bc5fe591b	if (vm_read_overwrite(mach_task_self(), sa + got, n, (vm_address_t)((uint8_t *)stk + got), &g4) || g4 != n) break;
 dm/host/hle_thread.c	apple-api	46c285b2b6d2db57395df279454e0d1707945c96	mach_port_t mport; // Host thread port (to get CPU time)
 dm/host/hle_thread.c	apple-api	4d84a80b1be73cede84df3207cefcff3696a720f	if (!t->mport || t->exited || t->mport == mach_thread_self()) return;
-dm/host/hle_thread.c	apple-api	5a0b2b9eb68e04337e472877686416d7f0d78c0b	if ((uint32_t)q != t->qos && !pthread_set_qos_class_self_np(q, 0)) t->qos = (uint32_t)q;
 dm/host/hle_thread.c	apple-api	61896177db7efff19ffa9a8904bd7d302cff5d3e	if (t->mport && !t->exited) { thread_basic_info_data_t bi; mach_msg_type_number_t n = THREAD_BASIC_INFO_COUNT;
-dm/host/hle_thread.c	apple-api	6242239c4490ad8dd68321c227f34dd46438cc8d	pthread_get_qos_class_np(pthread_self(), &qc, &rp); t->qos = (uint32_t)qc;
 dm/host/hle_thread.c	apple-api	64c8419a774d4567036e932a71da183cc5972414	for (int i = 19; i <= 20; i++) { uint8_t raw[128]; vm_size_t g = 0; uint64_t a = st.__x[i];
 dm/host/hle_thread.c	apple-api	6929d44154fd45119dd001facc9aa6d5e98d0c72	uint8_t raw[64]; vm_size_t g3 = 0; // Raw 64 bytes of the object being waited on (the structure holding the read-write lock / condition variable): to see the counts and the owner
 dm/host/hle_thread.c	apple-api	6de76ce73376528c4979e536b2ad461393c1c8e9	mach_port_deallocate(mach_task_self(), ths[i]);
@@ -665,22 +573,17 @@ dm/host/hle_thread.c	apple-api	77eadda592292f081da1f56f95bcb58a13af65b2	if (sp >
 dm/host/hle_thread.c	apple-api	7af05bebe9ea682d91904b841c143d302bc33e0c	uint64_t fr[2]; vm_size_t got = 0; if (!fp || vm_read_overwrite(mach_task_self(), fp, 16, (vm_address_t)fr, &got) || got != 16) break;
 dm/host/hle_thread.c	apple-api	82df901ac9cd5473eab04956ce9648c957d13c54	char own[96] = ""; if (t->wkind == 1 && t->waddr) { uint32_t w = 0; vm_size_t g2 = 0; // 0x40000000 | Lock wait: lock word = owner handle | 0x40000000
 dm/host/hle_thread.c	apple-api	86ae29ac861dc64577fe56a9f66a11fbadd56b8b	if (t->wkind == 0 && module_of((void *)__darwin_arm_thread_state64_get_pc(st))) { uint64_t sp = __darwin_arm_thread_state64_get_sp(st), stk[128]; vm_size_t g = 0; // Printed only if pc is inside a gue ...
-dm/host/hle_thread.c	apple-api	9287be7aa7f0585444cbadd2a5cf6c7a0e13b1c1	ucontext_t *uc = uc_; const struct __darwin_arm_thread_state64 *ss = &uc->uc_mcontext->__ss;
 dm/host/hle_thread.c	apple-api	a7512d4c15b54aa51e91689429ad5b38aec88a5b	uint64_t fr[2]; vm_size_t g2 = 0;
 dm/host/hle_thread.c	apple-api	abe7bd42db0d9ffd6ca51e351c9a42ccf8934b97	thread_basic_info_data_t bi; mach_msg_type_number_t c = THREAD_BASIC_INFO_COUNT;
 dm/host/hle_thread.c	apple-api	b955633a5d316dd9de6f563cc43f675b7632026d	vm_read_overwrite(mach_task_self(), np, n - 1, (vm_address_t)nb, &got)) return "?";
 dm/host/hle_thread.c	apple-api	baae4ff63e5836fe006d4cf50af72f451aa969b2	vm_read_overwrite(mach_task_self(), t->waddr, 4, (vm_address_t)&w, &g2); vm_read_overwrite(mach_task_self(), t->wkey, 4, (vm_address_t)&k, &g2);
 dm/host/hle_thread.c	apple-api	bafeaf1ad3e3d7e5349dffede44c00cdcb35f0fc	if (a < 0x100000000ull || vm_read_overwrite(mach_task_self(), a, sizeof raw, (vm_address_t)raw, &g) || g != sizeof raw) continue;
-dm/host/hle_thread.c	apple-api	ca1bc6cf7659bb2855c2a98ae87ee63eabcedcef	void dm_host_helper_qos(qos_class_t q) { if (g_qos_map) pthread_set_qos_class_self_np(q, 0); }
 dm/host/hle_thread.c	apple-api	d5830ab0807e484bc741a2358b530cc3aabc58e8	if (!guest && ths[i] != mach_thread_self() && thread_suspend(ths[i]) == KERN_SUCCESS) {
 dm/host/hle_thread.c	apple-api	e5f7228b25a386b7812d380662ab2427f5c5226a	if (vm_read_overwrite(mach_task_self(), fp, 16, (vm_address_t)fr, &g2) || g2 != 16 || fr[0] <= fp) break;
 dm/host/hle_thread.c	apple-api	ec9eca6f7b47639b6b704244af9de6e72c4db39f	uint64_t np = 0; vm_size_t got = 0;
 dm/host/hle_thread.c	apple-api	f1d0245ed445deb23ad41b16888c1376fb94afff	if (task_threads(mach_task_self(), &ths, &nth) == KERN_SUCCESS) {
 dm/host/hle_thread.c	apple-api	f548320d89ad3aba89ddfd1891d44ccd8bda23a9	arm_thread_state64_t st; mach_msg_type_number_t n = ARM_THREAD_STATE64_COUNT;
 dm/host/hle_time.c	apple-api	58390174992fcfde608a1030dfcb9403465e68a5	// Switch's it stays the same until the host clock moves against the guest ticks by more than a second (clock set by hand, a sleep mach_absolute_time did not count); with DM_FIXED_TIME it is made once
-dm/host/hle_uemalloc.c	apple-api	0a0cfbbcec0492b6ceba282deafa4b7ad56558ed	if (vm_region_64(mach_task_self(), &at, &sz, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info, &cnt, &obj) != KERN_SUCCESS) return 0; // vm_region_64: iOS has no mach_vm.h
-dm/host/hle_uemalloc.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
-dm/host/hle_uemalloc.c	apple-api	cf689f9c6c8224533859028b5f259bb3948e92a7	vm_address_t at = (vm_address_t)a; vm_size_t sz = 0; vm_region_basic_info_data_64_t info; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj;
 dm/host/loader.c	apple-api	24ffdb0ce7e55dc1558877f378ccc37433d6ea71	// Patch area before the base (patch_off < 0): W ends at the end of data (FILE_IMAGE_LEN); bss and the key page are zero pages from vm_allocate and are not in the executable
 dm/host/loader.c	apple-api	31f95cdd831ee6caf381918d520d917bfd455444	kern_return_t kr = vm_remap(mach_task_self(), &a, size, 0, VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE, mach_task_self(), (vm_address_t)from, copy, &cur, &max, VM_INHERIT_NONE);
 dm/host/loader.c	apple-api	409c72f3833deaed6fa7fea9e7fd0b427407aa0a	if (kr != KERN_SUCCESS || a != to) die("%s vm_remap %p → %#lx (%#lx bytes) failed: %d", m->name, from, (unsigned long)to, size, kr);
@@ -688,15 +591,14 @@ dm/host/loader.c	apple-api	45798a9c3b65fdd9977d024268ef938912f248ce	#define IMAG
 dm/host/loader.c	apple-api	4699cfed4d2ef35107bbabda558b286a38689516	#include <mach-o/ldsyms.h>
 dm/host/loader.c	apple-api	61e85156cd920399e9d3c8191013998667f36d6e	static void remap_at(module_t *m, vm_address_t to, const void *from, unsigned long size, boolean_t copy, vm_prot_t need) {
 dm/host/loader.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/loader.c	apple-api	7d03756deda699f84f3c61edc941b2910d2eee4c	uint64_t base; __asm__ volatile("mrs %0, tpidrro_el0" : "=r"(base));
 dm/host/loader.c	apple-api	8b20d6d355cc8aaee4958239cecd4a42bc06ca72	else { x0 = getsectiondata(IMAGE_MH, "__TEXT", sx0, &z0); w = getsectiondata(IMAGE_MH, dm, "__img", &zw); x1 = getsectiondata(IMAGE_MH, "__TEXT", sx1, &z1); }
 dm/host/loader.c	apple-api	8c1e8e9a2119bbfb642052613821d69a4f142686	if ((cur & need) != need) die("%s permissions after vm_remap %#x, missing %#x", m->name, cur, need);
-dm/host/loader.c	apple-api	8cf2f94532aeb0c8f1ef6d8a9e790d8dcdcb380a	unsigned long sz; g_force = (const hle_force_ent *)getsectiondata(&_mh_execute_header, "__DATA", "swforce", &sz);
 dm/host/loader.c	apple-api	9a135cddfb1b409c1be20fae9f66cd036898cd66	// and they are vm_remap'ed back at their original relative positions: code pages with copy=FALSE (sharing the same signed pages with __TEXT, r-x), W with copy=TRUE (copy-on-write, paged only when use ...
 dm/host/loader.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
 dm/host/loader.c	apple-api	a18f6f57cf17384aee1332b2b8d8ed7ae1ed51f5	// A module with nothing to rewrite has an empty patch area (87 of Super Smash Bros. Ultimate's 98 NROs: no x18, SVC or TLS register use); vm_remap refuses 0 bytes
 dm/host/loader.c	apple-api	a91c5999f00bc9bc0abdb8c129c20b34ea030b60	const nro_ent *t = (const nro_ent *)getsectiondata(IMAGE_MH, "__DATA", "__dm_nro_tab", &zt);
 dm/host/loader.c	apple-api	c969eaec2e115435bf1b98690fe7d28038c4b807	if (vm_allocate(mach_task_self(), &base, pre + m->size, VM_FLAGS_ANYWHERE) != KERN_SUCCESS) die("%s failed to reserve %#llx bytes of address space", m->name, (unsigned long long)(pre + m->size));
-dm/host/loader.c	apple-api	d08dad2c324561d98f2831fd51bacf6453d76b66	#include <CommonCrypto/CommonDigest.h>
 dm/host/loader.c	apple-api	d26f1509321552c9220e29c3a26a709e47054d17	vm_address_t a = to; vm_prot_t cur = 0, max = 0;
 dm/host/loader.c	apple-api	d7f62b2428917dfab52a35b0ae6f3196f6781397	vm_address_t base = 0;
 dm/host/loader.c	apple-api	e710c1a41cb286b5580002799f5b09a17dd629fe	const uint8_t *b0 = getsectiondata(IMAGE_MH, "__TEXT", "__dm_nro_x0", &s0), *bw = getsectiondata(IMAGE_MH, "__DM_NRO_W", "__img", &sw), *b1 = getsectiondata(IMAGE_MH, "__TEXT", "__dm_nro_x1", &s1);
@@ -708,9 +610,7 @@ dm/host/loader.c	macho-section	f0459e46efdfcc16f8ab53b6ab0b34689c2336e6	if (m->n
 dm/host/loader.c	page-assumption	2eec5901f0876c2de282a41166287bf027d0592d	if (m->patch_off < 0 && (!m->image_size || !m->file_image_len || m->file_image_len % 0x4000 || m->patch_off % 0x4000 || m->key_page_off + m->key_page_size > m->image_size))
 dm/host/loader.c	page-assumption	b28978993c661f40fdfce34554ec0c600b419113	// Seal the code area immediately after copying into anonymous pages (16 KB pages): [0, text_end) and the patch area are read-only+execute, and from then on any write to the code area crashes on the s ...
 dm/host/loader.c	page-assumption	e01c6adf61fe1fc5fd9af71243b3dc7f780a6d35	if (!m->patch_off || m->key_page_off % 0x4000 || m->key_page_size != 0x4000 || seen != (1u << KEY_N) - 1)
-dm/host/main.c	apple-api	3ca53085a51c2c74656a89985b6990b36804e37f	// Zero point of the boot timeline = process creation time (p_starttime from sysctl KERN_PROC_PID, wall clock) converted to the now_ns monotonic time base; same definition on Mac / iOS
-dm/host/main.c	apple-api	70b21a0ebcd5d6cab209fe3731db935998c1c4fa	if (sysctl(mib, 4, &kp, &n, NULL, 0) || !n) return mono;
-dm/host/main.c	apple-api	87bf1acd22262ca7ef075682c93ea18cbfe3f343	#include <sys/sysctl.h>
+dm/host/main.c	apple-api	9bb5eee001368bc91701011114d70eb24887eaad	// Zero point of the boot timeline = process creation time converted to the now_ns monotonic time base (port.h dm_proc_start_ns: p_starttime from sysctl on Mac / iOS, /proc/self/stat on Linux); same d ...
 dm/host/main.c	objc-framework	badad99e7863f62f485f97bd8cde471d34de16c9	// Host loading (independent of UIKit / Metal): read the NSO, relocate, forced take-over, probes / tick gate / keys, start prefetch. By default it runs synchronously in main;
 dm/host/main.c	objc-framework	ca7c85c5c5432d506660704b0d124ce0c49bdd87	// the iOS front end can call dm_host_preload_start(same arguments) at the very start of the App's main() so that it runs first on a background thread, in parallel with the UIKit startup chain (⓪ + ①  ...
 dm/host/main.c	objc-framework	e94ade5d6c90c25ebcd3fd65b28dfaa77291bfa1	// May be called only once; if not called, loading is synchronous inside main and behavior is exactly as before this call existed. Does not depend on UIKit / Metal.
@@ -771,63 +671,91 @@ dm/host/motion_pro_mac.h	objc-framework	f746c60e426653812617a339996ff70f2af328ca
 dm/host/motion_pro_mac.h	objc-framework	fbe6475f6f3566b4b4b75f6a9927085763e87971	CFRelease(g_pro_manager); g_pro_manager = NULL;
 dm/host/motion_pro_mac.h	objc-framework	ff99023b72971576cda884e07e6f1ec820be8a10	typedef struct pro_device { IOHIDDeviceRef hid; uint8_t report[512]; pro_motion motion; struct pro_device *next; } pro_device;
 dm/host/pad_slots.h	objc-framework	f0cc38072f813a4da19d4d07e9f4dbfef61fe1e3	// GCController); a holder that never disconnects (the keyboard with DM_KBD_PLAYER=own) takes slot 0 first and keeps it.
+dm/host/port.h	apple-api	0cb23348a35d1e0b1dd35e0da5d140a86e91e4a2	static inline void dm_sha256_final(dm_sha256_t *c, uint8_t out[32]) { CC_SHA256_Final(out, &c->cc); }
+dm/host/port.h	apple-api	122f361e8f066349d995ebc61ca117c2b1373741	return dispatch_semaphore_wait((dispatch_semaphore_t)s, timeout_ns < 0 ? DISPATCH_TIME_FOREVER : dispatch_time(DISPATCH_TIME_NOW, timeout_ns)) ? -1 : 0;
+dm/host/port.h	apple-api	16ba8ab5171d1512e80edaad1b21c2c66ccbab29	// dm_clone_tree: clone a directory tree (or one file) to a path that does not exist yet: 0, or -1 with errno. Apple: an APFS copy-on-write clone (clonefile, nearly free, every
+dm/host/port.h	apple-api	1f652a1180086f62c80ff8bc8a05c0774c3767fc	if (task_info(mach_task_self(), TASK_POWER_INFO_V2, (task_info_t)&pw, &n) != KERN_SUCCESS) return -1;
+dm/host/port.h	apple-api	214a7830bde1cb848cff5e79780e61365eb8914e	if (kr != KERN_SUCCESS || (to && a != (vm_address_t)to)) { errno = kr == KERN_INVALID_ARGUMENT ? EINVAL : kr == KERN_NO_SPACE ? ENOMEM : EIO; return NULL; }
+dm/host/port.h	apple-api	2173806928a61463d34d0ba86533b9152478d7c1	typedef union { CC_SHA256_CTX cc; uint64_t align[14]; } dm_sha256_t;
+dm/host/port.h	apple-api	2684feae569d7f70a90e094c60d0cf78500f0c7b	thread_extended_info_data_t xi; mach_msg_type_number_t xc = THREAD_EXTENDED_INFO_COUNT;
+dm/host/port.h	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
+dm/host/port.h	apple-api	4699cfed4d2ef35107bbabda558b286a38689516	#include <mach-o/ldsyms.h>
+dm/host/port.h	apple-api	4716e5c708bc4c8a0c2025c6af4b9124a033af95	task_power_info_v2_data_t pw; mach_msg_type_number_t n = TASK_POWER_INFO_V2_COUNT;
+dm/host/port.h	apple-api	491d3bd87095b6026b5a1f1a8bab4abc28f267ad	static inline void dm_sha256_init(dm_sha256_t *c) { CC_SHA256_Init(&c->cc); }
+dm/host/port.h	apple-api	506e7294f5b6d228b663a4eb4d3064f077d0fc38	// platform's state (CommonCrypto's, or dm/android/compat/digest.c's behind the opaque bytes), sized and aligned for either; sizes above 4 GiB are fed in blocks.
+dm/host/port.h	apple-api	52e462d339a9ce9d2fdc3841115ca25d6bf19418	static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
+dm/host/port.h	apple-api	5a5a72da49546036341dfeb14aeefc62d9fdbb75	src = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGTERM, 0, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0));
+dm/host/port.h	apple-api	5ade966289e2a74a9499895f0cdcaec25cce59b2	// dm_sem: a counting semaphore with a timed wait (GCD's dispatch_semaphore on Apple); dm_after_ns: call fn(arg) on some other thread after ns nanoseconds (dispatch_after);
+dm/host/port.h	apple-api	5d8b77437dc989f7dc092e7ba28947c9ed5c6d5b	static inline int dm_clone_tree(const char *src, const char *dst) { return clonefile(src, dst, 0); }
+dm/host/port.h	apple-api	615a43d9e403957d0d08e80fe2a2cf336baa4121	static inline void dm_qos_boost_end(dm_qos_boost_t b) { if (b) pthread_override_qos_class_end_np((pthread_override_t)b); }
+dm/host/port.h	apple-api	629ff6375bd7acfb61230bfc8b6749c4facccac0	static inline int dm_qos_set_self(qos_class_t c) { return pthread_set_qos_class_self_np(c, 0); }
+dm/host/port.h	apple-api	64df860d516fbddc511f86575e7f94ffd91f233d	// dm_vm_alias: a second mapping of the same pages at to (NULL = anywhere): the pointer, or NULL with errno. Apple: vm_remap with copy = FALSE. bionic: ENOTSUP, said once: an
+dm/host/port.h	apple-api	6508f89dd39068e0256f8593e9664c2bec6f21e3	dispatch_source_set_event_handler(src, ^{ fn("SIGTERM"); });
+dm/host/port.h	apple-api	70b21a0ebcd5d6cab209fe3731db935998c1c4fa	if (sysctl(mib, 4, &kp, &n, NULL, 0) || !n) return mono;
+dm/host/port.h	apple-api	77912511476934daa2e2c9e447f951bb98a5b2bc	// dm_proc_start_ns: when this process started, on the dm_clock_ns base (Apple: p_starttime from sysctl; Linux: /proc/self/stat starttime on CLOCK_BOOTTIME).
+dm/host/port.h	apple-api	787bf9a156915679db8fccd4070d43c22d782621	#include <mach/thread_policy.h>
+dm/host/port.h	apple-api	83097c5b7dde10d9a4cba3038bcffd8f62213d67	for (const uint8_t *p = data; n; ) { size_t k = n > (1u << 30) ? (1u << 30) : n; CC_SHA256_Update(&c->cc, p, (CC_LONG)k); p += k; n -= k; }
+dm/host/port.h	apple-api	87bf1acd22262ca7ef075682c93ea18cbfe3f343	#include <sys/sysctl.h>
+dm/host/port.h	apple-api	8a9c047ea7b1db7826f03a7d80737cf426ab96fc	static inline void dm_sem_free(dm_sem_t s) { dispatch_release((dispatch_semaphore_t)s); }
+dm/host/port.h	apple-api	8f8bc81e985ca53f9ac32020e01c2f6bbfed7612	vm_address_t a = (vm_address_t)to; vm_prot_t cur = 0, max = 0;
+dm/host/port.h	apple-api	9374595df8f066988cc3c716480a0d5e05e64cfb	static inline dm_sem_t dm_sem_new(long value) { return (dm_sem_t)dispatch_semaphore_create(value); }
+dm/host/port.h	apple-api	97a57bcb48f32151535f2e60637e446bfeb9c21b	// takes from mach_absolute_time in assembly, converted here by dm_ticks_ns), and compat's <mach/mach.h> answers the Mach calls whose semantics bionic has (vm_read_overwrite,
+dm/host/port.h	apple-api	99f00d6d7ab3ac5019b5b19cdb0bd03181e7f0aa	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)ns), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{ fn(arg); });
+dm/host/port.h	apple-api	a065bf2d4d0a31f6cec528086bd63faa1a365271	#include <mach/mach.h> // arm_thread_state64_t and the Mach calls both platforms answer (Apple's header, or compat's)
+dm/host/port.h	apple-api	ae59d656bb6531b93f2f8bf4ec2831c0a52bcc06	static dispatch_source_t src;
+dm/host/port.h	apple-api	afa5638deff04b740ba798d426ac6f246bd2d690	#include <sys/clonefile.h>
+dm/host/port.h	apple-api	b3e88ac663ce4797ad14c8f1b3b322f09f1a0ff8	static inline const dm_neon_t *dm_uc_ns(ucontext_t *uc, dm_neon_t *tmp) { (void)tmp; return &uc->uc_mcontext->__ns; }
+dm/host/port.h	apple-api	b5b99a0d2151f120f19227fcab83a4f82fa5030a	// In dm/host and dm/gfx/nvn this is the only file that spells CommonCrypto, clonefile, the pthread QoS calls, GCD, the Mach VM and thread-policy calls, Mach-O sections and
+dm/host/port.h	apple-api	b6634f81cf6a6e196c73686146b7c1d2d174e541	static inline void dm_sha256_update(dm_sha256_t *c, const void *data, size_t n) { // CC_LONG is 32 bits: in blocks, so a size past 4 GiB is not truncated
+dm/host/port.h	apple-api	c35e15aba6af8dfde904b8562fbb0484a3588433	static inline const void *dm_section(const char *name, unsigned long *size) { return getsectiondata(&_mh_execute_header, "__DATA", name, size); }
+dm/host/port.h	apple-api	c61cbd41848e0e266103d2e5d1e62bf2e1c42aaa	mach_wait_until(mach_absolute_time() + (deadline_ns - now) * tb.denom / tb.numer);
+dm/host/port.h	apple-api	c94e6bcdf4533e32e7758ea333a35b8d252eef92	static inline void dm_sem_signal(dm_sem_t s) { dispatch_semaphore_signal((dispatch_semaphore_t)s); }
+dm/host/port.h	apple-api	d08dad2c324561d98f2831fd51bacf6453d76b66	#include <CommonCrypto/CommonDigest.h>
+dm/host/port.h	apple-api	d20fe43a2aa7e370b42ac928c9e5e0d23fa842e6	thread_time_constraint_policy_data_t tp; mach_msg_type_number_t tc = THREAD_TIME_CONSTRAINT_POLICY_COUNT; boolean_t def = 0;
+dm/host/port.h	apple-api	d7712e91976c4ed61df586a5a921d741ec0a732d	static inline arm_thread_state64_t *dm_uc_ss(ucontext_t *uc) { return &uc->uc_mcontext->__ss; }
+dm/host/port.h	apple-api	d7962867bcad405d102ce2c1a66eb6c539731390	kern_return_t kr = vm_remap(mach_task_self(), &a, size, 0, to ? VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE : VM_FLAGS_ANYWHERE, mach_task_self(), (vm_address_t)from, FALSE, &cur, &max, VM_INHERIT_NONE);
+dm/host/port.h	apple-api	dc171b2a46d28cc4399f8102434557dddd8a0687	static inline qos_class_t dm_qos_self(void) { qos_class_t c = QOS_CLASS_UNSPECIFIED; int rp = 0; pthread_get_qos_class_np(pthread_self(), &c, &rp); return c; }
+dm/host/port.h	apple-api	deaa2c013807a01c3751a9a81a48848f8188a9a3	// dm_vm_region: the mapping that holds addr (start, length, PROT_* bits): 0, or -1 when nothing is mapped there (vm_region_64; /proc/self/maps on Linux).
+dm/host/port.h	apple-api	e35e3e3848df1269db4dac78dbb8ff91f4ae32d8	static inline uint64_t dm_ticks_ns(uint64_t ticks) { static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb); return ticks * tb.numer / tb.denom; }
+dm/host/port.h	apple-api	e3b82b2ca050fe5d5762903d94c6e958ab55d985	// dm_ticks_ns: mach_absolute_time ticks (the NVN profiling thunks in nvn_entry.S take them in assembly) to nanoseconds; compat's mach_absolute_time already counts nanoseconds.
+dm/host/port.h	apple-api	e9845eaafe9deff27821892167a2a08c7bdbe9bc	// call on either platform). Apple: CLOCK_UPTIME_RAW is mach_absolute_time() after the timebase conversion; bionic: CLOCK_MONOTONIC, the clock compat's mach_absolute_time reads.
+dm/host/port.h	apple-api	efc449d5e5f95d746e7f89ac0aa7f460183d1af0	// xattr included); bionic: a copy that is either whole or absent, like the clone (dm/android/compat/clonefile.c), which carries only user.* extended attributes.
+dm/host/port.h	apple-api	f409d506f6c1328cdc0299d18f76afb8ebf400cf	static inline dm_qos_boost_t dm_qos_boost_start(pthread_t t, qos_class_t c) { return (dm_qos_boost_t)pthread_override_qos_class_start_np(t, c, 0); }
+dm/host/port.h	apple-api	f4a74973865550bbd9d9995d477412f92ce267f7	// executable (getsectiondata); ELF: the linker's __start_ / __stop_ symbols (the Android link keeps them with -z nostart-stop-gc).
+dm/host/port.h	apple-api	f5a9f9fdac21dea1af834670dc6a539c09acef3d	if (vm_region_64(mach_task_self(), &at, &sz, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info, &cnt, &obj) != KERN_SUCCESS || at > addr) return -1;
+dm/host/port.h	apple-api	fa5a72c2d1783aedcaf1c9dea850de1f5b66923c	vm_address_t at = (vm_address_t)addr; vm_size_t sz = 0; vm_region_basic_info_data_64_t info; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj = MACH_PORT_NULL;
+dm/host/port.h	apple-api	ffed6bbb855c554334c87b822125c59335f1df05	#include <mach-o/getsect.h>
 dm/host/probe.c	apple-api	0d82d8c5129dad55bac6439710fc86d1e12d6162	if (p < 0x1000 || vm_read_overwrite(mach_task_self(), p, sizeof buf - 1, (vm_address_t)buf, &got) || !got) return;
-dm/host/probe.c	apple-api	0e805f6ca0b92134d9374e81baa75c4322634638	{ uint64_t x8 = uc->uc_mcontext->__ss.__x[8]; Dl_info di; fprintf(stderr, " x8=%#llx", x8); // x8: indirect call targets are often here (probe placed before blr x8)
 dm/host/probe.c	apple-api	112111bbf89e4d5cf6386119685fd51b720397d5	sys_icache_invalidate(w, 4);
-dm/host/probe.c	apple-api	1304283817f4215060b694063ffd613892233650	_STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss; unsigned rn = (in >> 5) & 31, sz = 1u << (in >> 30);
-dm/host/probe.c	apple-api	1495986bd789293f49701f53e154cb442f7deeef	uint64_t v = uc->uc_mcontext->__ss.__x[g_probe[i].freg]; vm_size_t g = 0;
 dm/host/probe.c	apple-api	17bb357676d2c2cd49c76c846743c2e1f3808946	for (mach_msg_type_number_t i = 0; i < ns; i++) {
 dm/host/probe.c	apple-api	1abc38acda16d216b4203f03aaa556f54ae568aa	if (!vm_read_overwrite(mach_task_self(), at, n, (vm_address_t)b, &got)) { fprintf(stderr, "[dm] [x2]:"); for (long k = 0; k < (long)got; k += 8) { uint64_t v; memcpy(&v, b + k, 8); fprintf(stderr, "%s ...
-dm/host/probe.c	apple-api	1b03b87d4a450bfca9e54f25a8a24bdcddbc8b15	if (mach_vm_remap(mach_task_self(), &al, g_wpsz, 0, VM_FLAGS_ANYWHERE, mach_task_self(), g_wpg, FALSE, &cur, &max, VM_INHERIT_NONE) == KERN_SUCCESS) g_walias = (uint8_t *)al;
-dm/host/probe.c	apple-api	1b7be8c53b9af94dab3ccfc3d42f07de2e58378d	if (v != g_probe[i].fval) { uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot; return 1; }
-dm/host/probe.c	apple-api	1bd78b8a6dc89bceb2b6403050454f9720ac4426	ucontext_t *uc = ucv; uint64_t pc = uc->uc_mcontext->__ss.__pc, ea = 0, wbv = 0; unsigned len = 0; int wb = -1; uint8_t data[64];
 dm/host/probe.c	apple-api	21dfa82d42ca1e06b1653d7726ba163d1f874478	if (g_probe[i].dump & 0x1000000) { uint64_t p = 0; vm_size_t g = 0; if (!vm_read_overwrite(mach_task_self(), at, 8, (vm_address_t)&p, &g) && p) at = p + g_probe[i].dpost; else at = 0; } // @*offset[+p ...
 dm/host/probe.c	apple-api	26e9eedded4c2fd4ec0b83454da7971cf9405df4	char buf[80]; vm_size_t got = 0;
 dm/host/probe.c	apple-api	27144096a7f700a85c447f08efd7bcfbc6e01055	(void)p; void svc_thread_dump(void); extern uint64_t g_t0_ns; uint64_t now_ns(void); vm_size_t got;
-dm/host/probe.c	apple-api	2b57462b2aad28f7d486cd95ad8b33c65f367992	mach_vm_address_t al = 0; vm_prot_t cur, max;
 dm/host/probe.c	apple-api	2d607b42a2448a010527f99b3986d4eb9f68cd12	for (mach_msg_type_number_t i = 0; i < ns; i++) { // threads with guest code anywhere in their first frames
 dm/host/probe.c	apple-api	30ce48c2fcc06177980f158c47e89c43e41a6ecc	while (vm_read_overwrite(mach_task_self(), g_poll, g_plen, (vm_address_t)&old, &got) || got != g_plen) usleep(1000);
-dm/host/probe.c	apple-api	316535bd2c1a7ee018eca6f43ade3bff3cead1c2	mach_vm_address_t ra = g_wpg; mach_vm_size_t rs = 0; vm_region_basic_info_data_64_t bi; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj;
 dm/host/probe.c	apple-api	3a697ce56da9c7d750765374d08bab6121901140	for (int k = 0; k < NF && fp > 0x100000000ull && !vm_read_overwrite(mach_task_self(), fp, 16, (vm_address_t)w, &g) && g == 16; k++) { fr[i][2 + k] = w[1]; fp = w[0]; }
 dm/host/probe.c	apple-api	3b882d4da8a95ba62d3ec08778f9b970aef10def	if (at && !vm_read_overwrite(mach_task_self(), at, 16, (vm_address_t)b, &got) && got == 16) {
 dm/host/probe.c	apple-api	44a77623f729d832391009e1cdea176d0f981f77	#if !TARGET_OS_IPHONE
-dm/host/probe.c	apple-api	4a2c902e2702f23baadc21fe140f01bd7247850c	uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot;
-dm/host/probe.c	apple-api	54fa43ec1a0fde1a91f9ebe68193429aa984727e	#include <mach/mach_vm.h> // the write watch (DM_PROBE_WATCH): iOS's SDK has no mach_vm.h
 dm/host/probe.c	apple-api	566cf568a9f99a707a2b7f0b88ebb0ba1dd7f172	if (vm_read_overwrite(mach_task_self(), g_poll, g_plen, (vm_address_t)&v, &got) || v == old) continue;
-dm/host/probe.c	apple-api	5ddc99d8e4cbd6291346b045bedf2e4569a6e368	char nm[128]; probe_heapname(uc->uc_mcontext->__ss.__x[g_probe[i].hreg], nm, sizeof nm);
+dm/host/probe.c	apple-api	5eca95de561cd432dad6b8a4563650177cb37234	uint64_t v = dm_uc_ss(uc)->__x[g_probe[i].freg]; vm_size_t g = 0;
 dm/host/probe.c	apple-api	69c2cf581dcdd2469eec6471f79e49ff9cb10278	if (g_probe[i].foff >= 0 && vm_read_overwrite(mach_task_self(), v + g_probe[i].foff, 8, (vm_address_t)&v, &g)) v = ~g_probe[i].fval;
 dm/host/probe.c	apple-api	70f8b834f0a91e80513be9ae9777fc6241f2502f	uint8_t b[16]; vm_size_t got = 0;
 dm/host/probe.c	apple-api	735dd6d2bd2b2243fc9bec48fe72be9af0113f60	for (mach_msg_type_number_t i = 0; i < ns; i++) thread_resume(keep[i]);
-dm/host/probe.c	apple-api	74e2e0f07be817f50178e429cb03689824d6e2ac	dm_backtrace(uc->uc_mcontext->__ss.__fp);
 dm/host/probe.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
 dm/host/probe.c	apple-api	84f207c56d5f8eeb1dff224e368d52bf8d3391ea	static int rd64(uint64_t a, uint64_t *v) { vm_size_t g = 0; return !vm_read_overwrite(mach_task_self(), a, 8, (vm_address_t)v, &g) && g == 8; }
-dm/host/probe.c	apple-api	8aae40c1fd3bfb7f8ed57dacc18d2257616c4dc6	if (!mach_vm_region(mach_task_self(), &ra, &rs, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&bi, &cnt, &obj) && ra <= g_wpg && (bi.protection & VM_PROT_WRITE)) {
-dm/host/probe.c	apple-api	92243045a0e74c32b95565b312762c58df4ee7b3	if (!strstr(nm, g_hw.want)) { uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot; return 1; }
+dm/host/probe.c	apple-api	8d146ea6963014abb23ae18b9453ac8e65f09321	if (xd > 0) { uint64_t at = dm_uc_ss(uc)->__x[2]; uint8_t b[512]; vm_size_t got = 0; long n = xd > 512 ? 512 : xd;
 dm/host/probe.c	apple-api	9d0e93e92f9de91ea61ca150e6acb680d328e822	if (len >= 3 && len < sizeof t && !vm_read_overwrite(mach_task_self(), ptr, len, (vm_address_t)t, &got) && got == len) {
 dm/host/probe.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
 dm/host/probe.c	apple-api	9eb7cdf22cca8ed9ada974817d1da6d34439aa9c	for (mach_msg_type_number_t i = 0; i < nth && ns < MT; i++) if (ths[i] != self && thread_suspend(ths[i]) == KERN_SUCCESS) keep[ns++] = ths[i];
 dm/host/probe.c	apple-api	a17e393d98dc26e76d860aa40ef471dde6f63c51	thread_act_array_t ths; mach_msg_type_number_t nth = 0, ns = 0; thread_act_t self = mach_thread_self();
-dm/host/probe.c	apple-api	a30205f3bc941982e228c7e2e04e21f9fcf14ef7	if (wb >= 0) { if (wb == 31) uc->uc_mcontext->__ss.__sp = wbv; else if (wb == 29) uc->uc_mcontext->__ss.__fp = wbv; else if (wb == 30) uc->uc_mcontext->__ss.__lr = wbv; else uc->uc_mcontext->__ss.__x[ ...
-dm/host/probe.c	apple-api	a3835e18ec1eed01a03d7d1298a1dcfdf3890fc2	for (int r = 0; r < 8; r++) { uint64_t v = uc->uc_mcontext->__ss.__x[r]; fprintf(stderr, " x%d=%#llx", r, v); probe_str(v); }
-dm/host/probe.c	apple-api	a4fc58e6a2a95b2191037abe42d454633c266e04	uint64_t at = uc->uc_mcontext->__ss.__x[dr] + (g_probe[i].dump & 0xffffff);
 dm/host/probe.c	apple-api	a82c0f904cf2f814c6d7e617fc9aa820279b160d	if (task_threads(mach_task_self(), &ths, &nth) != KERN_SUCCESS) return;
 dm/host/probe.c	apple-api	aa3b156aebb0c7b389ef081f8e67414bf87646ca	vm_deallocate(mach_task_self(), (vm_address_t)ths, nth * sizeof *ths); mach_port_deallocate(mach_task_self(), self);
 dm/host/probe.c	apple-api	acb714ef445617cdf36f658dec0ffd11ccdc3661	arm_thread_state64_t st; mach_msg_type_number_t n = ARM_THREAD_STATE64_COUNT; memset(fr[i], 0, sizeof fr[i]);
 dm/host/probe.c	apple-api	af2dbbd7f7c714a7a3322f68a79d9a4d58d0e0e7	#include <libkern/OSCacheControl.h>
 dm/host/probe.c	apple-api	b65252757666cc232a3d85ddf41452679ac6abe6	for (mach_msg_type_number_t i = 0; i < nth; i++) mach_port_deallocate(mach_task_self(), ths[i]);
-dm/host/probe.c	apple-api	b6a472ef9d38a8c65864762eb5b3beed3681587c	uc->uc_mcontext->__ss.__pc = pc + 4;
-dm/host/probe.c	apple-api	bc14dd7b849dd73fa49abd0ef5758fa765bba696	uint64_t pc = uc->uc_mcontext->__ss.__pc;
-dm/host/probe.c	apple-api	c20cecfe8bb9542e5a3c8ccf20a0d8a3abc806ba	if (getenv("DM_PROBE_ALL")) for (int r = 9; r < 19; r++) fprintf(stderr, " x%d=%#llx", r, uc->uc_mcontext->__ss.__x[r]); // also print x9–x18
-dm/host/probe.c	apple-api	ca11feff3c53816097ce2189568613e28ef4d991	if (g_probe[i].hreg >= 0) probe_heapwalk(uc->uc_mcontext->__ss.__x[g_probe[i].hreg]);
 dm/host/probe.c	apple-api	cd8604d426192e58d471430e441b12a7435164f7	uint64_t fp = __darwin_arm_thread_state64_get_fp(st), w[2]; vm_size_t g;
-dm/host/probe.c	apple-api	ced1199364c3d456b42484744bf147ffe73cfacf	watch_where("pc", pc); watch_where("lr", uc->uc_mcontext->__ss.__lr); fputc('\n', stderr);
-dm/host/probe.c	apple-api	d3dea6d53280cd90118810e99432baad0c7e1f3b	fprintf(stderr, " lr=%#llx", uc->uc_mcontext->__ss.__lr);
-dm/host/probe.c	apple-api	da2fc6cd6fb7b9d33926f183cb3cd5318138c65d	_STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss; _STRUCT_ARM_NEON_STATE64 *ns = &uc->uc_mcontext->__ns;
 dm/host/probe.c	apple-api	e487ae6a90c23f81adff19af9deb9f315c2aad9e	if (g_hw.lay[0] && rd64(h + g_hw.lay[0], &np) && np) { vm_size_t g = 0; vm_read_overwrite(mach_task_self(), np, n - 1, (vm_address_t)nm, &g); nm[g < n ? g : n - 1] = 0; for (int k = 0; nm[k]; k++) if  ...
-dm/host/probe.c	apple-api	e6d6dbdd01cdab4ff2089ec084f73762ea730288	uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot; return 1;
-dm/host/probe.c	apple-api	e78e1b1f9c7fedb1b518dbab5c9d149abc11265f	if (xd > 0) { uint64_t at = uc->uc_mcontext->__ss.__x[2]; uint8_t b[512]; vm_size_t got = 0; long n = xd > 512 ? 512 : xd;
-dm/host/probe.c	apple-api	eb054b455eafaca40561d8a66b644af22df86bd8	if (g_probe[i].fn) { g_probe[i].hits++; g_probe[i].fn(uc); uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot; return 1; }
-dm/host/probe.c	apple-api	f4f878587b2a9c5b2a220a93bdd9e1788ea8069e	for (int r = 19; r < 24; r++) fprintf(stderr, " x%d=%#llx", r, uc->uc_mcontext->__ss.__x[r]);
 dm/host/probe.c	apple-api	fe6fa3ad06597bc0b90807439abe3feef4b7f025	if (g_slots && !g_slots_sealed) { mprotect(g_slots, 0x4000, PROT_READ | PROT_EXEC); sys_icache_invalidate(g_slots, 0x4000); g_slots_sealed = 1; }
 dm/host/probe.c	page-assumption	7b3064ac5a85487a93f0dd40463cd76311cd110f	if (!g_slots) g_slots = mmap(NULL, 0x4000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
 dm/host/probe.c	page-assumption	fe6fa3ad06597bc0b90807439abe3feef4b7f025	if (g_slots && !g_slots_sealed) { mprotect(g_slots, 0x4000, PROT_READ | PROT_EXEC); sys_icache_invalidate(g_slots, 0x4000); g_slots_sealed = 1; }

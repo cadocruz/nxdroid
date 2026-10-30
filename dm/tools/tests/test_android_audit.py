@@ -74,6 +74,15 @@ class Audit(unittest.TestCase):
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]['category'], 'apple-api')
 
+    def test_thread_register_reads(self):
+        # a read of tpidrro_el0 (Darwin's TSD base) or tpidr_el0 (bionic's thread block) assumes a thread layout; a write, or a comment naming the register, does not read it
+        self.write(APPLE, 'static void f(void) {\n    uint64_t b; __asm__ volatile("mrs %0, tpidrro_el0" : "=r"(b));\n}\n'
+                          '// slot = tpidrro_el0 + 8*key\n')
+        self.write('dm/host/entry.S', '    mrs x16, tpidr_el0\n    msr tpidr_el0, x0\n')
+        hits = [json.loads(line) for line in self.run_tool('--json')[1].splitlines()]
+        self.assertEqual(sorted((h['path'], h['line'], h['match']) for h in hits),
+                         [(APPLE, 2, 'mrs %0, tpidrro_el0'), ('dm/host/entry.S', 1, 'mrs x16, tpidr_el0')])
+
     def test_objc_type_tokens_are_not_itemised_in_a_m_file(self):
         # one .m file is Objective-C as a whole; itemising its 1,800 MTL lines would bury the findings that matter
         self.write('dm/host/impl.m', '#import <Metal/Metal.h>\n@implementation X\n- (void)f { NSString *s = @"x"; }\n@end\n')
