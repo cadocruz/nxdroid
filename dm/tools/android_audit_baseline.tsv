@@ -1,0 +1,833 @@
+# file	category	sha1	text   (dm/tools/android_audit.py; --write-baseline regenerates it, and it should only shrink)
+dm/gfx/nvn/hle_nvn.c	apple-api	030cce446c4073807166b808c2469eff64725c88	mach_wait_until(mach_absolute_time() + (dl - now) * tb.denom / tb.numer);
+dm/gfx/nvn/hle_nvn.c	apple-api	0507a7eb8903836980decbc1d9751c598025a45c	vm_prot_t cur, max;
+dm/gfx/nvn/hle_nvn.c	apple-api	0b0035eb9c1008d2308c67e6996145688fe04992	thread_basic_info_data_t bi; mach_msg_type_number_t n = THREAD_BASIC_INFO_COUNT; mach_port_t me = mach_thread_self(); uint64_t r = 0;
+dm/gfx/nvn/hle_nvn.c	apple-api	0fc986d3760c2fdd175354f1a74f6c93f95c54bf	vm_address_t to = (vm_address_t)(v->base + r->voff);
+dm/gfx/nvn/hle_nvn.c	apple-api	1532d92388ed393d7111ca16c5b0cd3a04d82d55	static unsigned isub = ~0u; static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
+dm/gfx/nvn/hle_nvn.c	apple-api	217820272a4306fe7bbb70a9dad2c25066987fdb	kern_return_t kr = vm_remap(mach_task_self(), &to, r->size, 0, VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE, mach_task_self(), (vm_address_t)from, FALSE, &cur, &max, VM_INHERIT_NONE);
+dm/gfx/nvn/hle_nvn.c	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
+dm/gfx/nvn/hle_nvn.c	apple-api	4556b41437400e61a898e9aa239d9e0b8a2cee59	mach_port_deallocate(mach_task_self(), me); return r;
+dm/gfx/nvn/hle_nvn.c	apple-api	4699cfed4d2ef35107bbabda558b286a38689516	#include <mach-o/ldsyms.h>
+dm/gfx/nvn/hle_nvn.c	apple-api	4716e5c708bc4c8a0c2025c6af4b9124a033af95	task_power_info_v2_data_t pw; mach_msg_type_number_t n = TASK_POWER_INFO_V2_COUNT;
+dm/gfx/nvn/hle_nvn.c	apple-api	47e9bc41ffdfa722c3dbd22a0787379473bb28bb	#if TARGET_OS_OSX
+dm/gfx/nvn/hle_nvn.c	apple-api	4ec809e4799ec5ba489823d186865bf4ee1ee1d5	static uint64_t pt, pe, pcpu, pp, piw, ppw, pg, pf, pld, pst, pfu, pudc; static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
+dm/gfx/nvn/hle_nvn.c	apple-api	52d30259ed05e49428d4a6040973380ba1a682d7	if (kr != KERN_SUCCESS || to != (vm_address_t)(v->base + r->voff)) { LOG("[RED] virtual pool remap %#lx → %p (%#llx bytes) failed: %d", (unsigned long)from, (void *)(v->base + r->voff), (unsigned long ...
+dm/gfx/nvn/hle_nvn.c	apple-api	52e462d339a9ce9d2fdc3841115ca25d6bf19418	static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
+dm/gfx/nvn/hle_nvn.c	apple-api	5d61e9ebad17ee79031c0169437a0776904e9bb6	if (a_ > 0) trow(f - 8, "@pres_at_ms", a_ * 1e3 - g_t0_ns / 1e6); // on-screen present time (ms since process start; presentedTime shares a time base with mach_absolute_time)
+dm/gfx/nvn/hle_nvn.c	apple-api	6fde255e6fdb7b06de1f4a4076f800f6568142bc	const nvn_impl *im = (const nvn_impl *)getsectiondata(&_mh_execute_header, "__DATA", "swnvn", &sz);
+dm/gfx/nvn/hle_nvn.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/gfx/nvn/hle_nvn.c	apple-api	787bf9a156915679db8fccd4070d43c22d782621	#include <mach/thread_policy.h>
+dm/gfx/nvn/hle_nvn.c	apple-api	7d11c9f541e66f63c070341aca926ff773def222	if (task_info(mach_task_self(), TASK_POWER_INFO_V2, (task_info_t)&pw, &n) != KERN_SUCCESS) return;
+dm/gfx/nvn/hle_nvn.c	apple-api	87bf1acd22262ca7ef075682c93ea18cbfe3f343	#include <sys/sysctl.h>
+dm/gfx/nvn/hle_nvn.c	apple-api	96811458fbbea3bf8267a4c00366591ab3423fb5	if (task_info(mach_task_self(), TASK_POWER_INFO_V2, (task_info_t)&pw, &n) != KERN_SUCCESS) return slowed;
+dm/gfx/nvn/hle_nvn.c	apple-api	98f9b5d59dd1589d0e8a1360f24d931046bcf6b4	thread_time_constraint_policy_data_t tp; mach_msg_type_number_t tc = THREAD_TIME_CONSTRAINT_POLICY_COUNT; boolean_t def = 0; int rt_live = thread_policy_get(pthread_mach_thread_np(pthread_self()), THR ...
+dm/gfx/nvn/hle_nvn.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
+dm/gfx/nvn/hle_nvn.c	apple-api	af195540156b38008d486589c94312787a65fdb3	if (g_frame % 300 == 0) { task_vm_info_data_t vi; mach_msg_type_number_t cnt = TASK_VM_INFO_COUNT;
+dm/gfx/nvn/hle_nvn.c	apple-api	b6412a9077ceb653c0147abd7191dfa573de006b	task_vm_info_data_t vi; mach_msg_type_number_t vc = TASK_VM_INFO_COUNT; double fp = task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vi, &vc) == KERN_SUCCESS ? vi.phys_footprint / 1048576.0 : - ...
+dm/gfx/nvn/hle_nvn.c	apple-api	bdaf483486d7240d1c6f49cbcf6ae0aaf007544f	if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vi, &cnt) == KERN_SUCCESS) { unsigned long long mb = (unsigned long long)(vi.phys_footprint >> 20); void mtl_mem_stat(unsigned long long, un ...
+dm/gfx/nvn/hle_nvn.c	apple-api	c477e7ec8e71c1561cd9f89138919d50da14d105	if (frame % 300 == 0) { unsigned wn = 0; uint32_t wq = dm_guest_work_qos(&wn); thread_extended_info_data_t xi; mach_msg_type_number_t xc = THREAD_EXTENDED_INFO_COUNT; int okx = thread_info(pthread_mac ...
+dm/gfx/nvn/hle_nvn.c	apple-api	d08dad2c324561d98f2831fd51bacf6453d76b66	#include <CommonCrypto/CommonDigest.h>
+dm/gfx/nvn/hle_nvn.c	apple-api	d5e2985fcad422496777b277b8f18695d5ccecf2	qos_class_t qc = QOS_CLASS_UNSPECIFIED; int rp = 0; pthread_get_qos_class_np(pthread_self(), &qc, &rp);
+dm/gfx/nvn/hle_nvn.c	apple-api	e3f14c920006c7469d0d8cad8a49cb7ad2debeb5	// and every mapping request vm_remaps the physical pool's pages over its part of that range: the virtual addresses then read and write the same memory as the physical pool, as the GPU page table does
+dm/gfx/nvn/hle_nvn.c	apple-api	ea9615479910fe95b8eabd885620a449ceafec92	uint32_t mg = 0; vm_size_t got = 0; // the value the client gives is not necessarily a pointer: test-read first
+dm/gfx/nvn/hle_nvn.c	apple-api	ee1a3ee0d3712e5068fda5d92ee3bf5e19e54479	#if TARGET_OS_IPHONE // 1 GB: Monster Hunter Rise's buffers stay under 0x20100000 through its opening, its textures (32 GB in) are read through the page table, and 4 GB guest + 1 GB stays near the 5 G ...
+dm/gfx/nvn/hle_nvn.c	apple-api	f98b15ecfe0df3b679dbc9b78f0d0495ad81476a	if (!t || (uintptr_t)t & 7 || vm_read_overwrite(mach_task_self(), (vm_address_t)t, 4, (vm_address_t)&mg, &got) != KERN_SUCCESS || got != 4) return -1;
+dm/gfx/nvn/hle_nvn.c	apple-api	ffed6bbb855c554334c87b822125c59335f1df05	#include <mach-o/getsect.h>
+dm/gfx/nvn/hle_nvn.c	macho-section	9588a4224f9f70314ab105f5c595bc9b398e18d6	__attribute__((used, section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
+dm/gfx/nvn/hle_nvn.c	objc-framework	09bb5f0d90c675d5d0e17828ce284e123f7bc4d2	#include <CoreFoundation/CoreFoundation.h>
+dm/gfx/nvn/hle_nvn.c	objc-framework	17dde2445b67616be472574d2ac9ee511845bd91	// Thermal cap (iOS): while the device is thermally serious or worse (NSProcessInfo thermalState >= 2) the frame step holds 30 fps, and it goes back to the cap after the device
+dm/gfx/nvn/hle_nvn.c	objc-framework	1d354b6887e4429acc72cb3b1cc65a26a9a965ae	static pthread_mutex_t g_pk_mu = PTHREAD_MUTEX_INITIALIZER; static CFMutableDictionaryRef g_pk; // a dedicated table (keys not shared with other side tables)
+dm/gfx/nvn/hle_nvn.c	objc-framework	70c1711f537f8d15013eae0c186106b082390002	if (!k && make) { k = calloc(1, sizeof *k); CFDictionarySetValue(g_pk, p, k); }
+dm/gfx/nvn/hle_nvn.c	objc-framework	771b75fef90a0e2ab65da4ba676db20e9f1df316	if (k) { CFDictionaryRemoveValue(g_pk, p); free(k); }
+dm/gfx/nvn/hle_nvn.c	objc-framework	78bf2eed00c242cc78a4704d889929e31ee4977d	// Clears of integer targets (Paper Mario: The Thousand-Year Door): recorded as floats, which both replay paths convert to the attachment's integer type (the load action's MTLClearColor,
+dm/gfx/nvn/hle_nvn.c	objc-framework	838f58d97ff714867f47633ea1032a1e8af70b1c	// GPU address = CPU address (memory pools use the real memory given by the game, also built as zero-copy MTLBuffer). Commands are recorded into the command memory given by the game and replayed at su ...
+dm/gfx/nvn/hle_nvn.c	objc-framework	ad004a092c36d45dcee3d038e573570b44c7dfef	if (!g_pk) g_pk = CFDictionaryCreateMutable(NULL, 0, NULL, NULL);
+dm/gfx/nvn/hle_nvn.c	objc-framework	b0df77c9130553fc417269ed9c98dcbb1a55a988	prog_keys_t *k = g_pk ? (prog_keys_t *)CFDictionaryGetValue(g_pk, p) : NULL;
+dm/gfx/nvn/hle_nvn.c	objc-framework	b42b17388f685185ceb1d090f0fe047047a032d5	prog_keys_t *k = (prog_keys_t *)CFDictionaryGetValue(g_pk, p);
+dm/gfx/nvn/hle_nvn.c	objc-framework	b7d766ecd60ee6b6930ed1c230536414417a8181	// CPU texture read (NVN ReadTexels): for packaged textures the pool memory is the ground truth (de-layout and read directly); GPU-written textures are read back from the MTLTexture (nvn_mtl.m)
+dm/gfx/nvn/hle_nvn.c	objc-framework	f13ee94dc407985c4d72226994618c1d8a5a2fae	// previously every init created a new private MTLTexture and the old one stayed in the serial table forever, so GPU memory grew about 13 MB per frame (killed by the memory watchdog at 24 GB)
+dm/gfx/nvn/hle_nvn.c	page-assumption	92f9086a55c06c64d0f4fdf84702743f07f88ba0	// NVN maps at 4 KB, the host aliases at its 16 KB page: a request that is not 16 KB aligned (Monster Hunter Rise's ASTC 6x6 textures, whose mip tail starts 0x81000 into the texture),
+dm/gfx/nvn/nvn_capture.inc	apple-api	416a3d43898b3326b8efdc7b4e62090717c1dbdf	CC_SHA256(b.contents, (CC_LONG)n, md);
+dm/gfx/nvn/nvn_capture.inc	objc-framework	04711bcf5caac0f41c45c981553a531aa4b6e0d4	uint32_t slices = (uint32_t)(t.textureType == MTLTextureTypeCube || t.textureType == MTLTextureTypeCubeArray ? 6 * t.arrayLength : t.arrayLength), np = (uint32_t)cap_tex_planes(t.pixelFormat);
+dm/gfx/nvn/nvn_capture.inc	objc-framework	07a26eaa4c019e06448f760bbe268ca5c966c9a6	static int cap_pf_bpp(MTLPixelFormat f, int plane) { // bytes per pixel of a plane (0 = not readable as plain texels)
+dm/gfx/nvn/nvn_capture.inc	objc-framework	1a29b9e68ed79f1b0e34656b155bc3c871e4e680	static int cap_tex_planes(MTLPixelFormat f) { return f == MTLPixelFormatDepth32Float_Stencil8 ? 2 : 1; }
+dm/gfx/nvn/nvn_capture.inc	objc-framework	1c1a75b7beeb92a54ae154830a79edc4b8610e87	uint32_t w = (uint32_t)MAX(t.width >> lv, 1u), h = (uint32_t)MAX(t.height >> lv, 1u), d = t.textureType == MTLTextureType3D ? (uint32_t)MAX(t.depth >> lv, 1u) : 1;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	296cb662ffe2954f1c09a49743d88b8ac060cb9e	|| f == MTLPixelFormatBGRA8Unorm || f == MTLPixelFormatBGRA8Unorm_sRGB || (f >= MTLPixelFormatRGB10A2Unorm && f <= MTLPixelFormatBGR10A2Unorm) || f == MTLPixelFormatDepth32Float) return 4;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	309e39d3a8a1da59ec5261653cdde16f603560f9	if (f == MTLPixelFormatDepth32Float_Stencil8) return plane ? 1 : 4;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	34f9a8c38600426186b47f079472e6466d28e32c	if ((f >= MTLPixelFormatBC2_RGBA && f <= MTLPixelFormatBC3_RGBA_sRGB) || f == MTLPixelFormatBC5_RGUnorm || f == MTLPixelFormatBC5_RGSnorm
+dm/gfx/nvn/nvn_capture.inc	objc-framework	3742f2229baa97eca1385371cf00b2382b7fc2dd	if ((f >= MTLPixelFormatR16Unorm && f <= MTLPixelFormatR16Float) || (f >= MTLPixelFormatRG8Unorm && f <= MTLPixelFormatRG8Sint) || (f >= MTLPixelFormatB5G6R5Unorm && f <= MTLPixelFormatBGR5A1Unorm) || ...
+dm/gfx/nvn/nvn_capture.inc	objc-framework	3a7d5cafe1b8067dcd549480a70203648f1b9452	|| (f >= MTLPixelFormatBC6H_RGBFloat && f <= MTLPixelFormatBC7_RGBAUnorm_sRGB)) return 16;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	3bd80056bb83aefcd82533dafba0d955732ba962	id<MTLTexture> mt = o; if (mt.parentTexture) mt = mt.parentTexture;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	3e17d7eb0b6049a22f82ea49497561e80ad5e20d	if (f >= MTLPixelFormatRGBA32Uint && f <= MTLPixelFormatRGBA32Float) return 16;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	4c1925763f23d3414b4642b753cdb45b7a5b7400	[e copyFromTexture:t sourceSlice:s->slice sourceLevel:s->level sourceOrigin:MTLOriginMake(0, 0, 0) sourceSize:MTLSizeMake(s->w, s->h, s->d) toBuffer:b destinationOffset:off
+dm/gfx/nvn/nvn_capture.inc	objc-framework	5203a46bec221607471dd5a175d1e18021747114	static id<MTLBuffer> cap_tex_readback(id<MTLTexture> t, cap_tsub **subs, uint32_t *nsub) {
+dm/gfx/nvn/nvn_capture.inc	objc-framework	5a5032e421db642f78ca8b8e46dc165c3b7e20a8	if (!o || [o isKindOfClass:[NvPkg class]] || ![o conformsToProtocol:@protocol(MTLTexture)]) return; // made at first use (as live, from the pools), or uploaded from the pools
+dm/gfx/nvn/nvn_capture.inc	objc-framework	6139e76de93ba0b2aae8b2ccfa4141a3898c4c7b	cap_tsub *subs; uint32_t nsub; id<MTLBuffer> b = cap_tex_readback(mt, &subs, &nsub);
+dm/gfx/nvn/nvn_capture.inc	objc-framework	6d5d80f1fa8020cfc1f37e671efe36daf96f0c66	if (f == MTLPixelFormatA8Unorm || (f >= MTLPixelFormatR8Unorm && f <= MTLPixelFormatR8Sint) || f == MTLPixelFormatStencil8) return 1;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	7295aec319aad29170137558089407e5a4b5b23c	[e copyFromTexture:mt sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0) sourceSize:MTLSizeMake(mt.width, mt.height, 1) toBuffer:b destinationOffset:0 destinationBytesPerRow:row destinati ...
+dm/gfx/nvn/nvn_capture.inc	objc-framework	74216ab660aaba06c9cccd2df4397ba499bae398	id<MTLBuffer> b = [g_dev newBufferWithLength:n options:MTLResourceStorageModeShared];
+dm/gfx/nvn/nvn_capture.inc	objc-framework	773fd09d3b28b78df64957cfd24908851a625fc3	id<MTLCommandBuffer> cb = q_cb(); id<MTLBlitCommandEncoder> e = [cb blitCommandEncoder];
+dm/gfx/nvn/nvn_capture.inc	objc-framework	810cda7a9d22bc4b305d69971b877f2e2f558a67	static nvn_hmap g_cap_mtex = {.klen = 8}; // MTLTextures already read (several serials can share one)
+dm/gfx/nvn/nvn_capture.inc	objc-framework	845b27478860a9f8b5741cb93e0ab5af2e039ed9	static int cap_pf_block(MTLPixelFormat f, int plane, uint32_t *bw, uint32_t *bh) {
+dm/gfx/nvn/nvn_capture.inc	objc-framework	a40089fd721165511d9aeac3425b5cf54d3ded29	static MTLBlitOption cap_plane_opt(MTLPixelFormat f, int plane) { return f != MTLPixelFormatDepth32Float_Stencil8 ? MTLBlitOptionNone : plane ? MTLBlitOptionStencilFromDepthStencil : MTLBlitOptionDept ...
+dm/gfx/nvn/nvn_capture.inc	objc-framework	a9edf7354cb4dce3783dcde0a5569628037c2535	id<MTLCommandBuffer> cb = q_cb(); id<MTLBlitCommandEncoder> e = [cb blitCommandEncoder]; uint64_t off = 0;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	b7ff704c0a87054105f528af15e8aba8505bd435	(uint32_t)(mt.textureType == MTLTextureTypeCube || mt.textureType == MTLTextureTypeCubeArray ? 6 * mt.arrayLength : mt.arrayLength), (uint32_t)mt.sampleCount, nsub, 0};
+dm/gfx/nvn/nvn_capture.inc	objc-framework	baaa339624d75ad2c3b519b8e025b57d1e1ccb05	if ((f >= MTLPixelFormatR32Uint && f <= MTLPixelFormatR32Float) || (f >= MTLPixelFormatRG16Unorm && f <= MTLPixelFormatRG16Float) || (f >= MTLPixelFormatRGBA8Unorm && f <= MTLPixelFormatRGBA8Sint)
+dm/gfx/nvn/nvn_capture.inc	objc-framework	c5a82e7f70c4123259ef405d75f63c737fe6a8c2	if ((f >= MTLPixelFormatRG32Uint && f <= MTLPixelFormatRG32Float) || (f >= MTLPixelFormatRGBA16Unorm && f <= MTLPixelFormatRGBA16Float)) return 8;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	c69c54b5df715d60d13a97e797d699d5d1fd4870	id<MTLTexture> mt = o; if (!mt) return 0;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	ee18cd29e62138bebea5b9cb08eac489c1efa376	if (f == MTLPixelFormatBC1_RGBA || f == MTLPixelFormatBC1_RGBA_sRGB || f == MTLPixelFormatBC4_RUnorm || f == MTLPixelFormatBC4_RSnorm) return 8;
+dm/gfx/nvn/nvn_capture.inc	objc-framework	f4ba25ba696007fa376b3968e6b43c732856a286	id<MTLBuffer> b = [g_dev newBufferWithLength:MAX(total, 16u) options:MTLResourceStorageModeShared];
+dm/gfx/nvn/nvn_capture.inc	objc-framework	f6f188b18f9eaba80ae3fe696dfd6d81e8e68983	if (mt.buffer || mt.storageMode == MTLStorageModeMemoryless) return; // reads pool memory in place, or has no content
+dm/gfx/nvn/nvn_dirty.c	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
+dm/gfx/nvn/nvn_dirty.c	apple-api	52e462d339a9ce9d2fdc3841115ca25d6bf19418	static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
+dm/gfx/nvn/nvn_dirty.c	apple-api	583d94af68087ef2b478193cd8a24d7595f47629	atomic_fetch_add(&g_mp_ticks, mach_absolute_time() - t); atomic_fetch_add(&g_mp_calls, 1); atomic_fetch_add(&g_mp_pages, len >> g_shift);
+dm/gfx/nvn/nvn_dirty.c	apple-api	7958007c7f1762fd6aaa90b710f616c3aabe5200	uint64_t now = mach_absolute_time(); if (!t0) t0 = now;
+dm/gfx/nvn/nvn_dirty.c	apple-api	ab2aeb68ade99b556b9f746c2ad36471cb1a20ef	if (!inited) { inited = 1; g_pg = (uintptr_t)getpagesize(); g_shift = __builtin_ctzl(g_pg); mach_timebase_info(&g_tb); dm_fault_hook_register(on_fault); dm_guest_write_prep_register(prep_write); }
+dm/gfx/nvn/nvn_dirty.c	apple-api	b34a3403cbd49e8e5de509dd62a04aa0fec96b75	static mach_timebase_info_data_t g_tb; // obtained when the first pool is registered (the fault path only multiplies and divides)
+dm/gfx/nvn/nvn_dirty.c	apple-api	b62a4c91cc566ffb2a62f4708148fdbe040f6add	// Wait for this page to leave BUSY. Returns 1 = it has left; 0 = waited past the limit (reported red once). Usable in a signal handler: only atomic reads, mach_absolute_time and sched_yield
+dm/gfx/nvn/nvn_dirty.c	apple-api	d3050de5558ca2f3e2ef82b485e915ee8dfa0312	uint64_t t = mach_absolute_time(); mprotect((void *)a, len, prot);
+dm/gfx/nvn/nvn_dirty.c	page-assumption	171539d26bbaecef2352a116173a471668eb21c4	// Unprotect pages p..q of a range with one mprotect per run of protected pages (a host write over a whole texture, e.g. WriteTexels, used to make one system call per 16 KB page:
+dm/gfx/nvn/nvn_dirty.c	page-assumption	51f8a6d0847b848c4d49c096518c5ea2a662748a	// Ranges are rounded to host pages (16 KB) but guest memory pools are only 4 KB aligned: adjacent pools share their first / last pages, so one address can fall in several registered ranges.
+dm/gfx/nvn/nvn_entry.S	apple-api	63da5b009788b1cb085d944e74231cb7068ba25e	// Save x0-x7 / q0-q7 (NVN functions pass no arguments on the stack, verified by the generator), take mach_absolute_time -> call the real implementation (nvn_real[i]) -> take it again,
+dm/gfx/nvn/nvn_entry.S	apple-api	b42e91165b79d538a9b8d87fa7f14cb94822fdf7	bl _mach_absolute_time
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	0110dddbef16839bb87fed1860310d0750484da7	NSError *e=nil; id<MTLLibrary> lib=[g_dev newLibraryWithSource:@(k_nvn_tf_msl) options:nil error:&e];
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	0148fa8c8d1084ec3624dc33475f4f63c52b3888	id<MTLBuffer> buf; size_t off = arena_alloc(32, &buf);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	044dcc0df40f2975e37d4694a6805aa3e7770e54	else { enc_b_copy_buffer(blit_buf(0,0,b->ctl,b->ctl+32), g_tf_state, 0, (__bridge id<MTLBuffer>)buffer, off, 32); pend_add(b->ctl,32,4); }
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	06756b5e3d622daad82a3e0d51be658dd7b39d3f	id<MTLRenderPipelineState> ps=vs&&vs->tf_fn?tf_pso(vs):nil;if(!ps)return;
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	1258b8c7886421190cc2ed7df7019e97eda98404	if (b->what == 3) enc_b_copy_buffer(blit_buf(b->ctl,b->ctl+32,0,0), (__bridge id<MTLBuffer>)buffer, off, g_tf_state, 0, 32);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	2558f3864330032d01e53b2e1493fc59f53f901a	id<MTL4ComputeCommandEncoder> ce=enc_c_begin(NULL);enc_c_pso(ce,g_tf_prepare);enc_c_args(ce,job,0);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	31166f3a99ad20c107d0d325441f15703aa027cf	enc_r_draw_instanced(en,MTLPrimitiveTypePoint,dw->first,dw->count,instances,dw->base_instance);enc_r_end(en);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	3628da26b5b0838d2c62e979f385e8c98f8168e7	id<MTL4RenderCommandEncoder> en=enc_r_begin(rd);enc_r_pso(en,ps);bind_vbufs(en);vconv_bind(en,vs,1,dw,NULL);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	5e9df440c61959e822b0563434fcef1de50fdd98	if (!g_tf_state) { g_tf_state = [g_dev newBufferWithLength:32 options:MTLResourceStorageModeShared]; res_add(g_tf_state); }
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	6193f640bc409f39598310324621c7c0462baaea	id<MTLBuffer> buf;size_t off=arena_alloc(sizeof j,&buf);memcpy((uint8_t *)buf.contents+off,&j,sizeof j);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	76a554d03b89d7daef6f7dd29911f7e4cac63243	id<MTLRenderPipelineState> cached = hm_get_id(&g_pso, &k);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	8287c4126f5aa6d41405287871cb3345e85ff5c0	static id<MTLRenderPipelineState> tf_pso(NvShader *vs) {
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	9233839e670577454012bc2adff79f98a722a91d	enc_c_dispatch(ce,MTLSizeMake(1,1,1),MTLSizeMake(1,1,1));enc_c_end(ce);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	9fd47464e339d679d1342ea595b030b4079b6ae5	id<MTL4RenderCommandEncoder> en=enc_r_begin(rd);enc_r_pso(en,ps);args_dirty_all();encode_args(en,reader,0,1);enc_r_vbuf(en,14,job);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	b17e307488eef19680420a504943b0ac9af33187	enc_r_draw_indirect(en,MTLPrimitiveTypePoint,job+16);enc_r_end(en);tf_note(reader);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	b372d76cbe8f9b5983c75cdd69a0c7ce76b04253	id<MTLRenderPipelineState> ps=tf_pso(reader);if(!ps)return;
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	c1f66b33cfd2ab7f2b4d7c220cb3e9f43b07aa3f	NSError *e = nil; id<MTLRenderPipelineState> ps = pso_build(pso_desc(&k, vs, nil, nil, 0), &e);
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	c9efe95170c4f2d4dc442dbdb58ba7554514e1b4	static id<MTLComputePipelineState> g_tf_prepare;
+dm/gfx/nvn/nvn_feedback.inc	objc-framework	df73239c5a9817811d1c5e455e1c5a9fe656bd96	static id<MTLBuffer> g_tf_state;
+dm/gfx/nvn/nvn_geometry.inc	apple-api	b69f0e42c8600dc1de82343b3550df92cb9f891d	static nvn_hmap g_pso_mesh = {.klen = sizeof(pso_key)}; static os_unfair_lock g_pso_mesh_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_geometry.inc	apple-api	b80f662eda3cbecbc34f52087008d1a1477800b7	dispatch_async(pp_bg_queue(), ^{
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	015300d07a8cf4c178ea2425541043c5ae638fc0	[en setArgumentTable:g_vt atStages:MTLRenderStageMesh];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	0d054c3163e2d9d7ab1a9f06081d868298a1f9d8	static void geo_capture_one(id<MTL4RenderCommandEncoder> re, const geo_job *j) {
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	126faa4e3828daf4ad0fe0cbbfba757cd420b041	id<MTLTexture> d = tex_mtl(R.rt.depth);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	1d815faee2ab074a4da8566dffd8f14ec1591a41	[ce barrierAfterEncoderStages:MTLStageDispatch beforeEncoderStages:MTLStageDispatch visibilityOptions:MTL4VisibilityOptionDevice];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	22f2b6cbdfa789a6e60deefc8f40c4512b9f3fbe	if (j->has_di) enc_r_draw_indexed(re, MTLPrimitiveTypePoint, j->unique_count, MTLIndexTypeUInt32, j->capture_ix, j->nu * 4, j->di.instances, j->di.base_vertex, j->first_instance);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	270319a56b021f4517d8332e9a9e48bf6ffed462	static void geo_pack_encode(id<MTL4ComputeCommandEncoder> ce, id<MTLComputePipelineState> __strong *pack, uint64_t job, uint32_t groups) {
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	2a2af86cc490372509534b332f99f48087c43196	if (!c || c.textureType != MTLTextureType2D || c.sampleCount != d.sampleCount || mip_extent(c.width, l) != w || mip_extent(c.height, l) != h) return 0;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	2ed50886e2be6494bc3ad8f68b1789d0cc6ce1cb	enc_c_dispatch(ce, MTLSizeMake((j->groups + 63) / 64, 1, 1), MTLSizeMake(64, 1, 1));
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	322149b5d2fecc9d88115579eb26aa7d1534c4da	if (!vs->geo_mesh) vs->geo_mesh = [NSMutableDictionary dictionary];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	3b766a41c0b6ada5b046f693452fc4470f379ca4	id<MTL4RenderCommandEncoder> re = enc_r_begin(rd);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	45438b1b99c0c0cf89ea2df95ee92d494f06bc51	id<MTLLibrary> lib = [g_dev newLibraryWithSource:@(k_nvn_geo_pack_msl) options:nil error:&error];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	477a1a7bd0dadb027efff6422ad34a3ac6b9d5ea	static int geo_run_walk(id<MTL4RenderCommandEncoder> re) {
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	4ad885e473431accb7df3fb7e97f44972be751e8	static NSObject *g_pso_mesh_building;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	4b30709ee5212d6d375ae124ba3d3ab6abf67b69	NSString *k = @(lean->key); id f = vs->geo_mesh[k];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	4de409da355e413037e67f3d377843c9d7b089b2	NSString *path = [NSString stringWithFormat:@"%@/%.16s_%.16s_m3.metallib", g_msl_dir, vs->key, lean->key];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	531075bcd583668318ed53a8c15afe9bbabf8c6d	NSError *e = nil; uint64_t t0 = bp_now();
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	568506a5400a1785dda71b50ca7b436edfe865ca	id<MTLRenderPipelineState> capture = geo_capture_pso(vs); if (!capture) return 0;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	5861acca375737c1583cad53621757968188598c	[en drawMeshThreadgroups:MTLSizeMake((tris + GEO_MESH_PRIMS - 1) / GEO_MESH_PRIMS, 1, 1) threadsPerObjectThreadgroup:MTLSizeMake(1, 1, 1) threadsPerMeshThreadgroup:MTLSizeMake(3 * GEO_MESH_PRIMS, 1, 1 ...
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	5eaad8c53a5dc49bb438c666f5b533f38880df56	static id<MTLRenderPipelineState> geo_mesh_pso(NvProg *pr) {
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	606208f311e89beca8b69658dbc131c62389c1ee	id<MTLBuffer> output; size_t offset = arena_alloc(bytes + 512, &output);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	64cb7d6dbc3afb723f4e7defca397ad6efbcaf77	id<MTLLibrary> lib = [NSFileManager.defaultManager fileExistsAtPath:path] ? [g_dev newLibraryWithURL:[NSURL fileURLWithPath:path] error:nil] : nil;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	670c433333b01bd382f52a156a9f8259db26a136	static void geo_gs_one(id<MTL4ComputeCommandEncoder> ce, const geo_job *j) {
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	69059bf1018a237b7fe1eee6fd3e2f29237d8a60	id<MTLBuffer> scratch; size_t off = arena_alloc((size_t)total, &scratch);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	6e56ad30a6e2f4ff63b5355606d01ac1aff796aa	if (!gs->geo_pso) { NSError *e = nil; gs->geo_pso = [g_dev newComputePipelineStateWithFunction:gs->fn error:&e];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	731a243da2df5fa6edd1c0f9fdc4a0fee9047e1e	id<MTL4ComputeCommandEncoder> ce = nil;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	76060c3dc0d9a2ca52cddcbe32610c3b910638b9	NSError *e = nil;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	7cf5bab95fec41481955c7a09d2a1ce315ab6ce7	enc_c_dispatch(ce, MTLSizeMake((g_geo_run[i].packed_size / 4 + 63) / 64, 1, 1), MTLSizeMake(64, 1, 1));
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	7d77fc8ebd09cb8b6963632f3b2049472bd694a3	MTLMeshRenderPipelineDescriptor *m = [MTLMeshRenderPipelineDescriptor new];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	83c955dc600ea2a2211ec555a57a37a94e9a83b9	if (!lean->geo_pso && !lean->geo_pso_failed) { NSError *e = nil; lean->geo_pso = [g_dev newComputePipelineStateWithFunction:lean->fn error:&e];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	84102cc13033827b15e32ea507257ab6d236df1e	NSUInteger l = R.rt.has_cview[i] && R.rt.cview[i].set_levels ? R.rt.cview[i].base_level : 0;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	87cf138ffbac405e8a1fd0396e3ee9ff128614bd	NSUInteger dl = R.rt.has_dview && R.rt.dview.set_levels ? R.rt.dview.base_level : 0;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	89a468cc14f6b63faa418617581e52f1c35c1a6f	id<MTLRenderPipelineState> capture;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	89e98e52d410b3b90793ff045528b958dcadf676	static struct { int on, miss; __unsafe_unretained id<MTLFunction> fn; __unsafe_unretained NvShader *lean; geo_mesh_args a; } g_geo_mesh;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	8b506dd9f484f70d00edcbc0448b0d21478ff89b	static id<MTLRenderPipelineState> geo_capture_pso(NvShader *vs) {
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	8b891bd2eb0aadf72484b0e7a0d905126a15e6a9	id<MTLFunction> fn = geo_mesh_fn(pr, dw, di); if (!fn) return 0;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	8c4e4d6d2c120ffb4694d98804a14f478892f904	id<MTLBuffer> b; size_t o = arena_alloc(64, &b); uint8_t *p = (uint8_t *)b.contents + o;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	8ee0cbc1dd3003b2b63bc1bb1bec7a64b1426eed	static id<MTLComputePipelineState> pack[5]; // count, parallel scan, write, fused small draw, legacy scan
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	8f5c17a21c15f48866b4a1679d5330f282f70926	if (!d || d.textureType != MTLTextureType2D || !mtl_fmt_depth(d.pixelFormat) || d.pixelFormat == MTLPixelFormatStencil8) return 0;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	97aae56489ac89dfe4d9d74dd742a50657616174	enc_c_dispatch(ce, stage == 1 ? MTLSizeMake(1, 1, 1) : MTLSizeMake((g_geo_run[i].groups + 63) / 64, 1, 1), MTLSizeMake(stage == 1 ? (legacy ? 1 : 128) : 64, 1, 1));
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	99a06ceaf30c799da2f256ae6cdd32abb1d0b8cb	static void geo_mesh_encode(id<MTLRenderCommandEncoder> en_) {
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	9b861419486568eed2d0ee7cef3ccc9a8ab4c190	NSUInteger threads = i == 1 ? MIN((NSUInteger)256, pack[i].maxTotalThreadsPerThreadgroup) : 64;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	9f4cf6d5a91285b2b699cbc240b40fc1b3a5b080	NSString *key = [[NSString stringWithUTF8String:base->key] substringToIndex:16];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	ac6f44b99645f99f93702e2ef492ab20f06c01d1	id<MTLRenderPipelineState> ps = geo_capture_pso(vs); if (!ps) return;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	afa069e76959bbc40ca09cc521bbde988e3a21c1	NSError *error = nil;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	afc256f7dbad51978c9f63708327cba1f0bc01c8	id<MTLRenderPipelineState> p = [g_dev newRenderPipelineStateWithMeshDescriptor:m options:MTLPipelineOptionNone reflection:nil error:&e];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	b072dfe9c0cdddd3877b1e3f3bf2fb9dbb5ddced	else enc_r_draw_instanced(re, MTLPrimitiveTypePoint, j->dw.first, j->dw.count, j->dw.instances, j->first_instance);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	b387c57ba00b99882e2ae7519963d2433037ccf4	if (!ps) { if (!g_pso_mesh_building) g_pso_mesh_building = [NSObject new]; hm_put_id(&g_pso_mesh, &k, g_pso_mesh_building); }
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	b7fa2fc864b187294112ca80d4604d158f644163	static id<MTLComputePipelineState> g_geo_lean_k[3];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	bf7f90e39319937a471a12d1a55de8961cb98f07	if (!pack[4]) { NSError *e = nil; id<MTLLibrary> lib = [g_dev newLibraryWithSource:@(k_nvn_geo_pack_msl) options:nil error:&e];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	c8e633bed8b7bbe8e70c583ad5819c45636523b9	static id<MTLFunction> geo_mesh_fn(NvProg *pr, const p_draw *dw, const p_draw_idx *di) {
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	caacf68be569fc11f1ac53eac0543b23079ede74	enc_c_dispatch(ce, MTLSizeMake((j->np + 31) / 32, j->dw.instances, j->gs->geo_invocations), MTLSizeMake(32, 1, 1));
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	cbd6f326edaf28af84b832f618c485736fcb7169	enc_c_args(ce, g_geo_run[i].job, 0); enc_c_dispatch(ce, MTLSizeMake(1, 1, 1), MTLSizeMake(128, 1, 1)); g_geo_pack_small++;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	d33832d7697b6c54120afcf2b4c2cbcf396fb55d	id<MTL4RenderCommandEncoder> en = enc_r_begin(rd); enc_r_pso(en, ps); bind_vbufs(en);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	d95eec6d18353802b9aa014ce2b83834b3f779a9	if ((b->kind==NVN_RB_TEX || b->kind==NVN_RB_TEXU || b->kind==NVN_RB_TEXD || b->kind==NVN_RB_TEXA) && b->dtt==MTLTextureTypeTextureBuffer) a.unknown=1;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	de6daa13b62e48d2d21d76d0fd95b05478d85d3a	else [ce barrierAfterEncoderStages:MTLStageDispatch beforeEncoderStages:MTLStageDispatch visibilityOptions:MTL4VisibilityOptionDevice];
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	e4b51c6c42447d4f9032387cbdbb76c93d446502	id<MTLTexture> c = tex_mtl(R.rt.color[i]);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	e7820e791dbfdea4c179f45b9da4634bbedee88a	MTLRenderPipelineDescriptor *d = pso_desc(&k, vs, fs, nil, 0);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	eb642e5edfa9f62f10983e025b041eafbc3094c7	enc_c_dispatch(ce, i == 1 ? MTLSizeMake(1, 1, 1) : MTLSizeMake((groups + 63) / 64, 1, 1), MTLSizeMake(threads, 1, 1));
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	f706e2a03c0ca9b7f6c44524dc93988e9dc99c9a	enc_r_draw_instanced(en, MTLPrimitiveTypePoint, lo, span, 1, (uint32_t)info[3]); enc_r_end(en);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	f83ad65fac558319efbd3e302dee1bf579070a1d	id<MTL4RenderCommandEncoder> en = (id<MTL4RenderCommandEncoder>)en_;
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	fbedc6e881ce65c506e76dee081144d3f0e27022	id<MTLRenderPipelineState> ps = hm_get_id(&g_pso, &k);
+dm/gfx/nvn/nvn_geometry.inc	objc-framework	fe99cc0c3d66ef6d8eabd7b9b0039ab5e360f494	NSUInteger w = mip_extent(d.width, dl), h = mip_extent(d.height, dl);
+dm/gfx/nvn/nvn_hmap.h	objc-framework	3ca29716f03dde8b7aa5a468d56fee257a43f6c0	// The replay hot path uses it instead of NSDictionary: keys are not boxed, no allocation, a lookup does only one hash + memcmp.
+dm/gfx/nvn/nvn_mtl.h	objc-framework	4adcda5cf1365840617e6512c61f39085acaaed6	// Metal execution layer of the NVN null device (C interface): memory pool = zero-copy MTLBuffer, submit = MTLCommandBuffer, sync = MTLSharedEvent.
+dm/gfx/nvn/nvn_mtl.h	objc-framework	adbc0efbbccf194880dd7a56824f48f6121a3f4a	// happens only after the Metal command buffer has actually completed; CPU-side waits look only at the completed value of the MTLSharedEvent.
+dm/gfx/nvn/nvn_mtl.h	objc-framework	fb38a87f159018948fac4741810a2ba0cc3987d0	int mtl_addr(uint64_t addr, uint64_t len, void **buf, uint64_t *off); // 1 on success; buf is a (__bridge) id<MTLBuffer>
+dm/gfx/nvn/nvn_mtl.m	apple-api	02ce7075b65dbdaa2259d506bc483e75f2f0408a	snprintf(avail, sizeof avail, "%llu MB", (unsigned long long)(os_proc_available_memory() >> 20));
+dm/gfx/nvn/nvn_mtl.m	apple-api	034cf562d13a3c341424f5911797012aa52b7578	static ArchEpoch *g_ep; static os_unfair_lock g_ep_lock = OS_UNFAIR_LOCK_INIT; // the current period
+dm/gfx/nvn/nvn_mtl.m	apple-api	03813377437e18207cd8053c84892fecc79f109e	dispatch_group_enter(g_arch_pending);
+dm/gfx/nvn/nvn_mtl.m	apple-api	062d9c87977ec0f662a47d3bce42b094d3490057	static os_unfair_lock g_pf_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	083c4fac488e8a49278fa0b9e5c8c7a7c81c9e4c	g_arch_q = dispatch_queue_create("dm.nvn.pso-archive", dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_UTILITY, 0));
+dm/gfx/nvn/nvn_mtl.m	apple-api	08f04eac79b8381e47dc7fd71a0f90290023f7e4	dispatch_once(&once, ^{ const char *e = getenv("DM_NVN_HILITE");
+dm/gfx/nvn/nvn_mtl.m	apple-api	09b36f5f85f918ccef25d85ff004e2c882825d84	static os_unfair_lock g_fz_fn_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	09eb21a5a0b52cac576faf4600729b63fd49aca3	for (vm_address_t r = a; r < b; ) {
+dm/gfx/nvn/nvn_mtl.m	apple-api	0c4d94e6266520695dae72ba8ee83a7c187b6e4f	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 10 * (int64_t)NSEC_PER_SEC), g_arch_q, ^{ atomic_store(&g_arch_sched, 0); arch_flush(); });
+dm/gfx/nvn/nvn_mtl.m	apple-api	14b63605b828b200ab8acacaca27528537da417b	static os_unfair_lock g_warm_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	18c4df19025c1cd5e1a7c03013c2f3d37f053c53	if (!job) { job = [PbaseBuild new]; job->done = dispatch_group_create(); dispatch_group_enter(job->done); hm_put_id(&g_pbase_pending, &bk, job); owner = 1; }
+dm/gfx/nvn/nvn_mtl.m	apple-api	191d35044c3c8c0bdfd5e307e8e6e3a38aa521fd	static os_unfair_lock g_fn4_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	195d1c2cbb5c1e3d5918fc71e26cf51a4bed4627	else dispatch_group_notify(g, dispatch_get_global_queue(qos, 0), done);
+dm/gfx/nvn/nvn_mtl.m	apple-api	1c4c92b2e09641a4e33fe7a08d3f2e62b9b20d6b	dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INITIATED, 0); // Not optional background work: it decides whether the pipelines are ready be ...
+dm/gfx/nvn/nvn_mtl.m	apple-api	1da1194e19378bc1ffa01f056b5fa869f2dcd0dd	if (!present_offscreen_m4(src, crop, out, ^(int k) { kind = k; dispatch_semaphore_signal(sem); })) return 0;
+dm/gfx/nvn/nvn_mtl.m	apple-api	1f180b1851e15a4341ac1a789a25f930fb0651eb	for (int t = 0; t < threads; t++) dispatch_group_async(g, dispatch_get_global_queue(qos, 0), ^{
+dm/gfx/nvn/nvn_mtl.m	apple-api	20a50e8683143322c88cc5baa1f35aaceab1aa7a	static struct { pso_key k; id<MTLRenderPipelineState> ps; int done; } g_sm_amp[SM_AMP_MAX]; static int g_sm_amp_n; static os_unfair_lock g_sm_amp_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	21909ebdc2254ade1c6025372439a14e76ce0f0d	static dispatch_group_t g_arch_pending; // periods handed over and not written yet
+dm/gfx/nvn/nvn_mtl.m	apple-api	2629732d42ce7febd4b18e57e3a525211c096ff2	#include <os/proc.h> // os_proc_available_memory: for the memory readout line
+dm/gfx/nvn/nvn_mtl.m	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
+dm/gfx/nvn/nvn_mtl.m	apple-api	2e12c57467c3975f028ede995e0ad4798784c2f7	uint64_t g = guest_ns(), now = tb.denom ? mach_absolute_time() * tb.numer / tb.denom : 0, at = (uint64_t)(s * 1e9);
+dm/gfx/nvn/nvn_mtl.m	apple-api	3687fe81ba9b1b40f4e84ebcfad21c7f354a3392	#include <libkern/OSByteOrder.h>
+dm/gfx/nvn/nvn_mtl.m	apple-api	388b49ac5949fcadd633310cc12a011a23ea43ce	#include <mach-o/fat.h>
+dm/gfx/nvn/nvn_mtl.m	apple-api	39407e9f7c58307de98472599833ebb5a6570a3c	dispatch_apply(n, DISPATCH_APPLY_AUTO, ^(size_t i) { @autoreleasepool {
+dm/gfx/nvn/nvn_mtl.m	apple-api	3f36230a4e12ad362866c2936b3e7b0fcbb2ccdf	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ NSError *e = nil; id<MTLRenderPipelineState> ps = pso_build(d, &e);
+dm/gfx/nvn/nvn_mtl.m	apple-api	3fb5d1894715a5382ac5655cf2f1cacd2a231e44	static void arch_flush_wait(void) { arch_flush(); if (g_arch_pending) dispatch_group_wait(g_arch_pending, DISPATCH_TIME_FOREVER); }
+dm/gfx/nvn/nvn_mtl.m	apple-api	43cb0239b9249eb909aa70057dce282139c2058f	static NSDictionary<NSString *, NSString *> *g_pre_known; static NSMutableArray<NSString *> *g_pre_fails; static os_unfair_lock g_pre_fail_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	4606ddeedc891ee38993245ed2dcf2880624ac58	static os_unfair_lock g_pull_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	47e9bc41ffdfa722c3dbd22a0787379473bb28bb	#if TARGET_OS_OSX
+dm/gfx/nvn/nvn_mtl.m	apple-api	4e5e4884550546227bdeffc2cb635678fbb1213f	ep->busy = dispatch_group_create();
+dm/gfx/nvn/nvn_mtl.m	apple-api	4f59653f6fedb9d1996118297fedf10767bee2db	pso_pend_start(slot, gen, pso_desc(k, vs, fs, nil, 0), dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0));
+dm/gfx/nvn/nvn_mtl.m	apple-api	4f81ec8b94567a7a574c0dc97f221a5571c55ec2	if (fresh) { g_hy_kicked++; dispatch_async(pp_bg_queue(), ^{ NSError *be = nil; (void)pso_build(d, &be); }); }
+dm/gfx/nvn/nvn_mtl.m	apple-api	51bd0f56a6d1f0e2ce9fb444fd69e4099ef26ce6	static dispatch_once_t once;
+dm/gfx/nvn/nvn_mtl.m	apple-api	52e462d339a9ce9d2fdc3841115ca25d6bf19418	static mach_timebase_info_data_t tb; if (!tb.denom) mach_timebase_info(&tb);
+dm/gfx/nvn/nvn_mtl.m	apple-api	5b4105ce3a20bf9bc5ede5f3ca829c0d3f5f065b	static dispatch_queue_t g_feedback_q;
+dm/gfx/nvn/nvn_mtl.m	apple-api	5e27be317a71fe108855282bf59f127e15d9c863	dispatch_queue_attr_t feedback_attr = dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0);
+dm/gfx/nvn/nvn_mtl.m	apple-api	6624d2751eaa3bfaa160d4b0a9acbb2e2fda8097	dispatch_async(q, ^{
+dm/gfx/nvn/nvn_mtl.m	apple-api	6b4e0241982c6b4d8474f5131d5d5d7e91d466b9	static dispatch_queue_t q[8]; static int n; static _Atomic unsigned rr; static dispatch_once_t once;
+dm/gfx/nvn/nvn_mtl.m	apple-api	7309cbc70f95e293cc685521193a79836ad28560	static int pso_prebuild(int threads, int wait, dispatch_qos_class_t qos) {
+dm/gfx/nvn/nvn_mtl.m	apple-api	749dc937f808d9157c688c753f599dd57ea6a8f6	static NSHashTable *g_up_lost; static os_unfair_lock g_up_lost_lk = OS_UNFAIR_LOCK_INIT; static _Atomic int g_up_lost_n; static _Atomic uint64_t g_up_lost_redo; // Weak-reference table: if a texture i ...
+dm/gfx/nvn/nvn_mtl.m	apple-api	7600150845798c6bb0485074337ff09627060990	g_arch_pending = dispatch_group_create();
+dm/gfx/nvn/nvn_mtl.m	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/gfx/nvn/nvn_mtl.m	apple-api	764b598d959e6a47d964a4f2ea618c4be9071245	#import <CommonCrypto/CommonDigest.h>
+dm/gfx/nvn/nvn_mtl.m	apple-api	770d9c61545517ca686349772274d9641ac2310e	static NSString *dir; static dispatch_once_t once;
+dm/gfx/nvn/nvn_mtl.m	apple-api	78bcf7d1c4399371ddb63c1debeb892c8170ed13	g_feedback_q = dispatch_queue_create("dm.nvn.mtl4-feedback", feedback_attr);
+dm/gfx/nvn/nvn_mtl.m	apple-api	79cf5bce300e863affd9408e0de01f6a83131d83	while (dispatch_group_wait(g, dispatch_time(DISPATCH_TIME_NOW, 50 * (int64_t)NSEC_PER_MSEC))) {
+dm/gfx/nvn/nvn_mtl.m	apple-api	7f0a4ba2eec6759d79d26ef5694a55094a4863c8	dispatch_once(&once, ^{ char b[PATH_MAX]; if (confstr(_CS_DARWIN_USER_CACHE_DIR, b, sizeof b)) dir = [@(b) stringByAppendingPathComponent:@"com.apple.gpuarchiver"]; });
+dm/gfx/nvn/nvn_mtl.m	apple-api	843c26a4f238617d40823754b3ae772cc09c7b97	#include <mach-o/dyld.h>
+dm/gfx/nvn/nvn_mtl.m	apple-api	85d8de9505c93a25abe2d761c8d011cf1f24f1d3	dispatch_group_wait(job->done, DISPATCH_TIME_FOREVER); base = job->ps;
+dm/gfx/nvn/nvn_mtl.m	apple-api	87bf1acd22262ca7ef075682c93ea18cbfe3f343	#include <sys/sysctl.h>
+dm/gfx/nvn/nvn_mtl.m	apple-api	89df961ea9b4f30ffc0f0098df55403272cf91dc	if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC))) { MLOG("[RED] offscreen present: the GPU did not finish within 10 s"); return 0; }
+dm/gfx/nvn/nvn_mtl.m	apple-api	89f3bb710545e0c1f26d618d0fa3eb499a1fbd51	if (vm_region_64(mach_task_self(), &r, &rs, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&vi, &cnt, &obj) != KERN_SUCCESS) { MLOG("[RED] no VM region at or after %#llx", (unsigned long long)r); break; }
+dm/gfx/nvn/nvn_mtl.m	apple-api	8e5237b5e6428ae4833be82a402b2dd8aa9da26f	pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+dm/gfx/nvn/nvn_mtl.m	apple-api	92cfa62b711617742c31f3a54b62bc999a5c8200	for (int w = 0; w < workers; w++) dispatch_group_async(g, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+dm/gfx/nvn/nvn_mtl.m	apple-api	949c41dae33976b796c58b8ea232366334239ce4	// They used to come from CLOCK_MONOTONIC, which keeps running while the Mac sleeps while the guest clock (mach_absolute_time) does not, so the two differed by the sleep time; once timestamps were con ...
+dm/gfx/nvn/nvn_mtl.m	apple-api	95d8f53e316640695c40df59c482775744c7b5d0	hm_rel(nvn_hm_del(&g_pbase_pending, &bk)); dispatch_group_leave(job->done);
+dm/gfx/nvn/nvn_mtl.m	apple-api	99890b0ab8d9a7b3f02c92b72ffe48368fcca10e	ArchEpoch *ep = g_ep; atomic_fetch_add(&ep->active, 1); dispatch_group_enter(ep->busy);
+dm/gfx/nvn/nvn_mtl.m	apple-api	9d34d46899d2ba3096df19ae60c57da9b1910676	if (fs) { static char keys[6][24]; static int nk; static id<MTLLibrary> hl; static dispatch_once_t once;
+dm/gfx/nvn/nvn_mtl.m	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
+dm/gfx/nvn/nvn_mtl.m	apple-api	9fa7e6cf903726d2e0c29333e7daf4ba3fa42536	struct mach_header_64 h;
+dm/gfx/nvn/nvn_mtl.m	apple-api	9ffb091e45ca21ece1cf9943f88808514cb94c0e	static os_unfair_lock g_c1_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	a1e89a88a20db11d30a621f22ecac25cf81e7589	dispatch_group_t g = dispatch_group_create();
+dm/gfx/nvn/nvn_mtl.m	apple-api	a50a043d805156a8957d6ec1d315597b6a8b29ca	qos_class_t qc = QOS_CLASS_UNSPECIFIED; int rp = 0; pthread_get_qos_class_np(pthread_self(), &qc, &rp); atomic_store(&g_present_qos, (uint32_t)qc);
+dm/gfx/nvn/nvn_mtl.m	apple-api	a61ea1bc1cc07ff2be2bd3593363b751060c403b	static os_unfair_lock g_rmu = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	a8830d55e8b702ea1bc551cac4e759312fd9f563	static dispatch_queue_t pp_bg_queue(void) {
+dm/gfx/nvn/nvn_mtl.m	apple-api	ad8c0aedaebede933178056ef87a5635eef70bb0	dispatch_async(q, ^{ @autoreleasepool { long lines = 0; for (WarmTask *t in warm_parse(paths, &lines)) warm_task(t); warm_finish(); } });
+dm/gfx/nvn/nvn_mtl.m	apple-api	b1b7baa20539c5049c2575f7dc952845c054fc69	dispatch_once(&once, ^{ int pc = 0; size_t sz = sizeof pc; if (sysctlbyname("hw.perflevel0.physicalcpu", &pc, &sz, NULL, 0) || pc < 2) pc = 2;
+dm/gfx/nvn/nvn_mtl.m	apple-api	b664ae8bfa26349e5216925844040048349d661b	dispatch_queue_t q = dispatch_queue_create("dm.nvn.pso-warm", attr);
+dm/gfx/nvn/nvn_mtl.m	apple-api	b8cdc9a2fffcef78936237a5736eea3ee1b818b1	static os_unfair_lock g_pbase_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	be11f3045034cf9b3e11de46de950a599650d60f	static void ep_leave(ArchEpoch *ep) { atomic_fetch_sub(&ep->active, 1); dispatch_group_leave(ep->busy); }
+dm/gfx/nvn/nvn_mtl.m	apple-api	bec69f33ad9e72c0702a32742af2ee668869e4fa	static dispatch_queue_t g_arch_q; static _Atomic int g_arch_new, g_arch_new_vd, g_arch_sched; // bases captured and not written yet, those of them with a vertex layout
+dm/gfx/nvn/nvn_mtl.m	apple-api	bfd7503f9e23ff42c1362c09777e16ce60f16d9d	@interface PbaseBuild : NSObject { @public dispatch_group_t done; id<MTLRenderPipelineState> ps; NSError *error; int compiled; } @end
+dm/gfx/nvn/nvn_mtl.m	apple-api	c30720064f87553cb76889530ca3450b7a9d5035	#if TARGET_OS_SIMULATOR // The iOS simulator SDK has no presentation-time callback and no minimum display duration (used only for picture acceptance, display-link ticks are not counted)
+dm/gfx/nvn/nvn_mtl.m	apple-api	c3d09ed6fe093fd9a447a9c1087f7f3a9af7c06a	// os_proc_available_memory: how far this process is from being terminated by the system for memory, iOS only; the Mac writes "none". On a phone, a crash with no log is most likely this number reachin ...
+dm/gfx/nvn/nvn_mtl.m	apple-api	cb9bb1568521d9940f892d7650f59a73345ca42a	static NSMutableSet<NSData *> *g_hy_kick_set; static os_unfair_lock g_hy_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	cbc476d3ea0316a3cf89d18f977479e39d16d405	static void pso_pend_start(int slot, uint32_t gen, MTLRenderPipelineDescriptor *d, dispatch_queue_t q) {
+dm/gfx/nvn/nvn_mtl.m	apple-api	ccf8c07875e40c80baf79c4c805743f91232248a	if (wait) { dispatch_group_wait(g, DISPATCH_TIME_FOREVER); done(); }
+dm/gfx/nvn/nvn_mtl.m	apple-api	d48cadf98c48a741165e198a312e4208d143ea6c	vm_size_t rs = 0; vm_region_basic_info_data_64_t vi; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj = MACH_PORT_NULL;
+dm/gfx/nvn/nvn_mtl.m	apple-api	db6f0cdc7ec317a93d058dfb6fbbae69e6990401	@interface ArchEpoch : NSObject { @public id<MTL4Compiler> comp; id<MTL4PipelineDataSetSerializer> ser; dispatch_group_t busy; _Atomic int active, n, vd; int compacting; } @end
+dm/gfx/nvn/nvn_mtl.m	apple-api	e0b951be1055b5accd63ba519b5bcc2696b2466d	for (int i = 0; i < n; i++) q[i] = dispatch_queue_create("dm.nvn.pso-bg", dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_UTILITY, 0)); });
+dm/gfx/nvn/nvn_mtl.m	apple-api	e28c3a55c63fb922729cf20537488c28ec4f3ca1	// under way across a write came back with both nil and crashed there (dispatch_data_create_map on nil); eight threads compiling into one serializer written every 150 ms
+dm/gfx/nvn/nvn_mtl.m	apple-api	e711b7241ee7b4fc471c2a2930d9c7e158926724	NSData *d = [txt dataUsingEncoding:NSUTF8StringEncoding]; uint8_t h[CC_SHA256_DIGEST_LENGTH]; CC_SHA256(d.bytes, (CC_LONG)d.length, h);
+dm/gfx/nvn/nvn_mtl.m	apple-api	e7b0ab917197a55d59e4ce5ad96b9d99e1278f93	static os_unfair_lock g_vin_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	e9606ab639a62f8372da2c42213c4c69a578207e	if (old.count) dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+dm/gfx/nvn/nvn_mtl.m	apple-api	ee4779049c7451d08e48e76d9deb8cc8d7493d53	dispatch_group_notify(old->busy, g_arch_q, ^{ @autoreleasepool { arch_write(old); } dispatch_group_leave(g_arch_pending); });
+dm/gfx/nvn/nvn_mtl.m	apple-api	f368e941fbcd025605d043b95e9da110ddfb842a	static NSMutableDictionary *g_warm_dict; static os_unfair_lock g_warm_dict_lock = OS_UNFAIR_LOCK_INIT;
+dm/gfx/nvn/nvn_mtl.m	apple-api	fac23219301009860702ae2f6484e94ce2b0bcb4	dispatch_data_t d = dispatch_data_create(m, len, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ munmap(m, len); });
+dm/gfx/nvn/nvn_mtl.m	apple-api	fbbfc49ac5e354ffe4cc0c8a207b79266427b0c3	dispatch_semaphore_t sem = dispatch_semaphore_create(0); __block int kind = PRESENT_FAILED;
+dm/gfx/nvn/nvn_mtl.m	apple-api	fc525ad9537fb0e9cd5958000bed0e8bcc762aa5	dispatch_once(&once, ^{
+dm/gfx/nvn/nvn_mtl.m	apple-api	fe0069c5e001afb8e532c6ff0d4469d9f1ffa2fd	#if TARGET_OS_IPHONE
+dm/gfx/nvn/nvn_mtl.m	objc-framework	00c6657e92141e90db202e0be084ef26404b8131	@autoreleasepool { pso_prebuild_bg(); } // then, once, the bases every shader pair's hybrid draws need
+dm/gfx/nvn/nvn_mtl.m	objc-framework	01f26bd4a6688d24766e2e0a1554cca3dba0c91c	@implementation ArchEpoch @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	086e6953c82099b6ce38be2f759afd52e78a5651	@implementation NvShader
+dm/gfx/nvn/nvn_mtl.m	objc-framework	19b97b71e8749f3f100e008d6fd30e55469f08d3	if (g_up_block) { g_up_swaps++; g_up_swap_bytes += g_up_block_size; if (!up_retained(g_up_block, g_up_cur_slot)) { @autoreleasepool { if (!g_up_old) g_up_old = [NSHashTable weakObjectsHashTable]; [g_u ...
+dm/gfx/nvn/nvn_mtl.m	objc-framework	20614d25cdae44004469721205b71e175747445e	@interface NvDeferredRelease : NSObject { @public id object; uint64_t fence; int keep_resident; } @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	289538d249be64029d4ec169710eb224fc808843	@autoreleasepool {
+dm/gfx/nvn/nvn_mtl.m	objc-framework	2b0974277b6234b1e7b123fafb13c5cf9f3dd41a	@implementation NvPkg
+dm/gfx/nvn/nvn_mtl.m	objc-framework	2e1224899ae7e7109b81aa039e1864974b8b2ced	static void defer_drain(void) { @autoreleasepool {
+dm/gfx/nvn/nvn_mtl.m	objc-framework	30967726ad9f05e75421f170f46c4b8e4a996796	for (NSUInteger k = 0; k < PRE_PROBE && k < n; k++) @autoreleasepool {
+dm/gfx/nvn/nvn_mtl.m	objc-framework	32b0ee7d4cc7b3bd12a2d6f697c5a2e27d686259	@interface WarmItem : NSObject { @public int kind; NSString *key, *vs_key, *fs_key; NvShader *shader, *vs, *fs; pso_key pso; id<MTLFunction> fsfn; id object; } @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	39407e9f7c58307de98472599833ebb5a6570a3c	dispatch_apply(n, DISPATCH_APPLY_AUTO, ^(size_t i) { @autoreleasepool {
+dm/gfx/nvn/nvn_mtl.m	objc-framework	4e2ee03fb7ebcec48931bd6da85588a9b835e6c3	if (!d->keep_resident && [obj conformsToProtocol:@protocol(MTLResource)]) {
+dm/gfx/nvn/nvn_mtl.m	objc-framework	54cd660cc3084e0d9eab00c6ac57dbbc55487c13	#import <MetalFX/MetalFX.h>
+dm/gfx/nvn/nvn_mtl.m	objc-framework	5a03a9cea5c125de0a80ec94524ae1ee4b5c7400	@autoreleasepool { prepare_prebuild(); } // then the bases every shader pair's hybrid draws need, before the first frame too (once)
+dm/gfx/nvn/nvn_mtl.m	objc-framework	5c7a47eb390d6f4fb9c6c6d66174b5806bdd394a	@implementation WarmTask @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	5f931fbb9587ed37dec1670db80e685e4094abb5	@interface NvShader : NSObject { @public id<MTLFunction> fn, tf_fn, discard_fn, fn_u, fn_m, fn_d, geo_fn; uint8_t mask_m; // fn_u: the integer-output entry point (dmsh_build.py fs_uint), for pipelines ...
+dm/gfx/nvn/nvn_mtl.m	objc-framework	60777194cde9feec21f84518b6b809924f5bbd2a	if (!o || ![o conformsToProtocol:@protocol(MTLTexture)]) { MLOG("[texraw] ser=%llu: no host texture", (unsigned long long)serial); return; }
+dm/gfx/nvn/nvn_mtl.m	objc-framework	6252660232b5a1d1eb2f11cb76cf696b80f09c5d	#import <QuartzCore/CAMetalLayer.h>
+dm/gfx/nvn/nvn_mtl.m	objc-framework	6411fa16c74f9f3ba8c0f651f4798f3f20074289	@interface NvArena : NSObject { @public id<MTLBuffer> buf; uint64_t gpu, fence; size_t used, len; } @end // len: buf.length, kept so an allocation sends no message
+dm/gfx/nvn/nvn_mtl.m	objc-framework	67749ba5295a20981843e592bb08b66af8de37bd	@interface NvMetalDisplayLinkDelegate : NSObject <CAMetalDisplayLinkDelegate>
+dm/gfx/nvn/nvn_mtl.m	objc-framework	6784b8980bedd8fb8d54eab27b02945331646e90	#include <objc/runtime.h>
+dm/gfx/nvn/nvn_mtl.m	objc-framework	70751a2b8b04bbb10c5da7ee4ca04320ba348340	@implementation NvMetalDisplayLinkDelegate
+dm/gfx/nvn/nvn_mtl.m	objc-framework	724533ce02563366dc20ac479c23b5ac70952be7	int pres = 0; @autoreleasepool { pthread_mutex_lock(&g_mu); pres = g_pool_res_n; for (id<MTLBuffer> b in g_dead_pools) { dead_n++; dead_mb += b.length; } pthread_mutex_unlock(&g_mu); } dead_mb >>= 20; ...
+dm/gfx/nvn/nvn_mtl.m	objc-framework	7827f07145940d5a51328bbfea9e0736a9a8097c	static inline id enc_b_begin(id cb) { return [cb respondsToSelector:@selector(beginCommandBufferWithAllocator:)] ? [cb computeCommandEncoder] : [cb blitCommandEncoder]; }
+dm/gfx/nvn/nvn_mtl.m	objc-framework	7e3d2ebd66c684565f371ec46b9ad446585287f8	#import <Metal/Metal.h>
+dm/gfx/nvn/nvn_mtl.m	objc-framework	84f2b75e916382c1e6c40951c2896a8a951b1f63	return o && [o conformsToProtocol:@protocol(MTLTexture)] && (((id<MTLTexture>)o).usage & (MTLTextureUsageRenderTarget | MTLTextureUsageShaderWrite)) != 0;
+dm/gfx/nvn/nvn_mtl.m	objc-framework	8904116ec14c2b2df48bb189137aeffe32c6cf44	static void res_add_at(id<MTLAllocation> allocation, int line) { @autoreleasepool {
+dm/gfx/nvn/nvn_mtl.m	objc-framework	89853fb9e42c59f386bfb679314e54969c2aec12	if (!pso4_on() || ![(id)g_dev respondsToSelector:@selector(newCompilerWithDescriptor:error:)]) return; // no Metal 4 compiler (t_pso_pending's fake device): the MTLDevice path
+dm/gfx/nvn/nvn_mtl.m	objc-framework	89a10c983177d753a874e15182509868bcd8e3cf	#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+dm/gfx/nvn/nvn_mtl.m	objc-framework	8caf2310e44d9fd2832e7fc4398c07a58a74a242	@interface NvProg : NSObject { @public NvShader *sh[6]; char gs_miss[17]; NvProg *geo_raster, *geo_lean_raster; } @end // geo_raster: GS output reader paired with this program's fragment stage; geo_le ...
+dm/gfx/nvn/nvn_mtl.m	objc-framework	8fe98e0188341fc6a631e4a427972c876c3ad8a0	id<MTLAllocation> r = [(id)allocation conformsToProtocol:@protocol(MTLResource)] && ((id<MTLResource>)allocation).heap ? (id)((id<MTLResource>)allocation).heap : allocation;
+dm/gfx/nvn/nvn_mtl.m	objc-framework	a732fb22f546040f68c06d0a3316a53b19814dbf	@interface NvPkg : NSObject { @public id<MTLTexture> tex, spare, view; uint64_t stamp, seen, hash, spare_fence, vgen, vseen; const void *span; int sparse, vbase; uint8_t *edge[2]; uint32_t edge_n[2];  ...
+dm/gfx/nvn/nvn_mtl.m	objc-framework	a8c337cf2090b6c75a86057497b7d5863bf0f63d	sortedArrayUsingSelector:@selector(compare:)];
+dm/gfx/nvn/nvn_mtl.m	objc-framework	ad8c0aedaebede933178056ef87a5635eef70bb0	dispatch_async(q, ^{ @autoreleasepool { long lines = 0; for (WarmTask *t in warm_parse(paths, &lines)) warm_task(t); warm_finish(); } });
+dm/gfx/nvn/nvn_mtl.m	objc-framework	b1c687718990b6629613f5fd648cb4a3c92de1ec	static void res_remove(id<MTLAllocation> r) { @autoreleasepool {
+dm/gfx/nvn/nvn_mtl.m	objc-framework	b56fb1f2fc11b21e1d31bf6980c474b0309e05ed	@interface WarmTask : NSObject { @public int kind, stage; NSString *key, *vkey, *fkey; NSMutableArray<NSData *> *rs; } @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	b5e77d93ed6d6e405f7e4f2b9627fe2e28a488b5	@implementation NvArena @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	b83b956db64937d51b43a83cb2a25891dee30c69	if (!o || ![o conformsToProtocol:@protocol(MTLTexture)]) return 0;
+dm/gfx/nvn/nvn_mtl.m	objc-framework	b885e4be38a8c3772bbdcde26c35d061085c1f9d	@autoreleasepool { submitted = present_now(&it.t, it.period, it.frame, ticket, it.crop, update.drawable, update.targetPresentationTimestamp); }
+dm/gfx/nvn/nvn_mtl.m	objc-framework	b8c084c13202ae66a39371452eb30ff87587fec7	@implementation NvImageHeap
+dm/gfx/nvn/nvn_mtl.m	objc-framework	bb1a25317ef229b6b0c792fe490b4f00da72ec05	@interface NvImageHeap : NSObject { @public id<MTLHeap> heap; } @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	bb8957c7965fec16d7c1f3e5f250aae5db8d8bff	static void up_diag(void) { @autoreleasepool {
+dm/gfx/nvn/nvn_mtl.m	objc-framework	bbe28e49a3b8761b6c2cfa3570c7164a3a8902fa	@implementation PbaseBuild @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	bfd7503f9e23ff42c1362c09777e16ce60f16d9d	@interface PbaseBuild : NSObject { @public dispatch_group_t done; id<MTLRenderPipelineState> ps; NSError *error; int compiled; } @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	c20d8c94d52b5220984e259da0448a9d891d28c2	#import <ImageIO/ImageIO.h>
+dm/gfx/nvn/nvn_mtl.m	objc-framework	c72de02bb81f166c138ce45efe7ca917e5bb1674	int is_tex = [r conformsToProtocol:@protocol(MTLTexture)], is_buf = [r conformsToProtocol:@protocol(MTLBuffer)];
+dm/gfx/nvn/nvn_mtl.m	objc-framework	c800ede4ffa010fb8cff763a7abc4a043e05d405	NSString *dir = @(e), *gpu = [(id)g_dev respondsToSelector:@selector(architecture)] ? g_dev.architecture.name : nil;
+dm/gfx/nvn/nvn_mtl.m	objc-framework	ce342889f9b09e62f10fff055cd4c0e8dc9150ce	@implementation NvDeferredRelease @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	d35168158844c83f1fe6f2d936f41557e93a7f69	@end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	d5b6eff9a62bf0c2de19c33a0886c96fc5e68c90	@implementation WarmItem @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	d94a1b8c562b8c17f96a96d383130e7a99839b4f	@implementation NvProg @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	d9da1ee0b0892383373a27130d43cf7727828fa6	#import <QuartzCore/CAMetalDisplayLink.h>
+dm/gfx/nvn/nvn_mtl.m	objc-framework	dadbee0b8e8d4e5e46bbec9f6e7a61b48d61d4a6	if ([(id)r conformsToProtocol:@protocol(MTLResource)] && ((id<MTLResource>)r).heap) return;
+dm/gfx/nvn/nvn_mtl.m	objc-framework	db6f0cdc7ec317a93d058dfb6fbbae69e6990401	@interface ArchEpoch : NSObject { @public id<MTL4Compiler> comp; id<MTL4PipelineDataSetSerializer> ser; dispatch_group_t busy; _Atomic int active, n, vd; int compacting; } @end
+dm/gfx/nvn/nvn_mtl.m	objc-framework	dd954aafeac09c13dadcdbc9a1a4e70437c519d4	if ([e conformsToProtocol:@protocol(MTL4CommandEncoder)]) [(id<MTL4CommandEncoder>)e barrierAfterStages:MTLStageAll beforeQueueStages:MTLStageAll visibilityOptions:vis];
+dm/gfx/nvn/nvn_mtl.m	objc-framework	df98f7d9790e7584c641135d68fa334a83837093	@autoreleasepool { submitted = present_now(&it.t, it.period, it.frame, ticket, it.crop, nil, 0); }
+dm/gfx/nvn/nvn_mtl.m	objc-framework	ee4779049c7451d08e48e76d9deb8cc8d7493d53	dispatch_group_notify(old->busy, g_arch_q, ^{ @autoreleasepool { arch_write(old); } dispatch_group_leave(g_arch_pending); });
+dm/gfx/nvn/nvn_mtl.m	objc-framework	f496d7aa74888485a0564c0974f3d767dc77f70f	id<MTLFunction> pfn; int pfn_state, has_pull; } @end // pfn: the same entry of the pulling library <key>_bp (pull_fn; has_pull: the reflection names one, dmsh_pull.py) // vertex: the entry point loade ...
+dm/gfx/nvn/nvn_mtl.m	page-assumption	92b7aee77f9ed0f18a396689e9b78fed207ad12f	enum { SBW_N = 16384, SBW_PAGES = 4096 };
+dm/gfx/nvn/nvn_mtl.m	page-assumption	e8145daf2ba64fe65faa22e808ca5a8679aba894	// Writes beside a texture. The tracker marks whole host pages (16 KB) dirty, and guest memory pools are only 4 KB aligned: the first and last pages of a texture's storage are shared with
+dm/gfx/nvn/nvn_obj.h	objc-framework	0625ba4f08c20102742632f7ccbe1c4ba6b02f61	uint64_t serial; // Initialization serial: the replay layer uses it to find the MTLTexture in the host table (the game may copy the object by value, so object pointers cannot be stored)
+dm/gfx/nvn/nvn_obj.h	objc-framework	21ccb1f07f1ce9ca115100ade0822229b5f9cf7d	// Present: draw the swapchain texture to the front-end CAMetalLayer (only counts when there is no window)
+dm/gfx/nvn/nvn_pso_skey.h	objc-framework	49e71aa68ebbb07389b43cb0eba5210d4abf09cd	// so physical formats cannot decide which logical targets to drop. Depth / stencil formats stay for MTLDevice pipelines. Normalize both live keys and old prewarm rows.
+dm/gfx/nvn/nvn_rec.h	apple-api	8e5237b5e6428ae4833be82a402b2dd8aa9da26f	pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+dm/gfx/nvn/nvn_rec.h	apple-api	b1ea916b14723053d73afb295730a26c4df64ee4	(void)arg; pthread_setname_np("dm-ub-copy"); pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+dm/gfx/nvn/nvn_rec.h	apple-api	fe0069c5e001afb8e532c6ff0d4469d9f1ffa2fd	#if TARGET_OS_IPHONE
+dm/gfx/nvn/nvn_rec.h	objc-framework	09378ae67b4dffc65ae873c02aa9f2ad77e7fc27	- (void)setSamplerState:(MTLResourceID)t atIndex:(NSUInteger)i { rec_table_op(RO_T_SAMP, self, t._impl, i); }
+dm/gfx/nvn/nvn_rec.h	objc-framework	0dc2e6332c1e80ad70d71569fc797c05e54d2aa6	@autoreleasepool { for (int i = 0; i < b->n; i++) rec_exec(&b->r[i]); }
+dm/gfx/nvn/nvn_rec.h	objc-framework	0e26acddca90769ae17b3b45c5bbc38835d2e9d4	case RO_R_SREF: [(id<MTL4RenderCommandEncoder>)e setStencilReferenceValue:(uint32_t)a[0]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	1aa3cd74208a8924ebcf2fa63a17eac1fcda92e1	- (void)barrierAfterQueueStages:(MTLStages)a beforeStages:(MTLStages)b visibilityOptions:(MTL4VisibilityOptions)v { rec_t *r = rec_put(RO_BAR_QUEUE, 0); r->a[0] = a; r->a[1] = b; r->a[2] = v; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	1c05c4f9b285ee3176e5b616007f99a6fdab481e	toTexture:rec_id(a[1]) destinationSlice:a[8] destinationLevel:a[9] destinationOrigin:MTLOriginMake(a[10], a[11], a[12])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	1c2465842423cf47e4ae3bfd699f367fc9952a35	- (void)copyFromTexture:(id)s sourceSlice:(NSUInteger)sl sourceLevel:(NSUInteger)lv sourceOrigin:(MTLOrigin)o sourceSize:(MTLSize)z toBuffer:(id)d destinationOffset:(NSUInteger)doff destinationBytesPe ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	1f40ab7d51a2d9863d7a9e9ac779e66f13bf783e	case RO_C_COPY_TT: [(id<MTL4ComputeCommandEncoder>)e copyFromTexture:rec_id(a[0]) sourceSlice:a[2] sourceLevel:a[3] sourceOrigin:MTLOriginMake(a[4], a[5], a[6]) sourceSize:MTLSizeMake(a[7], a[8], a[9] ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	212c7951861526ee79b23e7bce65ca346b05e489	case RO_R_DRAW_IDX_IND: [(id<MTL4RenderCommandEncoder>)e drawIndexedPrimitives:a[0] indexType:a[1] indexBuffer:a[2] indexBufferLength:a[3] indirectBuffer:a[4]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	2195529662df7d32d12b24780fa097328f9e8235	case RO_T_SAMP: [(id<MTL4ArgumentTable>)rec_id(a[0]) setSamplerState:(MTLResourceID){a[1]} atIndex:a[2]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	2249183b7e1e08356e4e85d4c1c84650ca8012b7	static inline uint64_t rec_obj(id o) { return o ? (uint64_t)(uintptr_t)CFBridgingRetain(o) : 0; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	22d944879c2d00fdacc5a0790874d90a8e6d2338	case RO_R_FILL: [(id<MTL4RenderCommandEncoder>)e setTriangleFillMode:a[0]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	288c6a8fcd42441bc00b09e1eca582e9e6877785	case RO_R_DSS: [(id<MTL4RenderCommandEncoder>)e setDepthStencilState:rec_id(a[0])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	2bd7f3fdf094df53bfb03e79eb520a411b954989	- (void)setArgumentTable:(id)t atStages:(MTLRenderStages)s { id x = rec_table_real(t); int keep = x != t; rec_t *r = rec_put(RO_R_TABLE, !keep); r->a[0] = keep ? (uint64_t)(uintptr_t)(__bridge void *) ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	2f871bf9d7d2524ce47e9c0265eb318883aa13e0	case RO_C_COPY_TB: [(id<MTL4ComputeCommandEncoder>)e copyFromTexture:rec_id(a[0]) sourceSlice:a[2] sourceLevel:a[3] sourceOrigin:MTLOriginMake(a[4], a[5], a[6]) sourceSize:MTLSizeMake(a[7], a[8], a[9] ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	2fc5e4230a36172725a519b78ab9dfb982bb15f3	- (void)setFrontFacingWinding:(MTLWinding)w { rec_put(RO_R_WINDING, 0)->a[0] = w; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	309f4a2618de46930d917605e8e481fa6563a9d5	case RO_R_VIEWPORT: { MTLViewport v; memcpy(&v, a, sizeof v); [(id<MTL4RenderCommandEncoder>)e setViewport:v]; break; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	311ff37c59bc548dcb88d2e042d3a53f77323791	@implementation DmRecCB
+dm/gfx/nvn/nvn_rec.h	objc-framework	34e8d3635473879310fc9a4d5fec7242718ff64a	- (void)drawIndexedPrimitives:(MTLPrimitiveType)p indexType:(MTLIndexType)t indexBuffer:(uint64_t)g indexBufferLength:(NSUInteger)len indirectBuffer:(uint64_t)ind {
+dm/gfx/nvn/nvn_rec.h	objc-framework	3c174a7385cb2325b79575c0e6d5624a9c9e8bfa	case RO_R_TABLE: [(id<MTL4RenderCommandEncoder>)e setArgumentTable:rec_id(a[0]) atStages:a[1]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	3ca16ed9378f07ef7a64ddb8e985626479df6e92	case RO_C_COPY_BB: [(id<MTL4ComputeCommandEncoder>)e copyFromBuffer:rec_id(a[0]) sourceOffset:a[2] toBuffer:rec_id(a[1]) destinationOffset:a[3] size:a[4]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	401d443d9610e86d969e5116197d5792cbd09c7f	@interface DmRecCB : NSObject @end
+dm/gfx/nvn/nvn_rec.h	objc-framework	409fb4baf5a97e743a2d16df0f9bede8b7e1ac9e	- (void)drawIndexedPrimitives:(MTLPrimitiveType)p indexCount:(NSUInteger)n indexType:(MTLIndexType)t indexBuffer:(uint64_t)g indexBufferLength:(NSUInteger)len instanceCount:(NSUInteger)i baseVertex:(N ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	443bba6d45888925335993c542335861f4c442f5	case RO_R_VIS: [(id<MTL4RenderCommandEncoder>)e setVisibilityResultMode:a[0] offset:a[1]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	47e2f5d6b3a6f07e21327bc011df5d027bb3214d	case RO_R_BIAS: [(id<MTL4RenderCommandEncoder>)e setDepthBias:rec_fv(a[0]) slopeScale:rec_fv(a[1]) clamp:rec_fv(a[2])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	4bdc6431a78fdec59d4a670817113aa72e12a171	- (void)copyFromBuffer:(id)s sourceOffset:(NSUInteger)so sourceBytesPerRow:(NSUInteger)row sourceBytesPerImage:(NSUInteger)img sourceSize:(MTLSize)z toTexture:(id)d destinationSlice:(NSUInteger)sl des ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	51bea72ed750a0f6e6000ab1a69b130746774e3b	case RO_R_DRAW_INST: [(id<MTL4RenderCommandEncoder>)e drawPrimitives:a[0] vertexStart:a[1] vertexCount:a[2] instanceCount:a[3] baseInstance:a[4]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	543c55ecb11ce6e3918cba35ff16ec703aec23f4	case RO_R_CLIP: [(id<MTL4RenderCommandEncoder>)e setDepthClipMode:a[0]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	5b002d43d2205bbfd3f67b7195aa5ed7ab42cbfa	case RO_R_STORE_C: [(id<MTL4RenderCommandEncoder>)e setColorStoreAction:a[0] atIndex:a[1]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	5dc6cf6686c1b014c1985ac9b687f7a12a77c0b9	case RO_BAR_ENCODER: [(id<MTL4CommandEncoder>)e barrierAfterEncoderStages:a[0] beforeEncoderStages:a[1] visibilityOptions:a[2]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	5e0a8b04cbcd2e2768097c79b21735af180b8d2d	toTexture:rec_id(a[1]) destinationSlice:a[10] destinationLevel:a[11] destinationOrigin:MTLOriginMake(a[12], a[13], a[14])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	5e9734b99227a525b3d10e0af97bbe9836565c13	case RO_R_SCISSOR: { MTLScissorRect s; memcpy(&s, a, sizeof s); [(id<MTL4RenderCommandEncoder>)e setScissorRect:s]; break; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	6177e8f82815f8592e96b1df20e2f4437ac2c7c0	- (void)dispatchThreadgroups:(MTLSize)n threadsPerThreadgroup:(MTLSize)t { rec_t *r = rec_put(RO_C_DISPATCH, 0); r->a[0] = n.width; r->a[1] = n.height; r->a[2] = n.depth; r->a[3] = t.width; r->a[4] =  ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	67b8a319b66d5cc4d254b36f107eb9fa0227a80d	- (BOOL)conformsToProtocol:(Protocol *)p { return p == @protocol(MTL4CommandEncoder) || p == @protocol(MTL4RenderCommandEncoder) || p == @protocol(MTL4ComputeCommandEncoder) || [super conformsToProtoc ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	67fc9fe0c466f48cc3af6d2ade09285c0215799f	- (void)setStencilStoreAction:(MTLStoreAction)a { rec_put(RO_R_STORE_S, 0)->a[0] = a; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	69cc5fda18cf428ea653d142ca6ddea2d97cad2c	- (void)drawPrimitives:(MTLPrimitiveType)p vertexStart:(NSUInteger)v vertexCount:(NSUInteger)n { rec_t *r = rec_put(RO_R_DRAW, 0); r->a[0] = p; r->a[1] = v; r->a[2] = n; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	6a1fe345860c7d385e52ca30ce2972e1e18d4d0c	case RO_C_PSO: [(id<MTL4ComputeCommandEncoder>)e setComputePipelineState:rec_id(a[0])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	6aff299dd96d5eb69a072bdae1a80ca4ebb98e9c	- (void)setScissorRect:(MTLScissorRect)s { rec_t *r = rec_put(RO_R_SCISSOR, 0); memcpy(r->a, &s, sizeof s); }
+dm/gfx/nvn/nvn_rec.h	objc-framework	706ff0293491433a080a968105a168175778a2fb	case RO_CB_END: [(id<MTL4CommandBuffer>)g_rx_cb endCommandBuffer]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	7717bc0a29dbdca421098e879819b4776b4fc6ca	static inline void rec_table_op(uint32_t op, id t, uint64_t v, NSUInteger i) { rec_t *r = rec_put(op, 0); r->a[0] = (uint64_t)(uintptr_t)(__bridge void *)((DmRecTable *)t)->real; r->a[1] = v; r->a[2]  ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	79c4ef9a4d14bdbbcbe7373a53dbc0ced6a660bd	case RO_T_TEX: [(id<MTL4ArgumentTable>)rec_id(a[0]) setTexture:(MTLResourceID){a[1]} atIndex:a[2]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	7d8409d57a1c3adb932f43bf4d840a07c7c4bbb5	case RO_R_DRAW_IDX: [(id<MTL4RenderCommandEncoder>)e drawIndexedPrimitives:a[0] indexCount:a[1] indexType:a[2] indexBuffer:a[3] indexBufferLength:a[4] instanceCount:a[5] baseVertex:(NSInteger)a[6] bas ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	7dc98f7e39be7f11c64204b37343c01d5e1d3894	case RO_R_DRAW: [(id<MTL4RenderCommandEncoder>)e drawPrimitives:a[0] vertexStart:a[1] vertexCount:a[2]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	7fe5e9ad358cab0a222648a9fba4d53161435311	id<MTL4CommandBuffer> buffers[] = {cb};
+dm/gfx/nvn/nvn_rec.h	objc-framework	801c914b5c4919931b5f009547f195fa7abb7fba	case RO_C_TS: [(id<MTL4ComputeCommandEncoder>)e writeTimestampWithGranularity:a[1] intoHeap:rec_id(a[0]) atIndex:a[2]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	864734925cc602054b660a2263f89e77aff9226d	- (void)copyFromBuffer:(id)s sourceOffset:(NSUInteger)so toBuffer:(id)d destinationOffset:(NSUInteger)doff size:(NSUInteger)n {
+dm/gfx/nvn/nvn_rec.h	objc-framework	89c72f1d3a4e9c38a058a1117dcde934d1aea04b	- (void)setVisibilityResultMode:(MTLVisibilityResultMode)m offset:(NSUInteger)o { rec_t *r = rec_put(RO_R_VIS, 0); r->a[0] = m; r->a[1] = o; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	90f265b65344d343f2f8ff511900ccd535ee7aab	case RO_C_TABLE: [(id<MTL4ComputeCommandEncoder>)e setArgumentTable:rec_id(a[0])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	9127ac2ef6883c8f7cd9c0cd767d403df7274d8f	case RO_R_AMP: { MTLVertexAmplificationViewMapping m = {(uint32_t)a[1], (uint32_t)a[2]}; [(id<MTL4RenderCommandEncoder>)e setVertexAmplificationCount:a[0] viewMappings:a[0] ? &m : NULL]; break; } // c ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	9241df16a3a07562a6d092096d5b781b4fb9d559	case RO_R_STORE_S: [(id<MTL4RenderCommandEncoder>)e setStencilStoreAction:a[0]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	9265f60dd8f3a768a61ba3179cef6abeba76b5bd	id<MTL4CommandBuffer> buffers[] = {r->op == RO_COMMIT ? g_rx_cb : rec_id(a[1])}; MTL4CommitOptions *o = rec_id(a[0]);
+dm/gfx/nvn/nvn_rec.h	objc-framework	93e89e79243854ba2ce3c75f261e415f44ac79d6	- (void)setDepthClipMode:(MTLDepthClipMode)m { rec_put(RO_R_CLIP, 0)->a[0] = m; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	944c17732f936755aeb6a6207cc38b4fabeead6f	@implementation DmRecTable
+dm/gfx/nvn/nvn_rec.h	objc-framework	9463e9d0270c984405c0b374e1f1dbeeca380d86	- (void)setTriangleFillMode:(MTLTriangleFillMode)m { rec_put(RO_R_FILL, 0)->a[0] = m; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	98e1a47570db3c682fe3dd144660ea0ac7f971eb	case RO_R_BLEND: [(id<MTL4RenderCommandEncoder>)e setBlendColorRed:rec_fv(a[0]) green:rec_fv(a[1]) blue:rec_fv(a[2]) alpha:rec_fv(a[3])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	9c7f24551be2faaa84b67878d96d97ab4c4a79e4	- (void)setTexture:(MTLResourceID)t atIndex:(NSUInteger)i { rec_table_op(RO_T_TEX, self, t._impl, i); }
+dm/gfx/nvn/nvn_rec.h	objc-framework	9cec0316918d0abed5008d3914e4a7682d45b3fb	- (void)fillBuffer:(id)b range:(NSRange)rg value:(uint8_t)v { rec_t *r = rec_put(RO_C_FILL, 1); r->a[0] = rec_obj(b); r->a[1] = rg.location; r->a[2] = rg.length; r->a[3] = v; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	9d1ab16cfac4cda4db7f9f79288decc3338194bb	case RO_RE_BEGIN: g_rx_enc = [(id<MTL4CommandBuffer>)g_rx_cb renderCommandEncoderWithDescriptor:rec_id(a[0])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	9f947fc33e5c4a5129b2c65cbfe7202dfddba8bd	case RO_C_FILL: [(id<MTL4ComputeCommandEncoder>)e fillBuffer:rec_id(a[0]) range:NSMakeRange(a[1], a[2]) value:(uint8_t)a[3]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	a286396e01bb4c6525baf809a017740f7d35af43	@interface DmRecEnc : NSObject @end
+dm/gfx/nvn/nvn_rec.h	objc-framework	a2af2d154991d4842e7cd35196bd48e9706f6e51	case RO_T_ADDR: [(id<MTL4ArgumentTable>)rec_id(a[0]) setAddress:a[1] atIndex:a[2]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	a2b3478cbe881f3341affe329f6eae0588c92ec4	- (void)drawPrimitives:(MTLPrimitiveType)p vertexStart:(NSUInteger)v vertexCount:(NSUInteger)n instanceCount:(NSUInteger)i baseInstance:(NSUInteger)b {
+dm/gfx/nvn/nvn_rec.h	objc-framework	a2ba38e0a1a9a50f0ba0a75f6e33e2ef924b716c	case RO_R_MESH: [(id<MTL4RenderCommandEncoder>)e drawMeshThreadgroups:MTLSizeMake(a[0], 1, 1) threadsPerObjectThreadgroup:MTLSizeMake(1, 1, 1) threadsPerMeshThreadgroup:MTLSizeMake(a[1], 1, 1)]; break ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	a76add6af736787e5254a0de9cdf3f41c3220ee2	case RO_R_DRAW_IND: [(id<MTL4RenderCommandEncoder>)e drawPrimitives:a[0] indirectBuffer:a[1]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	a9bb4341f52d8014ce6b03d62307aa9d170c2b71	case RO_CE_BEGIN: g_rx_enc = [(id<MTL4CommandBuffer>)g_rx_cb computeCommandEncoder]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	aa90abd08e3b871199a8df5e3e0972d71214d166	case RO_R_TS: [(id<MTL4RenderCommandEncoder>)e writeTimestampWithGranularity:a[1] afterStage:a[2] intoHeap:rec_id(a[0]) atIndex:a[3]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	ab0aecac1ec9b96d5caa8478f2a7c2a702830e2b	case RO_END: [(id<MTL4CommandEncoder>)e endEncoding]; g_rx_enc = nil; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	ab55080cec4d09fa4fc60bb37d1f038e109dcb12	case RO_C_DISPATCH_IND: [(id<MTL4ComputeCommandEncoder>)e dispatchThreadgroupsWithIndirectBuffer:a[0] threadsPerThreadgroup:MTLSizeMake(a[1], a[2], a[3])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	ad16af2ce6d8294194d53fa2912a7ce5a835662e	for (uint32_t i = 0; i < r->nobj; i++) if (a[i]) CFRelease((CFTypeRef)(uintptr_t)a[i]);
+dm/gfx/nvn/nvn_rec.h	objc-framework	b0dec01be403bf8138ff303f3089e023e7947f4e	case RO_C_COPY_BT: [(id<MTL4ComputeCommandEncoder>)e copyFromBuffer:rec_id(a[0]) sourceOffset:a[2] sourceBytesPerRow:a[3] sourceBytesPerImage:a[4] sourceSize:MTLSizeMake(a[5], a[6], a[7])
+dm/gfx/nvn/nvn_rec.h	objc-framework	b222ef21ba2d28fb436580c845ef1ac81547b575	case RO_LABEL: [(id<MTL4CommandEncoder>)e setLabel:rec_id(a[0])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	ba1715b69b59fa4f1aa2b3c2d6b7d78799475222	- (void)writeTimestampWithGranularity:(MTL4TimestampGranularity)g intoHeap:(id)h atIndex:(NSUInteger)i { rec_t *r = rec_put(RO_C_TS, 1); r->a[0] = rec_obj(h); r->a[1] = g; r->a[2] = i; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	bb27cd07c149c2e27d4fdc0f16ac164d6561861d	- (void)drawPrimitives:(MTLPrimitiveType)p indirectBuffer:(uint64_t)g { rec_t *r = rec_put(RO_R_DRAW_IND, 0); r->a[0] = p; r->a[1] = g; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	bb558f0f865dd760f1af953f3cb191384e9e6f74	- (void)copyFromTexture:(id)s sourceSlice:(NSUInteger)sl sourceLevel:(NSUInteger)lv sourceOrigin:(MTLOrigin)o sourceSize:(MTLSize)z toTexture:(id)d destinationSlice:(NSUInteger)dsl destinationLevel:(N ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	bbc24911f1c618040988417402522fe5bb2c1ca0	- (void)writeTimestampWithGranularity:(MTL4TimestampGranularity)g afterStage:(MTLRenderStages)st intoHeap:(id)h atIndex:(NSUInteger)i { rec_t *r = rec_put(RO_R_TS, 1); r->a[0] = rec_obj(h); r->a[1] =  ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	bd037f21d652c65bc931f3d0f81da2b6d4d28a22	- (void)setDepthStoreAction:(MTLStoreAction)a { rec_put(RO_R_STORE_D, 0)->a[0] = a; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	be2cb8d741e0fd3a04d6cd55664c93b7e84d4065	case RO_C_DISPATCH: [(id<MTL4ComputeCommandEncoder>)e dispatchThreadgroups:MTLSizeMake(a[0], a[1], a[2]) threadsPerThreadgroup:MTLSizeMake(a[3], a[4], a[5])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	c7089b0b77202f114d713eee76f1103d5877d71c	- (void)setCullMode:(MTLCullMode)m { rec_put(RO_R_CULL, 0)->a[0] = m; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	c79d557a80e2885a58aed919949008c2b2114c35	case RO_CB_BEGIN: [(id<MTL4CommandBuffer>)g_rx_cb beginCommandBufferWithAllocator:rec_id(a[0])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	cf0bbbb064ca7adc8b062296d36f5a054749cc52	case RO_R_PSO: [(id<MTL4RenderCommandEncoder>)e setRenderPipelineState:rec_id(a[0])]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	d33c884e3e76623f5db1149b088c89fc05b0fea1	- (void)setColorStoreAction:(MTLStoreAction)a atIndex:(NSUInteger)i { rec_t *r = rec_put(RO_R_STORE_C, 0); r->a[0] = a; r->a[1] = i; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	d35168158844c83f1fe6f2d936f41557e93a7f69	@end
+dm/gfx/nvn/nvn_rec.h	objc-framework	d3ef4af1a7706af1936e05ae93bcafd86fa2fb5d	- (void)setViewport:(MTLViewport)v { rec_t *r = rec_put(RO_R_VIEWPORT, 0); memcpy(r->a, &v, sizeof v); }
+dm/gfx/nvn/nvn_rec.h	objc-framework	d8d3e2735d154c851fe9c0a6255d7768e4557a47	case RO_BAR_AFTER_STAGES: [(id<MTL4CommandEncoder>)e barrierAfterStages:a[0] beforeQueueStages:a[1] visibilityOptions:a[2]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	d9d4d8e0ef070f44f3f7864757718567d70adb21	case RO_R_WINDING: [(id<MTL4RenderCommandEncoder>)e setFrontFacingWinding:a[0]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	dca219a5ce2f2ae9bd3977836e709cdd6dbceb32	case RO_R_STORE_D: [(id<MTL4RenderCommandEncoder>)e setDepthStoreAction:a[0]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	de6a2fd8a6e3a32e5f3e2a6679d0ac9302a858f4	- (void)dispatchThreadgroupsWithIndirectBuffer:(uint64_t)g threadsPerThreadgroup:(MTLSize)t { rec_t *r = rec_put(RO_C_DISPATCH_IND, 0); r->a[0] = g; r->a[1] = t.width; r->a[2] = t.height; r->a[3] = t. ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	eaa12c92da2c59aff69d5b10abb703ed34436aef	- (void)setVertexAmplificationCount:(NSUInteger)n viewMappings:(const MTLVertexAmplificationViewMapping *)m { rec_t *r = rec_put(RO_R_AMP, 0); r->a[0] = n; r->a[1] = n && m ? m[0].viewportArrayIndexOf ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	ed2acc00a22161c8f52acdf7c3acb806721d4659	- (void)drawMeshThreadgroups:(MTLSize)g threadsPerObjectThreadgroup:(MTLSize)o threadsPerMeshThreadgroup:(MTLSize)m { (void)o; rec_t *r = rec_put(RO_R_MESH, 0); r->a[0] = g.width; r->a[1] = m.width; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	efde40cd2255f4979a05edd2e5ab950bbf110532	case RO_BAR_QUEUE: [(id<MTL4CommandEncoder>)e barrierAfterQueueStages:a[0] beforeStages:a[1] visibilityOptions:a[2]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	f2bddcc6b1cbbc97350d268a8a91feeaaebae2cb	@implementation DmRecEnc
+dm/gfx/nvn/nvn_rec.h	objc-framework	f7c71a1052c55fe1e3af5101dffe139253676bea	case RO_R_CULL: [(id<MTL4RenderCommandEncoder>)e setCullMode:a[0]]; break;
+dm/gfx/nvn/nvn_rec.h	objc-framework	f8ef0bcef570edf1965171c7c5cdc2370796db82	- (void)setAddress:(uint64_t)gpu atIndex:(NSUInteger)i { rec_table_op(RO_T_ADDR, self, gpu, i); }
+dm/gfx/nvn/nvn_rec.h	objc-framework	f914d28381bdff9736056a0e6d7f7520ebdcd306	- (void)barrierAfterStages:(MTLStages)a beforeQueueStages:(MTLStages)b visibilityOptions:(MTL4VisibilityOptions)v { rec_t *r = rec_put(RO_BAR_AFTER_STAGES, 0); r->a[0] = a; r->a[1] = b; r->a[2] = v; }
+dm/gfx/nvn/nvn_rec.h	objc-framework	f94f041126f8ccf7665dad1c0a45762efce63d04	- (void)barrierAfterEncoderStages:(MTLStages)a beforeEncoderStages:(MTLStages)b visibilityOptions:(MTL4VisibilityOptions)v { rec_t *r = rec_put(RO_BAR_ENCODER, 0); r->a[0] = a; r->a[1] = b; r->a[2] =  ...
+dm/gfx/nvn/nvn_rec.h	objc-framework	fb3559a2d03ec6f66ffd813b652bea8b52303f5f	- (void)setLabel:(NSString *)l { rec_put(RO_LABEL, 1)->a[0] = rec_obj(l); }
+dm/gfx/nvn/nvn_rec.h	objc-framework	fb7a40e4ae7bdc4bee78db1b32635d259afb8f7e	@interface DmRecTable : NSObject { @public id real; } @end
+dm/gfx/nvn/nvn_refl.h	objc-framework	094d49514892dfdc1718a4ada48df7812313af62	int nvn_refl_from_json(NSDictionary *j, nvn_refl *out, char *err, int errlen);
+dm/gfx/nvn/nvn_refl.h	objc-framework	1dbc830ca575d14c678272744ab4f4ed897d17f1	uint8_t dtt, dpf; // Dummy texture when the texture slot is unbound: MTLTextureType value, pixel class
+dm/gfx/nvn/nvn_refl.h	objc-framework	27d0b0697e417a1d3187d4996797d3e902ea4224	#import <Foundation/Foundation.h>
+dm/gfx/nvn/nvn_refl.h	objc-framework	ce52ceb1ebe99f18fe65a960642b8ec6936d86cc	// PC shader reflection json → fixed-length C arrays (converted once when the shader is fetched; each draw only walks the arrays and does not touch NSDictionary / NSString).
+dm/gfx/nvn/nvn_refl.m	objc-framework	7e3d2ebd66c684565f371ec46b9ad446585287f8	#import <Metal/Metal.h>
+dm/gfx/nvn/rt_range_check.inc	objc-framework	0d9cc5ef1492a51fcc38abb31e098b18b829689e	static NSArray *rr_read(id<MTLTexture> c,id<MTLTexture> d) {
+dm/gfx/nvn/rt_range_check.inc	objc-framework	0ffc8f385449b7b4ffa9871cdc7598a779c4bde6	[blit()copyFromTexture:c sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0)sourceSize:MTLSizeMake(w,h,1)toBuffer:a destinationOffset:0 destinationBytesPerRow:w*4 destinationBytesPerImage:w* ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	1a403252cf3a1b90365d937e11a3406191fe9ab9	if(color.pixelFormat!=MTLPixelFormatRG11B10Float||depth.pixelFormat!=MTLPixelFormatDepth32Float_Stencil8||color.width!=depth.width||color.height!=depth.height||color.sampleCount!=1||depth.sampleCount! ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	2dc8231f6bd5d0c672c1e3029e826b09720698f0	if(!ranged||g_rr_n!=2||g_rr_bad||g_rr_dirty!=nvn_dirty_now() || g_rr_reg!=g_reg_gen || g_rr_ser!=g_ser_gen || g_rr_resets!=1 || !g_rr_vis[0] || !g_rr_vis[1] || !g_rr_s[0].s.ds.dt || g_rr_s[0].s.ds.dw  ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	30abb0eccb3b38a807d5d428afc283daa81d6e3d	for(int k=0;k<2;k++){id<MTLTexture> t=tex_mtl(&g_rr_t[k]);MTLTextureDescriptor *d=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:t.pixelFormat width:t.width height:t.height mipmapped:NO];d.s ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	31aa8fd0d7ab22bf6a3abac4a7c02b00d9b7b9b2	NSArray *candidate=rr_read(c,d);rr_copy(g_rr_initial[0],c);rr_copy(g_rr_initial[1],d);g_vis=[g_dev newBufferWithLength:VIS_SLOTS*8 options:MTLResourceStorageModeShared];g_vis_n=0;g_vis_cur=-1;g_vis_on ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	37092e3add17ec3cf716a221b5622395872c0eff	static id<MTLBuffer> g_rr_vis[2],g_rr_before,g_rr_before_vis;static int g_rr_slot[2],g_rr_before_slot,g_rr_use_before;
+dm/gfx/nvn/rt_range_check.inc	objc-framework	3a4fc74dfad995ad577e1d474d544bb7d7a31c5c	[blit()copyFromTexture:a sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0)sourceSize:MTLSizeMake(a.width,a.height,1)toTexture:b destinationSlice:0 destinationLevel:0 destinationOrigin:MTLO ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	3fdd84836d0fa151d81a4b978495dc171dc51475	uint64_t original_passes=g_stat_pass-pass,original_bytes=g_bw_load-load+g_bw_store-store;NSArray *reference=rr_read(c,d);
+dm/gfx/nvn/rt_range_check.inc	objc-framework	4304fda51e710b116b2845c6dd5eb00bcd1aa0ce	static id<MTLTexture> g_rr_initial[2];
+dm/gfx/nvn/rt_range_check.inc	objc-framework	5949519ca5fd7c319eaaea24d735df296a536ee3	uint64_t curpass=g_vis_cur_pass;int vis=g_vis_on,counting=g_vis_counting,cur=g_vis_cur,visn=g_vis_n,vsn=g_nvs,vscap=g_vscap;id<MTLBuffer> oldvis=g_vis;vis_slot *oldvs=g_vs;
+dm/gfx/nvn/rt_range_check.inc	objc-framework	59f1a462de41123845a3ef93b4716f7b9ea17c40	uint64_t frame=g_rr_frame;unsigned vc=g_rr_s[1].indexed?g_rr_s[1].di.count:g_rr_s[1].dw.count;NSUInteger n=c.width*c.height;NSString *out=@(getenv("DM_NVN_RT_RANGE_CHECK"));
+dm/gfx/nvn/rt_range_check.inc	objc-framework	6174bb0115260f047712f5d186656ac13aa3f673	id<MTLTexture> c=tex_mtl(&g_rr_t[0]),d=tex_mtl(&g_rr_t[1]);id<MTLTexture> saved[2];id<MTLTexture> source[2]={c,d};
+dm/gfx/nvn/rt_range_check.inc	objc-framework	65148cf2eedea2c60ee65d048b198fb3e74e8f68	NSUInteger w=c.width,h=c.height;id<MTLBuffer> a=[g_dev newBufferWithLength:w*h*4 options:MTLResourceStorageModeShared],b=[g_dev newBufferWithLength:w*h*4 options:MTLResourceStorageModeShared],e=[g_dev ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	6bfffc7bd301d7704a2e6d2c9e589d55844b2c49	static void rr_copy(id<MTLTexture> a,id<MTLTexture> b) {
+dm/gfx/nvn/rt_range_check.inc	objc-framework	7377a04da368d9ab211b1bcc021e5e65538cfad7	[blit()copyFromTexture:d sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0)sourceSize:MTLSizeMake(w,h,1)toBuffer:e destinationOffset:0 destinationBytesPerRow:w destinationBytesPerImage:w*h  ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	74f3ae0668409f22260340ffca01c900aafcb4b2	[g_cb addCompletedHandler:^(id<MTLCommandBuffer> cb){unsigned long long diff[3]={0};
+dm/gfx/nvn/rt_range_check.inc	objc-framework	90b176928121acd2dd8db8fdb50b46ba28b806ad	for(int m=0;m<2;m++){id<MTLBuffer> x=m?b:a;NSString *path=[NSString stringWithFormat:@"%@/F%llu_P%llu_%s_%s.raw",out,(unsigned long long)frame,(unsigned long long)pass,m?"reference":"candidate",names[ ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	942a00fd3939861d991e08a704e5b7fd5c5d8f50	[blit()copyFromTexture:d sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0)sourceSize:MTLSizeMake(w,h,1)toBuffer:b destinationOffset:0 destinationBytesPerRow:w*4 destinationBytesPerImage:w* ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	975cca8fab12b1c54948fae6abb11e51bd94f6eb	NSString *qp=[out stringByAppendingPathComponent:@"QUERY_RESULTS.tsv"];FILE *qf=fopen(qp.UTF8String,"a");if(qf){fprintf(qf,"%llu\t%llu\t%llu\t%llu\t%llu\t%llu\n",(unsigned long long)frame,(unsigned lo ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	9865a9cd9669201bdc73417704c53290e7292d79	NSArray *referencevis=@[refvis[0],refvis[1]];int refslot0=refslot[0],refslot1=refslot[1];vis_clear();free(g_vs);g_vs=oldvs;g_nvs=vsn;g_vscap=vscap;g_vis=oldvis;g_vis_n=visn;
+dm/gfx/nvn/rt_range_check.inc	objc-framework	9e5eed57cff9a8c44d3d9ed951f2507fdae1943d	id<MTLBuffer> before=g_rr_before;int use_before=g_rr_use_before;NSArray *actualvis=@[g_rr_vis[0],g_rr_vis[1]];int slot0=g_rr_slot[0],slot1=g_rr_slot[1];uint64_t pass=g_stat_pass,draws=g_stat_draw,load ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	a7dd22a0c42e8bad3e799e04375a1089cfe0dabe	NSString *result=[out stringByAppendingPathComponent:@"CHECK_RESULTS.tsv"];FILE *rf=fopen(result.UTF8String,"a");if(rf){fprintf(rf,"%llu\t%llu\t%u\t%llu\t1\t%llu\t%llu\t%llu\t%llu\t%llu\t%lu\t%lu\n",( ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	aa3370273540c391baf3ba24b41d992c56f8f7ab	for(int k=0;k<2;k++){id<MTLTexture> t=source[k];MTLTextureDescriptor *td=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:t.pixelFormat width:t.width height:t.height mipmapped:NO];td.storageMo ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	b30e00e35c93c465bf83a781e33c5692198567e8	for(int k=0;k<3;k++){id<MTLBuffer> a=candidate[k],b=reference[k];size_t bp=k==2?1:4;for(NSUInteger j=0;j<n;j++)diff[k]+=memcmp((uint8_t *)a.contents+j*bp,(uint8_t *)b.contents+j*bp,bp)!=0;
+dm/gfx/nvn/rt_range_check.inc	objc-framework	b419a9f5818716a23d651ae86efe4047105f7766	g_rr_frame=atomic_load(&g_cur_frame);g_rr_dirty=nvn_dirty_now();g_rr_load=g_bw_load;g_rr_store=g_bw_store;g_rr_first_fresh=g_vis_cur<0;g_rr_before_vis=g_vis;g_rr_before_slot=g_vis_cur;g_rr_use_before= ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	bc1fdab8d81a03cbac9f6a8d0351ee8df5e49fef	id<MTLBuffer> refvis[2];int refslot[2];
+dm/gfx/nvn/rt_range_check.inc	objc-framework	dc09803e9d2c6f64e595f1d8fa8f2bbdbfc32f53	unsigned long long av[2],rv[2];int as[2]={slot0,slot1},rs[2]={refslot0,refslot1};for(int k=0;k<2;k++){id<MTLBuffer> a=actualvis[k],r=referencevis[k];av[k]=((uint64_t *)a.contents)[as[k]];rv[k]=((uint6 ...
+dm/gfx/nvn/rt_range_check.inc	objc-framework	f0d98551cab91870758b399a34ab0cbd902d7375	id<MTLTexture> color=tex_mtl(R.rt.color[0]),depth=tex_mtl(R.rt.depth);
+dm/host/crash.c	apple-api	0d40e1a2be3a67b2c53b0372b4c408cfb3ba929e	uint64_t w[2]; vm_size_t got = 0;
+dm/host/crash.c	apple-api	1647f48bf52d3bdff4cd199908c0d3c907101c40	fprintf(stderr, " sp=%#llx\n", uc->uc_mcontext->__ss.__sp);
+dm/host/crash.c	apple-api	2324eb865dfee2f4789f844d8bad40649a4b6cc8	uint64_t at[2] = {uc->uc_mcontext->__ss.__pc, uc->uc_mcontext->__ss.__lr};
+dm/host/crash.c	apple-api	2e5e9f33b690fbaa584d96e3acfbbdc412c43ad2	for (int i = 0; i < 29; i++) fprintf(stderr, "x%d=%#llx%s", i, uc->uc_mcontext->__ss.__x[i], i % 6 == 5 ? "\n" : " ");
+dm/host/crash.c	apple-api	36bea5901293f4ccb69664127e6d3f6b8614c034	{ uint64_t sp = uc->uc_mcontext->__ss.__sp; // The frame just popped (when a return address was overwritten, the bad value and the leftovers of whatever overwrote it sit below sp)
+dm/host/crash.c	apple-api	40efea6345828594a7aed0edf979e342b3f13036	// What the registers point at: the first six words of each readable target (read with vm_read_overwrite, which fails instead of faulting); a word inside a module prints as a module offset, so an obje ...
+dm/host/crash.c	apple-api	47e9bc41ffdfa722c3dbd22a0787379473bb28bb	#if TARGET_OS_OSX
+dm/host/crash.c	apple-api	4d2f85f814af9449315b3c92418b1bd96b07415c	{ uint64_t sp = uc->uc_mcontext->__ss.__sp; int n = 0;
+dm/host/crash.c	apple-api	60fd03468e6add7fb103710bea67f92918e04907	fprintf(stderr, "[dm] fp=%#llx 0x100 bytes below sp:", (unsigned long long)uc->uc_mcontext->__ss.__fp);
+dm/host/crash.c	apple-api	68a053ff4ce97f9b80cf12190a9bf516e0fa2cf1	if (a < 0x100000000ull || (a & 7) || vm_read_overwrite(mach_task_self(), (vm_address_t)a, sizeof w, (vm_address_t)w, &got) != KERN_SUCCESS || got != sizeof w) continue;
+dm/host/crash.c	apple-api	74e2e0f07be817f50178e429cb03689824d6e2ac	dm_backtrace(uc->uc_mcontext->__ss.__fp);
+dm/host/crash.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/crash.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
+dm/host/crash.c	apple-api	af2dbbd7f7c714a7a3322f68a79d9a4d58d0e0e7	#include <libkern/OSCacheControl.h>
+dm/host/crash.c	apple-api	c113d17405c24541d51d05a1fadabcefad7fc2b4	// Each frame is read with vm_read_overwrite, which fails instead of faulting: code built without frame pointers keeps data in x29 (STEINS;GATE RE:BOOT's main+0x38921c: x29 = 0x430),
+dm/host/crash.c	apple-api	c15e31e539e7b545137ae3c3c7abbb7b19a228b3	if (vm_read_overwrite(mach_task_self(), (vm_address_t)fp, sizeof w, (vm_address_t)w, &got) != KERN_SUCCESS || got != sizeof w) break;
+dm/host/crash.c	apple-api	c44f8762f744a3e9f93b16f0f1cc8d2616aee106	uint64_t a = uc->uc_mcontext->__ss.__x[i], w[6]; vm_size_t got = 0;
+dm/host/crash.c	apple-api	cc7b04c2916b2736c78acda6dd50ab9ce43b6343	off("addr", (uint64_t)si->si_addr); off("pc", uc->uc_mcontext->__ss.__pc); off("lr", uc->uc_mcontext->__ss.__lr);
+dm/host/front.h	objc-framework	1e41930fad0146647eceee77d29d7b84ef2ec634	setenv("MTL_HUD_ENABLED", "1", 0);
+dm/host/front.h	objc-framework	4906672d1c69b07e76743623a7b74c222b6d7b70	// Early start of host loading (main.c): reading the NSO / relocation / forced takeover / prefetch start are moved to a background thread, in parallel with the front end (UIKit launch chain, Metal vie ...
+dm/host/front.h	objc-framework	a52e24bf97d5036622882104469cabf8c0876195	setenv("MTL_HUD_HIDE_METALFX_METRICS", "1", 0);
+dm/host/front.h	objc-framework	bf5c30320d5138beb678036a9457fc666960f399	// The CAMetalLayer the graphics backend presents frames to (NULL when there is no window)
+dm/host/front_mac.m	apple-api	ace004b8a731dab8e40cf2823c16babb94cb5750	g_match_want = fps; dispatch_async(dispatch_get_main_queue(), ^{ screen_match_apply(); });
+dm/host/front_mac.m	apple-api	b8296b6098d62772e60ef094faa5b37a52c0fbc9	if (fs && strcmp(fs, "0")) dispatch_async(dispatch_get_main_queue(), ^{ [win toggleFullScreen:nil]; });
+dm/host/front_mac.m	apple-api	db86ead92a0313ae1e28f8bb6c43bfb0bdbb98a1	dispatch_async(dispatch_get_main_queue(), ^{
+dm/host/front_mac.m	apple-api	ebc44051c4ffe2536fd0085f45b40260bc57344a	dispatch_sync(dispatch_get_main_queue(), ^{
+dm/host/front_mac.m	objc-framework	289538d249be64029d4ec169710eb224fc808843	@autoreleasepool {
+dm/host/front_mac.m	objc-framework	3f0aa075ce61e5f91708514ccfde04869b4628d7	#import <Cocoa/Cocoa.h>
+dm/host/front_mac.m	objc-framework	4b8dbc7e05259922a5120920a197c92b8312c437	@interface DmGameView : NSView @end
+dm/host/front_mac.m	objc-framework	6252660232b5a1d1eb2f11cb76cf696b80f09c5d	#import <QuartzCore/CAMetalLayer.h>
+dm/host/front_mac.m	objc-framework	7e3d2ebd66c684565f371ec46b9ad446585287f8	#import <Metal/Metal.h>
+dm/host/front_mac.m	objc-framework	9cd676370da82fadc8e8b165372163ae5244451e	#import <GameController/GameController.h>
+dm/host/front_mac.m	objc-framework	c4727df0c07c6f0f8bc0291aa06c776773c05dfc	@implementation DmGameView
+dm/host/front_mac.m	objc-framework	d35168158844c83f1fe6f2d936f41557e93a7f69	@end
+dm/host/front_mac.m	objc-framework	d7c371566680b9f5acf8afa0935e822ad034146e	[app addItemWithTitle:@"Quit " DM_GAME_NAME action:@selector(terminate:) keyEquivalent:@"q"];
+dm/host/front_mac.m	objc-framework	e6aeba99f1b1845633d6491149476bd8bbbb4c5e	[wm addItemWithTitle:@"Enter Full Screen" action:@selector(toggleFullScreen:) keyEquivalent:@"f"].keyEquivalentModifierMask = NSEventModifierFlagControl | NSEventModifierFlagCommand;
+dm/host/haptics_apple.h	objc-framework	9cd676370da82fadc8e8b165372163ae5244451e	#import <GameController/GameController.h>
+dm/host/haptics_apple.h	objc-framework	cd1866d28b47c1a59c04355a90b0970dea1d9640	void dm_haptics_apple_controller(int player, GCController *controller);
+dm/host/haptics_apple.m	apple-api	23665aa3c73372fc2230f4d413bbafbb57797258	dispatch_queue_set_specific(queue, &queue, &queue, NULL);
+dm/host/haptics_apple.m	apple-api	38649b42d0a8813d1eb73811e0ed36a866b652bf	dispatch_sync(queue, ^{ configure(0, nil); });
+dm/host/haptics_apple.m	apple-api	3ce2e0a0452f81b4605d49527ea13ffa16cf4434	dispatch_async(queue, ^{ @autoreleasepool {
+dm/host/haptics_apple.m	apple-api	44a77623f729d832391009e1cdea176d0f981f77	#if !TARGET_OS_IPHONE
+dm/host/haptics_apple.m	apple-api	51bd0f56a6d1f0e2ce9fb444fd69e4099ef26ce6	static dispatch_once_t once;
+dm/host/haptics_apple.m	apple-api	7f1895dc786b6217a9b084aeba7fb8753154dd28	dispatch_sync(queue, ^{ configure(p, controller); });
+dm/host/haptics_apple.m	apple-api	929813a2da009a2d07295e867bf59581aa6895ee	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(wait * NSEC_PER_SEC)), queue, ^{
+dm/host/haptics_apple.m	apple-api	9b7dea163113e1e272c15c5cde696f1440f3aa21	static dispatch_queue_t queue;
+dm/host/haptics_apple.m	apple-api	ae7927ea3240781a5b2132c7a238f7f9c42be4cd	queue = dispatch_queue_create("dm.rumble", DISPATCH_QUEUE_SERIAL);
+dm/host/haptics_apple.m	apple-api	b3d2a97c54b40eefadaf84903a8fe379b26057cd	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), queue, ^{
+dm/host/haptics_apple.m	apple-api	b9e9438fc19541927af5aed60c57932318b405e8	dispatch_async(queue, ^{
+dm/host/haptics_apple.m	apple-api	c13b74389f47c02df7f6c17c184190857d6cec13	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((left + 0.05) * NSEC_PER_SEC)), queue, ^{
+dm/host/haptics_apple.m	apple-api	c378a9f8fb5902b9b805ad582bab9ef3a68fd447	if (on) { if (dispatch_get_specific(&queue)) stop(); else dispatch_sync(queue, stop); }
+dm/host/haptics_apple.m	apple-api	cb369da8dee9a1477c56c09bb44bdfcccd73c8c6	#import <TargetConditionals.h>
+dm/host/haptics_apple.m	apple-api	fc525ad9537fb0e9cd5958000bed0e8bcc762aa5	dispatch_once(&once, ^{
+dm/host/haptics_apple.m	apple-api	fe0069c5e001afb8e532c6ff0d4469d9f1ffa2fd	#if TARGET_OS_IPHONE
+dm/host/haptics_apple.m	objc-framework	007df31cab1ca931bcf9352982d90aafa0415c8a	@property(nonatomic, copy) void (^merge)(void); // replaces a split route by one engine for both motors
+dm/host/haptics_apple.m	objc-framework	0b7e0cf33264f5becbd8c887e9fbb576ddd2701d	@interface DmDs4Channel : DmRumbleChannel // one per motor; the route takes both motors' values at once (ds4_apply)
+dm/host/haptics_apple.m	objc-framework	2ffb4b72f3f4a82331f47df80732f0050dd5d005	@property(nonatomic) uint64_t silenceGeneration;
+dm/host/haptics_apple.m	objc-framework	35368f09da1961a6019797fc23ffb4c17da34440	@property(nonatomic) int motor; // the game's motor it plays (0 left, 1 right), or -1 for both mixed
+dm/host/haptics_apple.m	objc-framework	37487d823f4bf869d767e65478816737645a8ea6	@property(nonatomic) unsigned failures;
+dm/host/haptics_apple.m	objc-framework	3b37ac11d4dd8e9c4fbeecadd65e06344bf56739	@property(nonatomic) int player;
+dm/host/haptics_apple.m	objc-framework	3b427642cd2878551748275a908edc236fa0761c	@property(nonatomic, copy) CHHapticEngine *(^createEngine)(NSError **);
+dm/host/haptics_apple.m	objc-framework	3ce2e0a0452f81b4605d49527ea13ffa16cf4434	dispatch_async(queue, ^{ @autoreleasepool {
+dm/host/haptics_apple.m	objc-framework	541478c1c59ab99cccc67c476f770b4872e493de	#import <CoreHaptics/CoreHaptics.h>
+dm/host/haptics_apple.m	objc-framework	56e86a84ff26e48ba19bf4e75d3cc6fefd375543	@property(nonatomic) id<CHHapticPatternPlayer> pattern;
+dm/host/haptics_apple.m	objc-framework	619b2f72c83bd577b35ddfd37f23afad719f9954	@property(nonatomic, copy) NSString *target;
+dm/host/haptics_apple.m	objc-framework	7c9a7c80aa496223eb86c3f18dfe919711c5db66	#import <UIKit/UIKit.h>
+dm/host/haptics_apple.m	objc-framework	7dd6beefd6702cde4ea7157e11532b23f572eab2	@property(nonatomic) NSTimeInterval retryAfter;
+dm/host/haptics_apple.m	objc-framework	86973d19ebed9af146aca4cffe2bdb4a42b9dfa2	@property(nonatomic) uint64_t generation;
+dm/host/haptics_apple.m	objc-framework	86a85488ad3580631359a9b63e35f4c2ef573f55	#import <IOKit/hid/IOHIDManager.h>
+dm/host/haptics_apple.m	objc-framework	88ef29d54b4198b1bb4d429fbbc87f2515a6263f	@property(nonatomic) NSTimeInterval pulseEnd; // engine time at which the last scheduled pulse ends
+dm/host/haptics_apple.m	objc-framework	8bc78d973b6e78af10f2e90aff209803e8080417	@implementation DmRumbleChannel
+dm/host/haptics_apple.m	objc-framework	8e9fd760c03e4429caf52cc0eb9e70e450e5117b	@implementation DmDs4Channel
+dm/host/haptics_apple.m	objc-framework	95e0ef6a444353e8b255f73fe588d34cc456857a	@property(nonatomic) dm_haptic_level level; // the level the next pulse starts at
+dm/host/haptics_apple.m	objc-framework	aea597d7dfc502ced7dd9f6535b2af08c99c1e08	@property(nonatomic, copy) void (^fallback)(NSTimeInterval);
+dm/host/haptics_apple.m	objc-framework	ba228e1ab61348743af9325a62e17d56f84dacf1	#import <AppKit/AppKit.h>
+dm/host/haptics_apple.m	objc-framework	d35168158844c83f1fe6f2d936f41557e93a7f69	@end
+dm/host/haptics_apple.m	objc-framework	d3e8ba4e673462fc4f799345a6eea0a2f1f394ec	#import <AVFAudio/AVFAudio.h>
+dm/host/haptics_apple.m	objc-framework	d8a2cf9e0df2f70f1c4810dd27be01071b9d93fd	@interface DmRumbleChannel : NSObject
+dm/host/haptics_apple.m	objc-framework	e74b4ae61e222a4549286bc076440caff931b922	@property(nonatomic) CHHapticEngine *engine;
+dm/host/haptics_apple.m	objc-framework	e7c5c0b313235549a09613398b56964b862276fd	@property(nonatomic) id<CHHapticPatternPlayer> previous; // the pulse before the scheduled one, still playing
+dm/host/haptics_apple.m	objc-framework	ef2d91ddc18a6744f56aa34618bd6f2f913648d5	controller.vendorName.UTF8String ?: "unknown", [[localities.allObjects sortedArrayUsingSelector:@selector(compare:)] componentsJoinedByString:@", "].UTF8String ?: "none", (unsigned long)channels[p].co ...
+dm/host/haptics_apple.m	objc-framework	ffabf83a18505e815ff47b046cda105f587e5b81	@property(nonatomic) BOOL simple; // the engine's server offers no advanced players: plain players play the effect in pulses
+dm/host/hle.c	apple-api	4699cfed4d2ef35107bbabda558b286a38689516	#include <mach-o/ldsyms.h>
+dm/host/hle.c	apple-api	f4d30297022b963eada4390ee9febd0044c7a91b	g_hle_sec = (const hle_ent *)getsectiondata(&_mh_execute_header, "__DATA", "swhle", &secsz);
+dm/host/hle.c	apple-api	ffed6bbb855c554334c87b822125c59335f1df05	#include <mach-o/getsect.h>
+dm/host/hle.h	macho-section	421f8ce8d829cbb73b886e7441b7ab533b645cdb	__attribute__((used, section("__DATA,swforce"))) static const hle_force_ent hle_force_##cname = {mangled, (void *)(uintptr_t)cname##_bs, why}; \
+dm/host/hle.h	macho-section	849923e792ffa9e66a130ccd644ab986ab9dde9e	__attribute__((used, section("__DATA,swhle"))) static const hle_ent hle_ent_##cname = {mangled, (void *)cname}; \
+dm/host/hle.h	macho-section	b98f6dc3f8c008311579bf8bc770654d88af90c9	__attribute__((used, section("__DATA,swforce"))) static const hle_force_ent hle_force_##cname = {mangled, (void *)cname, why}; \
+dm/host/hle_audio.c	apple-api	22fe01481077df720138a7e450a60084f60773a1	if (released) { if (a->event) notify_release(a); if (a->rel_sem) dispatch_semaphore_signal(a->rel_sem); }
+dm/host/hle_audio.c	apple-api	3ff88a8b96f340e322fc95290087a9b7758c6320	a->notify_sem = dispatch_semaphore_create(0); a->id = atomic_fetch_add(&nopen, 1);
+dm/host/hle_audio.c	apple-api	44a77623f729d832391009e1cdea176d0f981f77	#if !TARGET_OS_IPHONE
+dm/host/hle_audio.c	apple-api	4938325debde336d4bfa99e9921ac90116b9f9ba	dispatch_semaphore_signal(a->notify_sem);
+dm/host/hle_audio.c	apple-api	6094d0a97604a5b8a4b0dc5fb6363fb525880c0a	if (a->rel_sem) dispatch_release(a->rel_sem);
+dm/host/hle_audio.c	apple-api	66de4bba4e91d131e191797579bbcbc41aa5ac93	dispatch_semaphore_wait(a->notify_sem, DISPATCH_TIME_FOREVER);
+dm/host/hle_audio.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
+dm/host/hle_audio.c	apple-api	a721afc7ea802044a3410f26bdcc4e4777dcc750	void dm_pcmout_wait(void *k, int ms) { dispatch_semaphore_wait(ao(k)->rel_sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)ms * 1000000)); }
+dm/host/hle_audio.c	apple-api	b1baa7be4627f08103cc8233a6b09b38d25c9696	dispatch_semaphore_t notify_sem;
+dm/host/hle_audio.c	apple-api	b63044a64d34b09923e5879f41bb42dcb5e3828c	static int real_audio(void) { const char *e = getenv("DM_AUDIO"); return e ? atoi(e) != 0 : TARGET_OS_IPHONE; }
+dm/host/hle_audio.c	apple-api	ba5fe3b26073e1b20740b2fc43f5b5b926e4066a	ao(key)->rel_sem = dispatch_semaphore_create(0);
+dm/host/hle_audio.c	apple-api	c0bcf4829e7f13c4058d76dc6f5ffd461fa0c196	dispatch_semaphore_t rel_sem; // Host outputs only (dm_pcmout_open): signaled for each release, so the in-process audio renderer blocks instead of polling (dm_pcmout_wait)
+dm/host/hle_audio.c	apple-api	c6872c35f8006a43184bae0fa67ad3d6b913880c	if (a->rel_sem) dispatch_semaphore_signal(a->rel_sem);
+dm/host/hle_audio.c	apple-api	dbb76e2224fb5c48123f514578d9d3e3ea2240a2	dispatch_release(a->notify_sem);
+dm/host/hle_audio.c	apple-api	fe0069c5e001afb8e532c6ff0d4469d9f1ffa2fd	#if TARGET_OS_IPHONE
+dm/host/hle_audio.c	objc-framework	9111c4f88b39e4eb7b60bbd08a4d82111418bcc3	#include <AudioToolbox/AudioToolbox.h>
+dm/host/hle_count.c	apple-api	1c9633ee24a288b55e285d3c020341bfc443536e	sys_icache_invalidate(g_hcode, HC_MAX * 48);
+dm/host/hle_count.c	apple-api	44a77623f729d832391009e1cdea176d0f981f77	#if !TARGET_OS_IPHONE
+dm/host/hle_count.c	apple-api	af2dbbd7f7c714a7a3322f68a79d9a4d58d0e0e7	#include <libkern/OSCacheControl.h>
+dm/host/hle_fpslock.c	apple-api	63e7c11534f1ec519a01afc41b6f9854964ccc1f	static int rd(uint64_t a, void *out, size_t n) { vm_size_t got = 0; return a >= 0x1000 && vm_read_overwrite(mach_task_self(), (vm_address_t)a, n, (vm_address_t)out, &got) == KERN_SUCCESS && got == n;  ...
+dm/host/hle_fpslock.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/hle_fs.c	apple-api	4b93f79f2ac7ee831e0364cbba299a8d054dfa77	kern_return_t kr = vm_region_64(mach_task_self(), &ra, &rs, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&vi, &cnt, &obj);
+dm/host/hle_fs.c	apple-api	552c31cfde8d13b37d012c07a691640d0d7e2e89	// clonefile preserves xattr, so save Commit/remount needs no separate mapping table; enumeration must not leak physical aliases.
+dm/host/hle_fs.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/hle_fs.c	apple-api	afa5638deff04b740ba798d426ac6f246bd2d690	#include <sys/clonefile.h>
+dm/host/hle_fs.c	apple-api	b55ed4dd0eab84ae15a20238406612d3f309c846	else if (dm_fs_test_fail("mountclone") || clonefile(dir, work, 0)) why = "cloning the work directory failed";
+dm/host/hle_fs.c	apple-api	b68f652b8625b62418f558aa605a285de65fd4a2	int e = errno; vm_address_t ra = (vm_address_t)((uint8_t *)buf + got); vm_size_t rs = 0; vm_region_basic_info_data_64_t vi; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj  ...
+dm/host/hle_fs.c	apple-api	c2969ca626b1c371cdff7dfa9744a7a556d157c6	// all game reads and writes happen in the working directory; Commit = clonefile(work → <commit>.new), then renamex_np(RENAME_SWAP) swaps it atomically with commit, then the swapped-out old version is ...
+dm/host/hle_fs.c	apple-api	cf3b4502c970ab2398ece6990c0c505c9d90fc59	if (clonefile(g_mnt[i].dir, neu, 0)) { LOG("[RED] save commit: clonefile %s failed errno=%d (committed version unchanged)", neu, errno); r = RES_FAIL; }
+dm/host/hle_fs.c	apple-api	d2d3a77e66467daf26494c95606dda8028e448a4	else if (dm_fs_test_fail("reclone") || clonefile(g_mnt[i].commit, re, 0)) { rerr = errno ? errno : EIO; rm_tree(re); }
+dm/host/hle_fs.c	apple-api	e209721c3bb344929c326bcd00ff504b8fd3ba1f	// Host: at mount, the committed directory commit (= $DM_SAVE) is clonefile'd as a whole tree into the working directory <commit>.work (APFS copy-on-write, nearly zero cost), and the mount points at t ...
+dm/host/hle_lifecycle.c	apple-api	3cff5b69f44204aee105dca86087c29873570746	dispatch_source_set_event_handler(src, ^{ dm_host_shutdown("SIGTERM"); });
+dm/host/hle_lifecycle.c	apple-api	5a5a72da49546036341dfeb14aeefc62d9fdbb75	src = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGTERM, 0, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0));
+dm/host/hle_lifecycle.c	apple-api	928e7eb90235f7eab6ffeb574989f1d47c00e40d	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1500 * NSEC_PER_MSEC), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+dm/host/hle_lifecycle.c	apple-api	ae59d656bb6531b93f2f8bf4ec2831c0a52bcc06	static dispatch_source_t src;
+dm/host/hle_movie.c	apple-api	4514209dfbdaffcade92da217779d990f37465ef	if (d->evc && (vm_read_overwrite(mach_task_self(), (vm_address_t)&d->evc[i], sizeof p, (vm_address_t)&p, &got) != KERN_SUCCESS || got != sizeof p)) p = NULL;
+dm/host/hle_movie.c	apple-api	6adb1f7925b52823c2f67ad448028ecfc2657e96	uint64_t w; vm_size_t got = 0; uintptr_t a = (uintptr_t)p;
+dm/host/hle_movie.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/hle_movie.c	apple-api	83f9e270c2201a7d7288322a170f6a9648b65c7e	// An EventType pointer that can be signalled: 8-byte aligned and readable (vm_read_overwrite fails instead of faulting)
+dm/host/hle_movie.c	apple-api	94363a169af186cc1a2b3960ee75b327d07dd056	return a >= 0x100000000ull && !(a & 7) && vm_read_overwrite(mach_task_self(), (vm_address_t)a, sizeof w, (vm_address_t)&w, &got) == KERN_SUCCESS && got == sizeof w;
+dm/host/hle_movie.c	apple-api	d8622e2ce0cbdb509352dbf5a17cee3c4bf41195	void *p = NULL; vm_size_t got = 0;
+dm/host/hle_movie.c	objc-framework	64395c9bf9f91a5008c50e8cbfe4d832eaef0a84	#include <AudioToolbox/AudioToolbox.h> // AAC
+dm/host/hle_movie_avc.c	objc-framework	03dd0696d6f6a168b7bb07fddb7e8a21911328b4	if (!st) st = CMBlockBufferReplaceDataBytes(a->au, bb, 0, c.len);
+dm/host/hle_movie_avc.c	objc-framework	1183c0f90ccf4573ff7d57e55e54a60472761dcc	if (a->vs) { VTDecompressionSessionWaitForAsynchronousFrames(a->vs); VTDecompressionSessionInvalidate(a->vs); CFRelease(a->vs); a->vs = NULL; }
+dm/host/hle_movie_avc.c	objc-framework	1feb29defa2ca1a8280ee257e7683f25fe19640b	VTDecompressionOutputCallbackRecord cb = {on_frame, a};
+dm/host/hle_movie_avc.c	objc-framework	27376108d932701e5d3288b391f4ef6369fb1f2a	struct { CVPixelBufferRef pb; int64_t pts; } q[QMAX]; int nq, depth;
+dm/host/hle_movie_avc.c	objc-framework	3314aef2b08955fcabdba89444326093ea37b93a	CVPixelBufferLockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
+dm/host/hle_movie_avc.c	objc-framework	482c0383b8d8ca9c50ec24b346cd44bf1cf1ba48	int pw = (int)CVPixelBufferGetWidthOfPlane(pb, 0), ph = (int)CVPixelBufferGetHeightOfPlane(pb, 0);
+dm/host/hle_movie_avc.c	objc-framework	49a1f527e1a1b6d0702ae7fe729682970ddb98c3	CMSampleTimingInfo ti = {kCMTimeInvalid, CMTimeMake(pts_us, 1000000), kCMTimeInvalid}; size_t ssz = c.len;
+dm/host/hle_movie_avc.c	objc-framework	595cc721c61c1831cf150bf263f9a455eda9d1b8	CMVideoDimensions dm = CMVideoFormatDescriptionGetDimensions(a->fd);
+dm/host/hle_movie_avc.c	objc-framework	5c9562f762f46849ba92366e4a3d8ae368e0f495	if (a->nq == QMAX) { if (!a->red++) LOG("[RED] movie: AVC reorder queue full, dropping the oldest frame"); CVPixelBufferRelease(a->q[0].pb); memmove(a->q, a->q + 1, --a->nq * sizeof a->q[0]); }
+dm/host/hle_movie_avc.c	objc-framework	6671a9ec9b8a4735067d7de5a82b4bf9a5c130a9	CFDictionaryRef attrs = CFDictionaryCreate(NULL, k, v, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks); CFRelease(n);
+dm/host/hle_movie_avc.c	objc-framework	66985b33a7bb97b7e098fd0089be95d0bc22b54a	CVPixelBufferRef pb = a->q[0].pb; if (pts_us) *pts_us = a->q[0].pts;
+dm/host/hle_movie_avc.c	objc-framework	67cdcf478a0a9194422160002145dffbbd61b9f7	static void take_rgba(CVPixelBufferRef pb, uint8_t *dst, int w, int h) {
+dm/host/hle_movie_avc.c	objc-framework	721103f141915eb60a6c9cfc9d23dee603686737	int pw = (int)CVPixelBufferGetWidth(pb), ph = (int)CVPixelBufferGetHeight(pb), cw = pw < w ? pw : w, chh = ph < h ? ph : h;
+dm/host/hle_movie_avc.c	objc-framework	81c1591244e2ad65dd280bd405fa0cbde58cb1aa	CMVideoFormatDescriptionRef fd; VTDecompressionSessionRef vs;
+dm/host/hle_movie_avc.c	objc-framework	8441c83c6ea5571d05b0c7cdc248c5f0b741a9b5	if (!st) st = CMSampleBufferCreateReady(NULL, bb, a->fd, 1, 1, &ti, 1, &ssz, &sb);
+dm/host/hle_movie_avc.c	objc-framework	86bce663e0447331b0bee9cdb2dbad9a67db7c5d	CFNumberRef n = CFNumberCreate(NULL, kCFNumberSInt32Type, &pf);
+dm/host/hle_movie_avc.c	objc-framework	871c0dcb94e2fba05e72e39a7f7f0af7730deb69	if (a->rgba) { take_rgba(pb, dst, w, h); CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly); CVPixelBufferRelease(pb); return 1; }
+dm/host/hle_movie_avc.c	objc-framework	8a245195ec7b60f33fcc4216cb737495a4023e67	a->q[k].pb = CVPixelBufferRetain(img); a->q[k].pts = t; a->nq++;
+dm/host/hle_movie_avc.c	objc-framework	8b4ce4d543f06f3d4d840d7162a91ead8e44b856	CVPixelBufferRelease(pb);
+dm/host/hle_movie_avc.c	objc-framework	a8d1768f3385dc13672359d9055d5ebfa6c9a584	if (sb) CFRelease(sb); if (bb) CFRelease(bb);
+dm/host/hle_movie_avc.c	objc-framework	b075dfa3cda1dda7be925c8003dc2e890dd80c53	size_t ys = CVPixelBufferGetBytesPerRowOfPlane(pb, 0), uvs = CVPixelBufferGetBytesPerRowOfPlane(pb, 1);
+dm/host/hle_movie_avc.c	objc-framework	b3ae96e298c3bf2b784bceef81fdeb770742700c	const uint8_t *src = CVPixelBufferGetBaseAddress(pb); size_t ss = CVPixelBufferGetBytesPerRow(pb);
+dm/host/hle_movie_avc.c	objc-framework	b67774ba72287b3ae80a889478b74ac955af6247	#include <VideoToolbox/VideoToolbox.h>
+dm/host/hle_movie_avc.c	objc-framework	c78156fdc572907f5e726eeb0ad9763f3b5b2762	static void on_frame(void *ref, void *src, OSStatus st, VTDecodeInfoFlags fl, CVImageBufferRef img, CMTime pts, CMTime dur) {
+dm/host/hle_movie_avc.c	objc-framework	c9b1ada05d741e049e8d34381f9b509ef3267559	CMBlockBufferRef bb = NULL; CMSampleBufferRef sb = NULL;
+dm/host/hle_movie_avc.c	objc-framework	cd75c7394920e50b2870b18fdc7b43f659ec7d0b	CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
+dm/host/hle_movie_avc.c	objc-framework	cdd9cecf9ee1adda2f460d180262c3b8dc4059d2	OSStatus st = CMBlockBufferCreateWithMemoryBlock(NULL, NULL, c.len, NULL, NULL, 0, c.len, 0, &bb);
+dm/host/hle_movie_avc.c	objc-framework	ce26c1e48a84966a492b6184e06a4002541af782	void mavc_drop(mavc *a) { for (int i = 0; i < a->nq; i++) CVPixelBufferRelease(a->q[i].pb); a->nq = 0; }
+dm/host/hle_movie_avc.c	objc-framework	d1d374650b71e00efb8c9a7f8eb2aec7d9ba056e	st = VTDecompressionSessionCreate(NULL, a->fd, NULL, attrs, &cb, &a->vs); CFRelease(attrs);
+dm/host/hle_movie_avc.c	objc-framework	e16d43e2a1e49d3d79bfbd5c6838059798be9951	OSStatus st = CMVideoFormatDescriptionCreateFromH264ParameterSets(NULL, 2, ps, sz, 4, &a->fd);
+dm/host/hle_movie_avc.c	objc-framework	e2fe95a4b8e90cd2e2a766d0e2baeb1701dc5765	if (a->fd) { CFRelease(a->fd); a->fd = NULL; }
+dm/host/hle_movie_avc.c	objc-framework	e9514e746af0794c0cfbb272b9729b9596b31a63	if (!st) st = VTDecompressionSessionDecodeFrame(a->vs, sb, 0, NULL, NULL); // flags 0: synchronous, the picture is queued before this returns
+dm/host/hle_movie_avc.c	objc-framework	f2848bce24ed9e6e062abab85498a1e6fdaa4eb6	const uint8_t *y = CVPixelBufferGetBaseAddressOfPlane(pb, 0), *uv = CVPixelBufferGetBaseAddressOfPlane(pb, 1);
+dm/host/hle_os.c	apple-api	27096d436d90a55698225a5a2bc7db7237dfd6aa	#include <mach/mach_time.h>
+dm/host/hle_os.c	apple-api	4e16ada75764d0a75690a7a3618ffda133390eb5	return mach_absolute_time() * tb.numer / tb.denom;
+dm/host/hle_os.c	apple-api	8ee53fb64003b55b893ad035ebf7560abddb469b	if (!tb.denom) mach_timebase_info(&tb);
+dm/host/hle_os.c	apple-api	c88abb3917204d8b6af08a423c63d9028d3c7b08	static mach_timebase_info_data_t tb;
+dm/host/hle_ro.c	apple-api	a408e72dcd5ace5a259bee82439825b30b197fd5	uint8_t sha[32]; CC_SHA256(h, n, sha);
+dm/host/hle_ro.c	apple-api	d08dad2c324561d98f2831fd51bacf6453d76b66	#include <CommonCrypto/CommonDigest.h>
+dm/host/hle_svc.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/hle_svc.c	apple-api	ea705d6daf27d62f241e0767836746f3f57b6e7e	uint64_t rec[2]; vm_size_t got = 0; // read safely: static constructors run on the host's main thread, whose stack is outside the guest block
+dm/host/hle_svc.c	apple-api	eeaf44f10f7a88c275195feb55f5fce4e0d57c57	if (!fp || (fp & 15) || vm_read_overwrite(mach_task_self(), (vm_address_t)fp, sizeof rec, (vm_address_t)rec, &got) || got != sizeof rec) break;
+dm/host/hle_svc.c	page-assumption	4acd4eee1b31464d88c4d0e041091c65c3265c66	// Loader text/patch seals use 16 KiB boundaries, independently of host page size.
+dm/host/hle_svc.c	page-assumption	adf290c07f30472d29c8e375e2b1ddd64360e403	// Host pages are 16 KB, Horizon pages 4 KB: a map is rounded out to host pages (the extra neighboring 4K pages are inside the alias region and merely become writable early, harmless);
+dm/host/hle_table.c	macho-section	a2bf2cd969a33199377bbccd7073090b6a460486	#define L(n) __attribute__((used, section("__DATA,swhle"))) static const hle_ent hle_lib_##n = { #n, (void *)n };
+dm/host/hle_thread.c	apple-api	0991f555e854a91e93e81c8354c8ca310a8091bf	memcpy(t->ctx_v, uc->uc_mcontext->__ns.__v, sizeof t->ctx_v); t->ctx_fpcr = uc->uc_mcontext->__ns.__fpcr; t->ctx_fpsr = uc->uc_mcontext->__ns.__fpsr;
+dm/host/hle_thread.c	apple-api	0a3e2fd80f16cc1b4157d20c66f5a8610d3d5f6d	if (sr && t->wkind) { uint64_t stk[160]; size_t got = 0; vm_address_t sa = (vm_address_t)((uint8_t *)sr + 800);
+dm/host/hle_thread.c	apple-api	18b3d12d449cf6f26cd53a5ad2e783afe3268aaf	for (mach_msg_type_number_t i = 0; i < nth; i++) {
+dm/host/hle_thread.c	apple-api	197ad23524501086d92bfec3a48f3eeefdc4bf0f	int have_raw = (t->wkind == 1 || t->wkind == 2 || t->wkind == 3) && t->waddr && !vm_read_overwrite(mach_task_self(), t->waddr & ~0xfull, 64, (vm_address_t)raw, &g3) && g3 == 64;
+dm/host/hle_thread.c	apple-api	19e4236be8faaca42c20a0df5ee1f6d782523a47	while (got < sizeof stk) { vm_size_t n = sizeof stk - got, g4 = 0, room = vm_page_size - ((sa + got) & (vm_page_size - 1)); if (n > room) n = room;
+dm/host/hle_thread.c	apple-api	23de6cbe4a717cead47f08567777432d1d25ec7c	// Sleep until dl (host monotonic ns) on time: macOS nanosleep / mach_wait_until carry timer slack; measured, 33 ms sleeps take about 36.4 ms, 5 ms take 6.1 ms, 1 ms take 1.26 ms (the same at any QoS) ...
+dm/host/hle_thread.c	apple-api	2899629e833ff55f18f7b88b2d15bedb748e20bf	if (t->wkind == 2 && t->waddr) { uint32_t w = 0, k = 0; vm_size_t g2 = 0; // Condition wait: current values of the associated lock word and the condition key (the deadlock dump lacked this item)
+dm/host/hle_thread.c	apple-api	2ffab4628fd7fd942787f02a326c7b40ad628ab3	thread_act_array_t ths; mach_msg_type_number_t nth = 0;
+dm/host/hle_thread.c	apple-api	3d1aa6717f97a8390b60b0ee0d9bb69044e8e0d1	pthread_set_qos_class_self_np(prio_qos(t->prio), 0);
+dm/host/hle_thread.c	apple-api	452febef7b42511442c12530b22a5c9bc5fe591b	if (vm_read_overwrite(mach_task_self(), sa + got, n, (vm_address_t)((uint8_t *)stk + got), &g4) || g4 != n) break;
+dm/host/hle_thread.c	apple-api	46c285b2b6d2db57395df279454e0d1707945c96	mach_port_t mport; // Host thread port (to get CPU time)
+dm/host/hle_thread.c	apple-api	4d84a80b1be73cede84df3207cefcff3696a720f	if (!t->mport || t->exited || t->mport == mach_thread_self()) return;
+dm/host/hle_thread.c	apple-api	5a0b2b9eb68e04337e472877686416d7f0d78c0b	if ((uint32_t)q != t->qos && !pthread_set_qos_class_self_np(q, 0)) t->qos = (uint32_t)q;
+dm/host/hle_thread.c	apple-api	61896177db7efff19ffa9a8904bd7d302cff5d3e	if (t->mport && !t->exited) { thread_basic_info_data_t bi; mach_msg_type_number_t n = THREAD_BASIC_INFO_COUNT;
+dm/host/hle_thread.c	apple-api	6242239c4490ad8dd68321c227f34dd46438cc8d	pthread_get_qos_class_np(pthread_self(), &qc, &rp); t->qos = (uint32_t)qc;
+dm/host/hle_thread.c	apple-api	64c8419a774d4567036e932a71da183cc5972414	for (int i = 19; i <= 20; i++) { uint8_t raw[128]; vm_size_t g = 0; uint64_t a = st.__x[i];
+dm/host/hle_thread.c	apple-api	6929d44154fd45119dd001facc9aa6d5e98d0c72	uint8_t raw[64]; vm_size_t g3 = 0; // Raw 64 bytes of the object being waited on (the structure holding the read-write lock / condition variable): to see the counts and the owner
+dm/host/hle_thread.c	apple-api	6de76ce73376528c4979e536b2ad461393c1c8e9	mach_port_deallocate(mach_task_self(), ths[i]);
+dm/host/hle_thread.c	apple-api	7023bb3149ad15b1023b5027476bafe2287d323e	if (!fp || vm_read_overwrite(mach_task_self(), fp, 16, (vm_address_t)fr, &g2) || g2 != 16 || fr[0] <= fp) break;
+dm/host/hle_thread.c	apple-api	706e66180c88b587523253aff3210cbe56cdb57e	if (!vm_read_overwrite(mach_task_self(), t->waddr, 4, (vm_address_t)&w, &g2)) snprintf(own, sizeof own, " owner %#x", w & ~WAITERS_BIT); }
+dm/host/hle_thread.c	apple-api	73192ee9c89c470e2290e18873cd317607c1a13d	vm_deallocate(mach_task_self(), (vm_address_t)ths, nth * sizeof *ths);
+dm/host/hle_thread.c	apple-api	74f4278573c0fdaa1ad48d519698d39f8f3e0c9b	if (vm_read_overwrite(mach_task_self(), t->arg + 0x1a0, 8, (vm_address_t)&np, &got) || !np ||
+dm/host/hle_thread.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/hle_thread.c	apple-api	77eadda592292f081da1f56f95bcb58a13af65b2	if (sp > 0x100000000ull && !vm_read_overwrite(mach_task_self(), sp, sizeof stk, (vm_address_t)stk, &g) && g == sizeof stk)
+dm/host/hle_thread.c	apple-api	7af05bebe9ea682d91904b841c143d302bc33e0c	uint64_t fr[2]; vm_size_t got = 0; if (!fp || vm_read_overwrite(mach_task_self(), fp, 16, (vm_address_t)fr, &got) || got != 16) break;
+dm/host/hle_thread.c	apple-api	82df901ac9cd5473eab04956ce9648c957d13c54	char own[96] = ""; if (t->wkind == 1 && t->waddr) { uint32_t w = 0; vm_size_t g2 = 0; // 0x40000000 | Lock wait: lock word = owner handle | 0x40000000
+dm/host/hle_thread.c	apple-api	86ae29ac861dc64577fe56a9f66a11fbadd56b8b	if (t->wkind == 0 && module_of((void *)__darwin_arm_thread_state64_get_pc(st))) { uint64_t sp = __darwin_arm_thread_state64_get_sp(st), stk[128]; vm_size_t g = 0; // Printed only if pc is inside a gue ...
+dm/host/hle_thread.c	apple-api	9287be7aa7f0585444cbadd2a5cf6c7a0e13b1c1	ucontext_t *uc = uc_; const struct __darwin_arm_thread_state64 *ss = &uc->uc_mcontext->__ss;
+dm/host/hle_thread.c	apple-api	a7512d4c15b54aa51e91689429ad5b38aec88a5b	uint64_t fr[2]; vm_size_t g2 = 0;
+dm/host/hle_thread.c	apple-api	abe7bd42db0d9ffd6ca51e351c9a42ccf8934b97	thread_basic_info_data_t bi; mach_msg_type_number_t c = THREAD_BASIC_INFO_COUNT;
+dm/host/hle_thread.c	apple-api	b955633a5d316dd9de6f563cc43f675b7632026d	vm_read_overwrite(mach_task_self(), np, n - 1, (vm_address_t)nb, &got)) return "?";
+dm/host/hle_thread.c	apple-api	baae4ff63e5836fe006d4cf50af72f451aa969b2	vm_read_overwrite(mach_task_self(), t->waddr, 4, (vm_address_t)&w, &g2); vm_read_overwrite(mach_task_self(), t->wkey, 4, (vm_address_t)&k, &g2);
+dm/host/hle_thread.c	apple-api	bafeaf1ad3e3d7e5349dffede44c00cdcb35f0fc	if (a < 0x100000000ull || vm_read_overwrite(mach_task_self(), a, sizeof raw, (vm_address_t)raw, &g) || g != sizeof raw) continue;
+dm/host/hle_thread.c	apple-api	ca1bc6cf7659bb2855c2a98ae87ee63eabcedcef	void dm_host_helper_qos(qos_class_t q) { if (g_qos_map) pthread_set_qos_class_self_np(q, 0); }
+dm/host/hle_thread.c	apple-api	d5830ab0807e484bc741a2358b530cc3aabc58e8	if (!guest && ths[i] != mach_thread_self() && thread_suspend(ths[i]) == KERN_SUCCESS) {
+dm/host/hle_thread.c	apple-api	e5f7228b25a386b7812d380662ab2427f5c5226a	if (vm_read_overwrite(mach_task_self(), fp, 16, (vm_address_t)fr, &g2) || g2 != 16 || fr[0] <= fp) break;
+dm/host/hle_thread.c	apple-api	ec9eca6f7b47639b6b704244af9de6e72c4db39f	uint64_t np = 0; vm_size_t got = 0;
+dm/host/hle_thread.c	apple-api	f1d0245ed445deb23ad41b16888c1376fb94afff	if (task_threads(mach_task_self(), &ths, &nth) == KERN_SUCCESS) {
+dm/host/hle_thread.c	apple-api	f548320d89ad3aba89ddfd1891d44ccd8bda23a9	arm_thread_state64_t st; mach_msg_type_number_t n = ARM_THREAD_STATE64_COUNT;
+dm/host/hle_time.c	apple-api	58390174992fcfde608a1030dfcb9403465e68a5	// Switch's it stays the same until the host clock moves against the guest ticks by more than a second (clock set by hand, a sleep mach_absolute_time did not count); with DM_FIXED_TIME it is made once
+dm/host/hle_uemalloc.c	apple-api	0a0cfbbcec0492b6ceba282deafa4b7ad56558ed	if (vm_region_64(mach_task_self(), &at, &sz, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info, &cnt, &obj) != KERN_SUCCESS) return 0; // vm_region_64: iOS has no mach_vm.h
+dm/host/hle_uemalloc.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/hle_uemalloc.c	apple-api	cf689f9c6c8224533859028b5f259bb3948e92a7	vm_address_t at = (vm_address_t)a; vm_size_t sz = 0; vm_region_basic_info_data_64_t info; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj;
+dm/host/loader.c	apple-api	24ffdb0ce7e55dc1558877f378ccc37433d6ea71	// Patch area before the base (patch_off < 0): W ends at the end of data (FILE_IMAGE_LEN); bss and the key page are zero pages from vm_allocate and are not in the executable
+dm/host/loader.c	apple-api	31f95cdd831ee6caf381918d520d917bfd455444	kern_return_t kr = vm_remap(mach_task_self(), &a, size, 0, VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE, mach_task_self(), (vm_address_t)from, copy, &cur, &max, VM_INHERIT_NONE);
+dm/host/loader.c	apple-api	409c72f3833deaed6fa7fea9e7fd0b427407aa0a	if (kr != KERN_SUCCESS || a != to) die("%s vm_remap %p → %#lx (%#lx bytes) failed: %d", m->name, from, (unsigned long)to, size, kr);
+dm/host/loader.c	apple-api	45798a9c3b65fdd9977d024268ef938912f248ce	#define IMAGE_MH (&_mh_execute_header)
+dm/host/loader.c	apple-api	4699cfed4d2ef35107bbabda558b286a38689516	#include <mach-o/ldsyms.h>
+dm/host/loader.c	apple-api	61e85156cd920399e9d3c8191013998667f36d6e	static void remap_at(module_t *m, vm_address_t to, const void *from, unsigned long size, boolean_t copy, vm_prot_t need) {
+dm/host/loader.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/loader.c	apple-api	8b20d6d355cc8aaee4958239cecd4a42bc06ca72	else { x0 = getsectiondata(IMAGE_MH, "__TEXT", sx0, &z0); w = getsectiondata(IMAGE_MH, dm, "__img", &zw); x1 = getsectiondata(IMAGE_MH, "__TEXT", sx1, &z1); }
+dm/host/loader.c	apple-api	8c1e8e9a2119bbfb642052613821d69a4f142686	if ((cur & need) != need) die("%s permissions after vm_remap %#x, missing %#x", m->name, cur, need);
+dm/host/loader.c	apple-api	8cf2f94532aeb0c8f1ef6d8a9e790d8dcdcb380a	unsigned long sz; g_force = (const hle_force_ent *)getsectiondata(&_mh_execute_header, "__DATA", "swforce", &sz);
+dm/host/loader.c	apple-api	9a135cddfb1b409c1be20fae9f66cd036898cd66	// and they are vm_remap'ed back at their original relative positions: code pages with copy=FALSE (sharing the same signed pages with __TEXT, r-x), W with copy=TRUE (copy-on-write, paged only when use ...
+dm/host/loader.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
+dm/host/loader.c	apple-api	a18f6f57cf17384aee1332b2b8d8ed7ae1ed51f5	// A module with nothing to rewrite has an empty patch area (87 of Super Smash Bros. Ultimate's 98 NROs: no x18, SVC or TLS register use); vm_remap refuses 0 bytes
+dm/host/loader.c	apple-api	a91c5999f00bc9bc0abdb8c129c20b34ea030b60	const nro_ent *t = (const nro_ent *)getsectiondata(IMAGE_MH, "__DATA", "__dm_nro_tab", &zt);
+dm/host/loader.c	apple-api	c969eaec2e115435bf1b98690fe7d28038c4b807	if (vm_allocate(mach_task_self(), &base, pre + m->size, VM_FLAGS_ANYWHERE) != KERN_SUCCESS) die("%s failed to reserve %#llx bytes of address space", m->name, (unsigned long long)(pre + m->size));
+dm/host/loader.c	apple-api	d08dad2c324561d98f2831fd51bacf6453d76b66	#include <CommonCrypto/CommonDigest.h>
+dm/host/loader.c	apple-api	d26f1509321552c9220e29c3a26a709e47054d17	vm_address_t a = to; vm_prot_t cur = 0, max = 0;
+dm/host/loader.c	apple-api	d7f62b2428917dfab52a35b0ae6f3196f6781397	vm_address_t base = 0;
+dm/host/loader.c	apple-api	e710c1a41cb286b5580002799f5b09a17dd629fe	const uint8_t *b0 = getsectiondata(IMAGE_MH, "__TEXT", "__dm_nro_x0", &s0), *bw = getsectiondata(IMAGE_MH, "__DM_NRO_W", "__img", &sw), *b1 = getsectiondata(IMAGE_MH, "__TEXT", "__dm_nro_x1", &s1);
+dm/host/loader.c	apple-api	fe0069c5e001afb8e532c6ff0d4469d9f1ffa2fd	#if TARGET_OS_IPHONE
+dm/host/loader.c	apple-api	ffed6bbb855c554334c87b822125c59335f1df05	#include <mach-o/getsect.h>
+dm/host/loader.c	macho-section	82085e931df6ff9c49881263ffaa1fd5e79f2c09	// Forced take-over table (hle.h HLE_FORCE, the __DATA,swforce section): a hit overrides the definition inside the module
+dm/host/loader.c	macho-section	aa5304856e7574a3d1cd2ee53bac7e5d23e9b293	// take 294. gen_embed.py puts their pieces one after another, each 16K aligned, in __TEXT,__dm_nro_x0 / __DM_NRO_W,__img / __TEXT,__dm_nro_x1, and __DATA,__dm_nro_tab lists them:
+dm/host/loader.c	macho-section	f0459e46efdfcc16f8ab53b6ab0b34689c2336e6	if (m->nro) { if (!nro_pieces(m->name, &x0, &z0, &w, &zw, &x1, &z1)) die("NRO %s: not in the embedded NRO table (__DATA,__dm_nro_tab)", m->name); }
+dm/host/loader.c	page-assumption	2eec5901f0876c2de282a41166287bf027d0592d	if (m->patch_off < 0 && (!m->image_size || !m->file_image_len || m->file_image_len % 0x4000 || m->patch_off % 0x4000 || m->key_page_off + m->key_page_size > m->image_size))
+dm/host/loader.c	page-assumption	b28978993c661f40fdfce34554ec0c600b419113	// Seal the code area immediately after copying into anonymous pages (16 KB pages): [0, text_end) and the patch area are read-only+execute, and from then on any write to the code area crashes on the s ...
+dm/host/loader.c	page-assumption	e01c6adf61fe1fc5fd9af71243b3dc7f780a6d35	if (!m->patch_off || m->key_page_off % 0x4000 || m->key_page_size != 0x4000 || seen != (1u << KEY_N) - 1)
+dm/host/main.c	apple-api	3ca53085a51c2c74656a89985b6990b36804e37f	// Zero point of the boot timeline = process creation time (p_starttime from sysctl KERN_PROC_PID, wall clock) converted to the now_ns monotonic time base; same definition on Mac / iOS
+dm/host/main.c	apple-api	70b21a0ebcd5d6cab209fe3731db935998c1c4fa	if (sysctl(mib, 4, &kp, &n, NULL, 0) || !n) return mono;
+dm/host/main.c	apple-api	87bf1acd22262ca7ef075682c93ea18cbfe3f343	#include <sys/sysctl.h>
+dm/host/main.c	objc-framework	badad99e7863f62f485f97bd8cde471d34de16c9	// Host loading (independent of UIKit / Metal): read the NSO, relocate, forced take-over, probes / tick gate / keys, start prefetch. By default it runs synchronously in main;
+dm/host/main.c	objc-framework	ca7c85c5c5432d506660704b0d124ce0c49bdd87	// the iOS front end can call dm_host_preload_start(same arguments) at the very start of the App's main() so that it runs first on a background thread, in parallel with the UIKit startup chain (⓪ + ①  ...
+dm/host/main.c	objc-framework	e94ade5d6c90c25ebcd3fd65b28dfaa77291bfa1	// May be called only once; if not called, loading is synchronous inside main and behavior is exactly as before this call existed. Does not depend on UIKit / Metal.
+dm/host/memstat.m	apple-api	0bfb24ec9d992deab32d82404bf30efa742d4479	task_vm_info_data_t vi; mach_msg_type_number_t n = TASK_VM_INFO_COUNT;
+dm/host/memstat.m	apple-api	2a579df7f3f52d4220541f5918e78adaa281f3aa	vm_address_t a = 0; vm_size_t sz; natural_t depth = 0; vm_size_t pg = vm_page_size;
+dm/host/memstat.m	apple-api	31db32c8d2690d74d493e36e0b5c7884ddf5b407	#include <mach/thread_info.h>
+dm/host/memstat.m	apple-api	39e84d831d5a27a9dea6f5326de86ae48872c836	// Totals: phys_footprint (task_info TASK_VM_INFO, which the iOS memory limit is based on), os_proc_available_memory (iOS only), Metal currentAllocatedSize
+dm/host/memstat.m	apple-api	3bc92aefb9ddd4fdfdcbce6d8f71e3a665bd143f	// Breakdown: walk this process's VM regions (vm_region_recurse_64, VM_REGION_SUBMAP_INFO_64), classify by region, and for each class record
+dm/host/memstat.m	apple-api	41e0f6bdbe2448d8851748b60f852fc717716a79	thread_extended_info_data_t ei; mach_msg_type_number_t c1 = THREAD_EXTENDED_INFO_COUNT;
+dm/host/memstat.m	apple-api	5facba8a70fd4632fd2a5ef8230970e59d17d97e	vm_deallocate(mach_task_self(), (vm_address_t)th, nt * sizeof *th);
+dm/host/memstat.m	apple-api	6c01b34012cc27804785feadbd403be27d536bfc	static int classify(vm_address_t a, const vm_region_submap_info_data_64_t *in) {
+dm/host/memstat.m	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/memstat.m	apple-api	8228d2e7f43fae6cfaf2f74c4284690e344c90b4	for (mach_msg_type_number_t i = 0; i < nt; i++) {
+dm/host/memstat.m	apple-api	8398ecf33d738b5cb4c8356c304853a1025b376f	if (gb && a >= (vm_address_t)gb && a < (vm_address_t)gb + gs) return C_GUEST;
+dm/host/memstat.m	apple-api	8b08e47186ae03d4b2ef05b51853a84fe1bbe017	thread_identifier_info_data_t ii; mach_msg_type_number_t c2 = THREAD_IDENTIFIER_INFO_COUNT;
+dm/host/memstat.m	apple-api	918d198ad9a07c01e55bcd2c46cb1c4e0010cf38	vm_region_submap_info_data_64_t in; mach_msg_type_number_t cnt = VM_REGION_SUBMAP_INFO_COUNT_64;
+dm/host/memstat.m	apple-api	96d0ce46b3a0ce84220b41923b96e6a4214f1487	mach_port_deallocate(mach_task_self(), th[i]);
+dm/host/memstat.m	apple-api	97df16d9134c7970ee5be49fb48071502083fca8	thread_act_array_t th; mach_msg_type_number_t nt = 0;
+dm/host/memstat.m	apple-api	9bef2273748a021194cd131f37157b7e7be65faa	if (vm_region_recurse_64(mach_task_self(), &a, &sz, &depth, (vm_region_recurse_info_t)&in, &cnt) != KERN_SUCCESS) break;
+dm/host/memstat.m	apple-api	9d46c29513bbcdbc3805313327a00d633013c6b9	if (a >= (vm_address_t)g_mod[i].base && a < (vm_address_t)g_mod[i].base + g_mod[i].size) return C_CODE;
+dm/host/memstat.m	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
+dm/host/memstat.m	apple-api	b1f0850c5ba9afacb9e34d0d48603e79c7072047	uint64_t fp = task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vi, &n) == KERN_SUCCESS ? vi.phys_footprint : 0;
+dm/host/memstat.m	apple-api	c7d57051fe9a0fcb03624a0071598971d0a12fb8	#include <os/proc.h>
+dm/host/memstat.m	apple-api	c9334d7d13aef3967179224d94173d310d05bb57	avail = os_proc_available_memory();
+dm/host/memstat.m	apple-api	d192b128e23580b6e3dc2377e4176016e5ea00bf	if (task_threads(mach_task_self(), &th, &nt) != KERN_SUCCESS) continue;
+dm/host/memstat.m	apple-api	d9bf1e09c28e3309db55f6855348aa560686ef12	#include <mach/vm_statistics.h>
+dm/host/memstat.m	apple-api	fe0069c5e001afb8e532c6ff0d4469d9f1ffa2fd	#if TARGET_OS_IPHONE
+dm/host/memstat.m	objc-framework	27d0b0697e417a1d3187d4996797d3e902ea4224	#import <Foundation/Foundation.h>
+dm/host/memstat.m	objc-framework	7e3d2ebd66c684565f371ec46b9ad446585287f8	#import <Metal/Metal.h>
+dm/host/motion_apple.h	objc-framework	16939f001f5e1b77286d294967103d4a880ead9e	GCMotion *mo = c.motion;
+dm/host/motion_apple.h	objc-framework	56a08eb8d3f1ef8785932762544cfd03f0814960	static inline void dm_motion_attach(GCController *c, int player) {
+dm/host/motion_apple.h	objc-framework	8bd582aaad4027ebdb492ac02e09e67578a48caf	// Controller motion from GameController (GCMotion) to the host's six-axis sensor (dm_motion_set, hle_hid.c). Shared by the Mac front end (front_mac.m) and the iOS gamepad
+dm/host/motion_apple.h	objc-framework	9cd676370da82fadc8e8b165372163ae5244451e	#import <GameController/GameController.h>
+dm/host/motion_apple.h	objc-framework	a43d1cbeb2b284267786bb67f10c593f92edff2c	// DM_MOTION=0 leaves the sensors off. GCMotion's acceleration / hasRotationRate / manual activation need macOS 11.3 / iOS 14.5, below both platforms' targets.
+dm/host/motion_apple.h	objc-framework	c6e91218210430f4d4257e8a6fa263afe8f3ef42	mo.valueChangedHandler = ^(GCMotion *m) {
+dm/host/motion_apple.h	objc-framework	f5f87086c4d11d58f0802b263e29bec497acdef1	static inline void dm_motion_detach(GCController *c, int player) {
+dm/host/motion_fusion.h	objc-framework	01e2bd2deb3c33ebacdc1d31aab8ad9d06e49465	// Input: what the front end reads from GameController (GCMotion), in the controller's own frame as Apple reports it: acceleration in G (gravity direction, as CoreMotion:
+dm/host/motion_pro_mac.h	objc-framework	144aeac927054af60d3cb8c655eddeedd27297d2	static void pro_found(void *ctx, IOReturn result, void *sender, IOHIDDeviceRef hid) {
+dm/host/motion_pro_mac.h	objc-framework	26a23bf90106f9375f22cb3d583efb147c09b1d1	g_pro_manager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone); if (!g_pro_manager) return;
+dm/host/motion_pro_mac.h	objc-framework	280a2e46b512a2b251ef693cd3691a08243fed60	IOHIDDeviceRegisterInputReportCallback(hid, d->report, sizeof d->report, NULL, NULL);
+dm/host/motion_pro_mac.h	objc-framework	2904c219fc6967a26ef289d34c8ba30cc77f8318	static void pro_removed(void *ctx, IOReturn result, void *sender, IOHIDDeviceRef hid) {
+dm/host/motion_pro_mac.h	objc-framework	2c6afbc623e7570d8c5be91044a5f550374318d0	IOHIDManagerRegisterDeviceMatchingCallback(g_pro_manager, pro_found, NULL);
+dm/host/motion_pro_mac.h	objc-framework	369b22ae40c7a4e987f7fe8e45169d72f1c2c8eb	IOHIDManagerSetDeviceMatching(g_pro_manager, (__bridge CFDictionaryRef)@{@kIOHIDVendorIDKey: @0x057E, @kIOHIDProductIDKey: @0x2009});
+dm/host/motion_pro_mac.h	objc-framework	3b8b0005fa3b9dd530b4b8a76272898a1df170b5	// A separate buffer / decoder belongs to each retained IOHIDDevice. Disconnect or ambiguity clears only the raw source; GameController keeps its buttons and motion.
+dm/host/motion_pro_mac.h	objc-framework	3d6db9c3eedbca0e28857b40714a0780e56c7806	d->hid = (IOHIDDeviceRef)CFRetain(hid); d->next = g_pro_devices; g_pro_devices = d;
+dm/host/motion_pro_mac.h	objc-framework	44df1c6c5280069ac15fde8a69c659b646b871d3	IOHIDManagerRegisterDeviceRemovalCallback(g_pro_manager, pro_removed, NULL);
+dm/host/motion_pro_mac.h	objc-framework	494efbab75b0adce07974bbcefb856ca7a34a826	static IOHIDManagerRef g_pro_manager;
+dm/host/motion_pro_mac.h	objc-framework	79555c838dc19a3ea2fd1cdb5477a3e48e0ed099	static void pro_report(void *ctx, IOReturn result, void *sender, IOHIDReportType type, uint32_t report_id, uint8_t *r, CFIndex len) {
+dm/host/motion_pro_mac.h	objc-framework	7f64aaee55ee9e176998a4d2479dcf00fa4168dc	IOHIDManagerUnscheduleFromRunLoop(g_pro_manager, CFRunLoopGetMain(), kCFRunLoopCommonModes);
+dm/host/motion_pro_mac.h	objc-framework	86a85488ad3580631359a9b63e35f4c2ef573f55	#import <IOKit/hid/IOHIDManager.h>
+dm/host/motion_pro_mac.h	objc-framework	88b730e8555a7fa31b67c42aa4f150a7f4361ebb	CFRelease(d->hid); free(d);
+dm/host/motion_pro_mac.h	objc-framework	980830890afb153aa8c55f57d283897dbfc0549d	#import <GameController/GCSyntheticDeviceKeys.h>
+dm/host/motion_pro_mac.h	objc-framework	c8ccac25870dd1aac5f80229adb679a730ea43f2	IOHIDManagerScheduleWithRunLoop(g_pro_manager, CFRunLoopGetMain(), kCFRunLoopCommonModes);
+dm/host/motion_pro_mac.h	objc-framework	d145dd979d94b05206e77114e0a28233ab916ea0	IOReturn r = IOHIDManagerOpen(g_pro_manager, kIOHIDOptionsTypeNone); // nonexclusive, no output / feature reports
+dm/host/motion_pro_mac.h	objc-framework	e97f7bc18273ef59cd9595c233fbbe77f03ec4a4	IOHIDDeviceRegisterInputReportCallback(hid, d->report, sizeof d->report, pro_report, d);
+dm/host/motion_pro_mac.h	objc-framework	ece8a624a97dc6383483ad1edcd4906eec494f8d	// Workaround for macOS's zero-only Pro GCMotion: the OS driver cannot be fixed here, but its underlying reports contain the IMU samples (#296).
+dm/host/motion_pro_mac.h	objc-framework	f746c60e426653812617a339996ff70f2af328ca	if (result != kIOReturnSuccess || IOHIDDeviceGetProperty(hid, CFSTR(kIOHIDGCSyntheticDeviceKey)) == kCFBooleanTrue) return;
+dm/host/motion_pro_mac.h	objc-framework	fbe6475f6f3566b4b4b75f6a9927085763e87971	CFRelease(g_pro_manager); g_pro_manager = NULL;
+dm/host/motion_pro_mac.h	objc-framework	ff99023b72971576cda884e07e6f1ec820be8a10	typedef struct pro_device { IOHIDDeviceRef hid; uint8_t report[512]; pro_motion motion; struct pro_device *next; } pro_device;
+dm/host/pad_slots.h	objc-framework	f0cc38072f813a4da19d4d07e9f4dbfef61fe1e3	// GCController); a holder that never disconnects (the keyboard with DM_KBD_PLAYER=own) takes slot 0 first and keeps it.
+dm/host/probe.c	apple-api	0d82d8c5129dad55bac6439710fc86d1e12d6162	if (p < 0x1000 || vm_read_overwrite(mach_task_self(), p, sizeof buf - 1, (vm_address_t)buf, &got) || !got) return;
+dm/host/probe.c	apple-api	0e805f6ca0b92134d9374e81baa75c4322634638	{ uint64_t x8 = uc->uc_mcontext->__ss.__x[8]; Dl_info di; fprintf(stderr, " x8=%#llx", x8); // x8: indirect call targets are often here (probe placed before blr x8)
+dm/host/probe.c	apple-api	112111bbf89e4d5cf6386119685fd51b720397d5	sys_icache_invalidate(w, 4);
+dm/host/probe.c	apple-api	1304283817f4215060b694063ffd613892233650	_STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss; unsigned rn = (in >> 5) & 31, sz = 1u << (in >> 30);
+dm/host/probe.c	apple-api	1495986bd789293f49701f53e154cb442f7deeef	uint64_t v = uc->uc_mcontext->__ss.__x[g_probe[i].freg]; vm_size_t g = 0;
+dm/host/probe.c	apple-api	17bb357676d2c2cd49c76c846743c2e1f3808946	for (mach_msg_type_number_t i = 0; i < ns; i++) {
+dm/host/probe.c	apple-api	1abc38acda16d216b4203f03aaa556f54ae568aa	if (!vm_read_overwrite(mach_task_self(), at, n, (vm_address_t)b, &got)) { fprintf(stderr, "[dm] [x2]:"); for (long k = 0; k < (long)got; k += 8) { uint64_t v; memcpy(&v, b + k, 8); fprintf(stderr, "%s ...
+dm/host/probe.c	apple-api	1b03b87d4a450bfca9e54f25a8a24bdcddbc8b15	if (mach_vm_remap(mach_task_self(), &al, g_wpsz, 0, VM_FLAGS_ANYWHERE, mach_task_self(), g_wpg, FALSE, &cur, &max, VM_INHERIT_NONE) == KERN_SUCCESS) g_walias = (uint8_t *)al;
+dm/host/probe.c	apple-api	1b7be8c53b9af94dab3ccfc3d42f07de2e58378d	if (v != g_probe[i].fval) { uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot; return 1; }
+dm/host/probe.c	apple-api	1bd78b8a6dc89bceb2b6403050454f9720ac4426	ucontext_t *uc = ucv; uint64_t pc = uc->uc_mcontext->__ss.__pc, ea = 0, wbv = 0; unsigned len = 0; int wb = -1; uint8_t data[64];
+dm/host/probe.c	apple-api	21dfa82d42ca1e06b1653d7726ba163d1f874478	if (g_probe[i].dump & 0x1000000) { uint64_t p = 0; vm_size_t g = 0; if (!vm_read_overwrite(mach_task_self(), at, 8, (vm_address_t)&p, &g) && p) at = p + g_probe[i].dpost; else at = 0; } // @*offset[+p ...
+dm/host/probe.c	apple-api	26e9eedded4c2fd4ec0b83454da7971cf9405df4	char buf[80]; vm_size_t got = 0;
+dm/host/probe.c	apple-api	27144096a7f700a85c447f08efd7bcfbc6e01055	(void)p; void svc_thread_dump(void); extern uint64_t g_t0_ns; uint64_t now_ns(void); vm_size_t got;
+dm/host/probe.c	apple-api	2b57462b2aad28f7d486cd95ad8b33c65f367992	mach_vm_address_t al = 0; vm_prot_t cur, max;
+dm/host/probe.c	apple-api	2d607b42a2448a010527f99b3986d4eb9f68cd12	for (mach_msg_type_number_t i = 0; i < ns; i++) { // threads with guest code anywhere in their first frames
+dm/host/probe.c	apple-api	30ce48c2fcc06177980f158c47e89c43e41a6ecc	while (vm_read_overwrite(mach_task_self(), g_poll, g_plen, (vm_address_t)&old, &got) || got != g_plen) usleep(1000);
+dm/host/probe.c	apple-api	316535bd2c1a7ee018eca6f43ade3bff3cead1c2	mach_vm_address_t ra = g_wpg; mach_vm_size_t rs = 0; vm_region_basic_info_data_64_t bi; mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64; mach_port_t obj;
+dm/host/probe.c	apple-api	3a697ce56da9c7d750765374d08bab6121901140	for (int k = 0; k < NF && fp > 0x100000000ull && !vm_read_overwrite(mach_task_self(), fp, 16, (vm_address_t)w, &g) && g == 16; k++) { fr[i][2 + k] = w[1]; fp = w[0]; }
+dm/host/probe.c	apple-api	3b882d4da8a95ba62d3ec08778f9b970aef10def	if (at && !vm_read_overwrite(mach_task_self(), at, 16, (vm_address_t)b, &got) && got == 16) {
+dm/host/probe.c	apple-api	44a77623f729d832391009e1cdea176d0f981f77	#if !TARGET_OS_IPHONE
+dm/host/probe.c	apple-api	4a2c902e2702f23baadc21fe140f01bd7247850c	uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot;
+dm/host/probe.c	apple-api	54fa43ec1a0fde1a91f9ebe68193429aa984727e	#include <mach/mach_vm.h> // the write watch (DM_PROBE_WATCH): iOS's SDK has no mach_vm.h
+dm/host/probe.c	apple-api	566cf568a9f99a707a2b7f0b88ebb0ba1dd7f172	if (vm_read_overwrite(mach_task_self(), g_poll, g_plen, (vm_address_t)&v, &got) || v == old) continue;
+dm/host/probe.c	apple-api	5ddc99d8e4cbd6291346b045bedf2e4569a6e368	char nm[128]; probe_heapname(uc->uc_mcontext->__ss.__x[g_probe[i].hreg], nm, sizeof nm);
+dm/host/probe.c	apple-api	69c2cf581dcdd2469eec6471f79e49ff9cb10278	if (g_probe[i].foff >= 0 && vm_read_overwrite(mach_task_self(), v + g_probe[i].foff, 8, (vm_address_t)&v, &g)) v = ~g_probe[i].fval;
+dm/host/probe.c	apple-api	70f8b834f0a91e80513be9ae9777fc6241f2502f	uint8_t b[16]; vm_size_t got = 0;
+dm/host/probe.c	apple-api	735dd6d2bd2b2243fc9bec48fe72be9af0113f60	for (mach_msg_type_number_t i = 0; i < ns; i++) thread_resume(keep[i]);
+dm/host/probe.c	apple-api	74e2e0f07be817f50178e429cb03689824d6e2ac	dm_backtrace(uc->uc_mcontext->__ss.__fp);
+dm/host/probe.c	apple-api	762554fc8c66404b47a9a18910414b62da1d876e	#include <mach/mach.h>
+dm/host/probe.c	apple-api	84f207c56d5f8eeb1dff224e368d52bf8d3391ea	static int rd64(uint64_t a, uint64_t *v) { vm_size_t g = 0; return !vm_read_overwrite(mach_task_self(), a, 8, (vm_address_t)v, &g) && g == 8; }
+dm/host/probe.c	apple-api	8aae40c1fd3bfb7f8ed57dacc18d2257616c4dc6	if (!mach_vm_region(mach_task_self(), &ra, &rs, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&bi, &cnt, &obj) && ra <= g_wpg && (bi.protection & VM_PROT_WRITE)) {
+dm/host/probe.c	apple-api	92243045a0e74c32b95565b312762c58df4ee7b3	if (!strstr(nm, g_hw.want)) { uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot; return 1; }
+dm/host/probe.c	apple-api	9d0e93e92f9de91ea61ca150e6acb680d328e822	if (len >= 3 && len < sizeof t && !vm_read_overwrite(mach_task_self(), ptr, len, (vm_address_t)t, &got) && got == len) {
+dm/host/probe.c	apple-api	9e591a809805f36fdfff8d6db621b8115c3a71f7	#include <TargetConditionals.h>
+dm/host/probe.c	apple-api	9eb7cdf22cca8ed9ada974817d1da6d34439aa9c	for (mach_msg_type_number_t i = 0; i < nth && ns < MT; i++) if (ths[i] != self && thread_suspend(ths[i]) == KERN_SUCCESS) keep[ns++] = ths[i];
+dm/host/probe.c	apple-api	a17e393d98dc26e76d860aa40ef471dde6f63c51	thread_act_array_t ths; mach_msg_type_number_t nth = 0, ns = 0; thread_act_t self = mach_thread_self();
+dm/host/probe.c	apple-api	a30205f3bc941982e228c7e2e04e21f9fcf14ef7	if (wb >= 0) { if (wb == 31) uc->uc_mcontext->__ss.__sp = wbv; else if (wb == 29) uc->uc_mcontext->__ss.__fp = wbv; else if (wb == 30) uc->uc_mcontext->__ss.__lr = wbv; else uc->uc_mcontext->__ss.__x[ ...
+dm/host/probe.c	apple-api	a3835e18ec1eed01a03d7d1298a1dcfdf3890fc2	for (int r = 0; r < 8; r++) { uint64_t v = uc->uc_mcontext->__ss.__x[r]; fprintf(stderr, " x%d=%#llx", r, v); probe_str(v); }
+dm/host/probe.c	apple-api	a4fc58e6a2a95b2191037abe42d454633c266e04	uint64_t at = uc->uc_mcontext->__ss.__x[dr] + (g_probe[i].dump & 0xffffff);
+dm/host/probe.c	apple-api	a82c0f904cf2f814c6d7e617fc9aa820279b160d	if (task_threads(mach_task_self(), &ths, &nth) != KERN_SUCCESS) return;
+dm/host/probe.c	apple-api	aa3b156aebb0c7b389ef081f8e67414bf87646ca	vm_deallocate(mach_task_self(), (vm_address_t)ths, nth * sizeof *ths); mach_port_deallocate(mach_task_self(), self);
+dm/host/probe.c	apple-api	acb714ef445617cdf36f658dec0ffd11ccdc3661	arm_thread_state64_t st; mach_msg_type_number_t n = ARM_THREAD_STATE64_COUNT; memset(fr[i], 0, sizeof fr[i]);
+dm/host/probe.c	apple-api	af2dbbd7f7c714a7a3322f68a79d9a4d58d0e0e7	#include <libkern/OSCacheControl.h>
+dm/host/probe.c	apple-api	b65252757666cc232a3d85ddf41452679ac6abe6	for (mach_msg_type_number_t i = 0; i < nth; i++) mach_port_deallocate(mach_task_self(), ths[i]);
+dm/host/probe.c	apple-api	b6a472ef9d38a8c65864762eb5b3beed3681587c	uc->uc_mcontext->__ss.__pc = pc + 4;
+dm/host/probe.c	apple-api	bc14dd7b849dd73fa49abd0ef5758fa765bba696	uint64_t pc = uc->uc_mcontext->__ss.__pc;
+dm/host/probe.c	apple-api	c20cecfe8bb9542e5a3c8ccf20a0d8a3abc806ba	if (getenv("DM_PROBE_ALL")) for (int r = 9; r < 19; r++) fprintf(stderr, " x%d=%#llx", r, uc->uc_mcontext->__ss.__x[r]); // also print x9–x18
+dm/host/probe.c	apple-api	ca11feff3c53816097ce2189568613e28ef4d991	if (g_probe[i].hreg >= 0) probe_heapwalk(uc->uc_mcontext->__ss.__x[g_probe[i].hreg]);
+dm/host/probe.c	apple-api	cd8604d426192e58d471430e441b12a7435164f7	uint64_t fp = __darwin_arm_thread_state64_get_fp(st), w[2]; vm_size_t g;
+dm/host/probe.c	apple-api	ced1199364c3d456b42484744bf147ffe73cfacf	watch_where("pc", pc); watch_where("lr", uc->uc_mcontext->__ss.__lr); fputc('\n', stderr);
+dm/host/probe.c	apple-api	d3dea6d53280cd90118810e99432baad0c7e1f3b	fprintf(stderr, " lr=%#llx", uc->uc_mcontext->__ss.__lr);
+dm/host/probe.c	apple-api	da2fc6cd6fb7b9d33926f183cb3cd5318138c65d	_STRUCT_ARM_THREAD_STATE64 *ss = &uc->uc_mcontext->__ss; _STRUCT_ARM_NEON_STATE64 *ns = &uc->uc_mcontext->__ns;
+dm/host/probe.c	apple-api	e487ae6a90c23f81adff19af9deb9f315c2aad9e	if (g_hw.lay[0] && rd64(h + g_hw.lay[0], &np) && np) { vm_size_t g = 0; vm_read_overwrite(mach_task_self(), np, n - 1, (vm_address_t)nm, &g); nm[g < n ? g : n - 1] = 0; for (int k = 0; nm[k]; k++) if  ...
+dm/host/probe.c	apple-api	e6d6dbdd01cdab4ff2089ec084f73762ea730288	uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot; return 1;
+dm/host/probe.c	apple-api	e78e1b1f9c7fedb1b518dbab5c9d149abc11265f	if (xd > 0) { uint64_t at = uc->uc_mcontext->__ss.__x[2]; uint8_t b[512]; vm_size_t got = 0; long n = xd > 512 ? 512 : xd;
+dm/host/probe.c	apple-api	eb054b455eafaca40561d8a66b644af22df86bd8	if (g_probe[i].fn) { g_probe[i].hits++; g_probe[i].fn(uc); uc->uc_mcontext->__ss.__pc = (uint64_t)g_probe[i].slot; return 1; }
+dm/host/probe.c	apple-api	f4f878587b2a9c5b2a220a93bdd9e1788ea8069e	for (int r = 19; r < 24; r++) fprintf(stderr, " x%d=%#llx", r, uc->uc_mcontext->__ss.__x[r]);
+dm/host/probe.c	apple-api	fe6fa3ad06597bc0b90807439abe3feef4b7f025	if (g_slots && !g_slots_sealed) { mprotect(g_slots, 0x4000, PROT_READ | PROT_EXEC); sys_icache_invalidate(g_slots, 0x4000); g_slots_sealed = 1; }
+dm/host/probe.c	page-assumption	7b3064ac5a85487a93f0dd40463cd76311cd110f	if (!g_slots) g_slots = mmap(NULL, 0x4000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+dm/host/probe.c	page-assumption	fe6fa3ad06597bc0b90807439abe3feef4b7f025	if (g_slots && !g_slots_sealed) { mprotect(g_slots, 0x4000, PROT_READ | PROT_EXEC); sys_icache_invalidate(g_slots, 0x4000); g_slots_sealed = 1; }

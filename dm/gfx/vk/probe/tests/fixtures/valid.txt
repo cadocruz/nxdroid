@@ -1,0 +1,71 @@
+; SYNTHETIC FIXTURE, NOT A CAPTURE: hand-written from the contract in ../test_probe_output.py to show a dump that obeys it. The device is invented
+; (device.0.name = fixture_device, driver_info = fixture_driver), the rest is plausible for a Vulkan 1.3 phone. It is valid, so a test that breaks it fails
+; for what the test broke.
+# instance
+instance_api_version = 1.3.0
+instance_extension_count = 2
+instance_extension = VK_KHR_get_physical_device_properties2
+instance_extension = VK_KHR_portability_enumeration
+# device
+device_count = 1
+device_selected = 0
+device.0.name = fixture_device
+device.0.device_type = integrated_gpu
+device.0.vendor_id = 0x5143
+device.0.device_id = 0x07030000
+device.0.api_version = 1.3.0
+device.0.driver_version = 24.1.0
+device.0.driver_version_raw = 2435551488
+device.0.driver_id = qualcomm_proprietary
+device.0.driver_info = fixture_driver
+# extensions
+device_extension = VK_EXT_external_memory_host 1
+device_extension = VK_EXT_robustness2 1
+device_extension = VK_KHR_16bit_storage 1
+device_extension = VK_KHR_pipeline_executable_properties 1
+# features
+geometryShader = true
+robustBufferAccess = false
+shaderInt64 = false
+externalMemoryHost = present
+# limits
+maxImageDimension2D = 16384
+maxComputeSharedMemorySize = 32768
+maxMemoryAllocationCount = 4096
+timestamp_compute_and_graphics = true
+# memory
+memory_heap_count = 2
+memory_type_count = 3
+memory_heap.0.size = 8053063680
+memory_heap.0.flags = device_local
+memory_heap.1.size = 3221225472
+memory_heap.1.flags = host_visible
+memory_type.0.flags = device_local
+memory_type.0.heap_index = 0
+memory_type.1.flags = host_visible
+memory_type.1.heap_index = 1
+memory_type.2.flags = host_visible host_coherent
+memory_type.2.heap_index = 1
+# formats
+VK_FORMAT_ASTC_4x4_UNORM_BLOCK = none
+VK_FORMAT_BC1_RGBA_UNORM_BLOCK = sampled filter-linear transfer-dst blit-src blit-dst
+VK_FORMAT_BC3_UNORM_BLOCK = sampled transfer-dst
+VK_FORMAT_R8G8B8A8_UNORM = sampled storage color depth blit-src blit-dst filter-linear transfer-dst
+# external_memory_host
+external_memory_host = present
+min_imported_host_pointer_alignment = 4096
+host_pointer.4096 = 0x00000006
+host_pointer.65536 = 0x00000006
+unaligned_rejected = true
+largest_importable = none
+# exec_pages
+exec_pages = denied
+exec_pages_errno = 13
+# pagesize
+pagesize = 4096
+# verdict
+zero_copy = ok
+bc_textures = ok
+guest_upload_cost = none
+pipeline_cache_offline = ok
+mirror_clamp = ok
