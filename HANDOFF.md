@@ -6,14 +6,13 @@ design lives in `dm/gfx/vk/address_space.md` and `docs/reference/android.md`, an
 in `dm/gfx/vk/engine_smoke/opcode_map.txt` and `payload_mismatch.txt`. This file says **where the
 work stands, what is broken, what to do next, and how to run it**.
 
-The repository points to remote `origin git@github.com:cadocruz/nxdroid.git`.
-The repository is initialized with a single commit on `main`; the working tree carries the uncommitted
-work of the host bring-up (§8 items 4, 4a, 4b), the `P6` viewport work and the engine rounds F to I (§7),
-and a rewritten `README.md`, to be committed with proper descriptive messages following repository
-conventions. Nothing has been committed or pushed. The repository-local git identity is
-`Ricardo A. F. da Cruz <7233682+cadocruz@users.noreply.github.com>` (`.git/config`; the global one is
-untouched). `AGENTS.md` still says to commit as `seedds`; that command-line override would ignore the local
-identity, and the rule goes with the Apple removal (§8 item 10).
+The repository's remote is `origin https://github.com/cadocruz/nxdroid.git`. `main` holds three commits,
+all pushed (`origin/main` is at the last): `8e050e9` (initial), `f7e190d` (the host bring-up, §8 items 4,
+4a, 4b, the `P6` viewport work and engine rounds F to I, §7, and the rewritten `README.md`) and `6dc397b`
+(this file). The two later commits were made outside the coordinating session, with the repository-local
+identity `Ricardo A. F. da Cruz <7233682+cadocruz@users.noreply.github.com>` (`.git/config`; the global one
+is untouched) and Portuguese messages. `AGENTS.md` asks for the `seedds` identity and English text; that
+rule goes with the Apple removal (§8 item 10).
 
 **Status at this cut:** all the work is code, read and checked statically on a Windows machine (gcc
 `-fsyntax-only` with shims, the generated-report gates, scratch mutation tests). Nothing has been built with
@@ -421,6 +420,68 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     and check `dm/tools/tests/test_docs.py` (links, anchors, notes and table rows) afterwards. The
     `android_audit` baseline is the checklist: it should shrink to 0 as this lands. The git history
     (`8e050e9`) keeps everything removed.
+11. **Independent audit follow-ups** (audit of `f7e190d` / `6dc397b`; a dev pass was running at the 17:15
+    cut, so check `git diff` for what landed before redoing any of it). Each item is to be verified
+    against the code first, then fixed:
+    - `docs/reference/android.md` stale lines: "not wired into any build" (line ~3), "Three rows carry a
+      pending adaptation" (~47; the manifest has 11 adapted rows), "Fix: none here" for the 27 `mtl_*`
+      entry points (~92), and the line that calls the ~60 Apple APIs expected compile errors (~120;
+      item 4 says they are behind `port.h`, with no NDK compile yet). Sweep the file, README and §4 / §8
+      for other claims later rounds made false.
+    - `pipeline_memo_source_test.py` does not catch removing the lower-left viewport flip
+      (`origin_ll` in `xbg_game.cpp` `draw()`) nor the `need(vpn==1 || (multiViewport && vpn <=
+      maxViewports))` gate: add structural assertions, prove them on scratch copies, update the
+      test's vendor row (LF sha256, by hand). **[DONE]** both assertions added (plus: the draw reads
+      no origin atomic, the companion ViewportIndex gate); 7 scratch mutations (flip removed /
+      commented / `if(false)`, gate removed / commented / `vpn<=16`, draw reading the atomic) all fail
+      it, the current file passes; row updated. §7's mutation count (33) not yet updated: 40 now.
+    - `xbg_game.cpp` ~4116: `VkPhysicalDeviceVulkan12Features` is chained by the loader's
+      `vkEnumerateInstanceVersion`, not the created instance's `apiVersion`: a 1.1 instance on a 1.2
+      loader (the desktop smoke harness) gets a 1.2 struct. Use the instance's version. **[DONE, not
+      compiled]** `xbg_game_config.instance_api_version` (new last field; `vulkan_present.cpp` and
+      `smoke.c` fill it), used here and in the mirror-clamp setter's 1.2 query. Open: line ~4170
+      (`format_feature_flags2` from the device's 1.3 alone) is the same class, left unchanged. The
+      g++ `-fsyntax-only` re-run did not happen (the scratch Vulkan shim lacks `vk_video/`).
+    - Window origin (`origin_ll` / `queue_origin_ll`) is read at draw time on the worker thread;
+      `nvn_mtl.m` captures the queue origin at queue creation. Trace whether a host-side change can
+      reach draws of an already recorded submission; if so capture it per submission. **[DONE, not
+      compiled]** Traced: no worker thread translates (`gfx_async` is hard-wired false, `xbg_submit`
+      translates on the submitting thread under `g_sub_mu`), so a finished submission is out of reach;
+      but `nvn_vk.c`'s device-origin setter re-sent a possibly stale queue origin (lost update against
+      a concurrent submit), real. Fixed: separate engine setters (`xbg_game_set_window_origin` /
+      `xbg_game_set_queue_origin`), origins captured per submission in `xbg_submit` (`sub_origin`,
+      also into the `gfx_async` job), `PipeMemoKey.origin` from it. `android.md` round-F entry still
+      names the old two-argument setter: to update.
+    - Wording: the rewriter's Apple output is not byte-identical in `build_src.sha256` (it holds the
+      rewriter's own hash, so `build_ipa_from_nsp.py` re-runs it once); the patched image, gates and
+      fixups are unchanged. State that exactly in item 4a and `android.md`.
+    - **First-run blocker, not only a platform limit:** `dm_vm_alias` always fails on bionic
+      (`port_android.c`), so NVN virtual pools (`hle_nvn.c` `vpool_map`) draw from unmapped memory
+      and the write watch is off until a memfd-backed guest block exists. Any game that maps
+      physical into virtual pools cannot render on Android until then.
+    - Process: the two commits do not follow `AGENTS.md` (identity `seedds`, English messages, no
+      `regress.py` report); moot once item 10 rewrites `AGENTS.md`.
+    - **Left open at the 17:15 cut** (status then: the three code items above are ticked, the two docs
+      items are not started):
+      1. The edits to `xbg_game.cpp`, `xbg_game.h`, `nvn_vk.c`, `vulkan_present.cpp` and
+         `engine_smoke/smoke.c` were read, **not compiled**: the scratch Vulkan shim lacked
+         `vk_video/vulkan_video_codec_h264std.h`. Re-run `g++ -fsyntax-only` with a complete shim (or on
+         the NDK) before trusting them. `xbg_game_config` gained `instance_api_version` as its last
+         field (the engine_smoke README's measured size 320 is now 328; the harness was not re-run).
+      2. Not re-run after the edits: `undef_scan`, `docs_symptoms --check`, `test_thread_slots`,
+         `test_android_undef_scan`, `test_android_audit`, `test_lint_python`.
+      3. §7 says the memo test catches 33 mutations; the honest figure is 40 (7 more: the flip and the
+         `multiViewport` gate removed / commented / weakened, the draw reading the origin atomic).
+      4. `android.md` ~113 (round-F entry) still names the old two-argument `xbg_game_set_window_origin`;
+         there are now two setters, `xbg_game_set_window_origin` and `xbg_game_set_queue_origin`, and
+         `xbg_submit` captures both per submission into `sub_origin` (a real race existed in `nvn_vk.c`:
+         the device-origin setter re-sent a stale queue origin; there is no translation worker, `gfx_async`
+         is false).
+      5. `xbg_game.cpp` ~4170 `format_feature_flags2` has the same loader-vs-instance version bug as the
+         viewport query; left unchanged because it alters the format path on the S23 and needs a
+         measurement.
+      6. The two docs items (the four stale `android.md` lines plus the sweep; the byte-identical wording
+         and the `dm_vm_alias` first-run blocker wording in §8 items 4 / 9) are not started.
 
 ## 9. How to work in this tree
 

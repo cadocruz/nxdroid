@@ -41,8 +41,6 @@ for part in ['offsetof(State,viewport)-offsetof(State,attrib)', 'offsetof(State,
     assert part in key, part
 # The viewport count the pipeline declares comes from draw_viewports() and goes into the memo key with the other pipeline inputs.
 assert 'k.viewports=viewports;' in source and 'vp.viewportCount=vp.scissorCount=vpn;' in source
-# The queue's raster origin decides rs.frontFace, so it is in the memo key too
-assert 'k.origin=uint32_t(queue_origin_ll.load(' in source and 'queue_origin_ll.load(std::memory_order_relaxed)!=0))?VK_FRONT_FACE_COUNTER_CLOCKWISE' in source
 # The one-line style hides a whole statement sequence behind a // comment appended mid-line (a frontFace edit once swallowed rs.lineWidth,
 # depthBiasEnable and depthBiasConstantFactor): every rasterization assignment the draw's pipeline needs is in code, not in a comment, and no
 # line comment in the file is followed by what reads as code (a `;` and then a `name.field=` or `name=`).
@@ -87,6 +85,31 @@ STATEMENT = re.compile(r';\s*(?:(?:[A-Za-z_][\w:<>*&]*\s+){0,3}[A-Za-z_][\w:]*\s
 swallowed = [(n, comment.strip()) for n, (line, comment) in enumerate(zip(code.split('\n'), comments.split('\n')), 1)
              if line.strip() and comment.strip() and STATEMENT.search(comment)]   # a comment on a line that also holds code, not a comment line
 assert not swallowed, ('a comment is followed by what reads as code', swallowed)
+# Window origins: captured per submission when the host hands it over (xbg_submit -> sub_origin), so a later host call never reaches a submission
+# already handed over; the draw reads no origin atomic. The queue's raster origin decides rs.frontFace and is in the memo key; the device origin
+# flips every viewport the draw sets, after the viewport is built and before it is bounds-checked and set.
+submit = balanced(code, code.index('extern "C" void xbg_submit(int n,const uint64_t *handles){'))
+assert code.count('origin_ll.load(') == 2 and submit.count('origin_ll.load(') == 2, 'the origin atomics are read only where xbg_submit captures them'
+assert 'const SubmitOrigin origin{origin_ll.load()!=0,queue_origin_ll.load()!=0};' in submit
+assert submit.count('xbg_submit_now(n,handles,origin);') == 1 and submit.count('xbg_submit_now(int(list.size()),list.data(),origin);') == 1
+assert 'static void xbg_submit_now(int n,const uint64_t *handles,SubmitOrigin origin){std::lock_guard<std::recursive_mutex> lock(mutex);sub_origin=origin;' in code
+assert code.count('sub_origin=') == 1, 'sub_origin is written only by xbg_submit_now'
+assert 'k.origin=uint32_t(sub_origin.queue_ll);' in code
+assert 'rs.frontFace=((state.poly.front!=0)!=sub_origin.queue_ll)?VK_FRONT_FACE_COUNTER_CLOCKWISE:VK_FRONT_FACE_CLOCKWISE;' in draw_code
+viewport_loop = balanced(code, code.index('for(uint32_t i=0;i<vpn;i++){VkViewport &viewport=viewports[i];'))
+FLIP = 'if(sub_origin.device_ll){viewport.y+=viewport.height;viewport.height=-viewport.height;}'
+assert viewport_loop.count(FLIP) == 1, ('lower-left window origin: every viewport is flipped about its centre', FLIP)
+assert viewport_loop.index('xbg_nvn_viewport(&viewport,') < viewport_loop.index(FLIP) < viewport_loop.index('need(viewport.width<='), \
+    'the origin flip comes after the viewport is built and before its bounds check'
+assert code.index(viewport_loop) + len(viewport_loop) < code.index('vkCmdSetViewport(c.command,0,vpn,viewports);'), 'the flipped viewports are the ones set'
+# The multi-viewport gates: a draw that declares more than one viewport needs multiViewport and at most maxViewports, and a ViewportIndex written
+# by a vertex or tessellation stage needs shaderOutputViewportIndex enabled; both before the pipeline declares the count.
+for gate in ['need(vpn==1 || (cfg.enabled_core.multiViewport && vpn<=properties.limits.maxViewports),"Multi-viewport draw needs the multiViewport feature");',
+             'need(vpn==1 || s==state.shader[3] || viewport_index_enabled,"ViewportIndex from a vertex or tessellation stage needs shaderOutputViewportIndex '
+             'enabled at device creation (xbg_game_set_viewport_features)");']:
+    assert code.count(gate) == 1 and gate in draw_code, ('multi-viewport gate', gate[:60])
+    assert draw_code.index('const uint32_t vpn=draw_viewports();') < draw_code.index(gate) < draw_code.index('vp.viewportCount=vp.scissorCount=vpn;'), \
+        ('multi-viewport gate before the pipeline declares the count', gate[:60])
 # OP_RENDER_COND (nvn_mtl.m rc_value): a pending timestamp report at exactly a counter field's address makes that field known 0; any other pending
 # report or writeback over it keeps it unknown (drawn); only then is the field read from memory. Reverting to "any pending report is unknown" or to
 # a direct read fails here.
@@ -181,4 +204,5 @@ assert 'shaders.erase' not in source and source.count('shaders.clear()') == 1
 assert 'render_pass_cache.erase' not in source and 'layout_cache.erase' not in source
 assert '!ab_off("pipememo")' in source and '"/gfx-pipe-memo"' in source and 'pipe_memo_valid=false;if(m)' in source
 print('PASS: %d actual State fields, memo key slices, clear/evict/shutdown invalidation, opt-in/A-B source wiring, no code in comments, '
-      'render-condition pending check and guards, counter types, report paths and zero counter, and restart mask; not a native or GPU test' % len(expected))
+      'per-submission window origins and the viewport flip, multi-viewport gates, render-condition pending check and guards, counter types, '
+      'report paths and zero counter, and restart mask; not a native or GPU test' % len(expected))

@@ -169,11 +169,14 @@ void mtl_queue_forget(uint64_t serial) { (void)serial; }
 static _Atomic int g_depth_zero, g_depth_said;
 void mtl_set_depth_zero(int on) { atomic_store(&g_depth_zero, on != 0); }
 static void vk_depth_mode_check(void) { if (!atomic_load(&g_depth_zero) && !atomic_exchange(&g_depth_said, 1)) LOG("[RED] NVN depth mode near=-w (GL) kept by the game: the Vulkan replay has no near=-w vertex entry point (nvn_mtl.m entry_z), depth is mapped as near=0; not implemented"); }
-// NVN window origin: the engine flips the viewports and the winding (xbg_game_set_window_origin), the front end flips the window image at present
-// (vulkan_present.cpp reads dm_vk_present_flip), as nvn_mtl.m does for its lower-left origin.
-static _Atomic int g_origin_ll, g_queue_origin_ll;
-void mtl_set_origin_lower_left(int on) { atomic_store(&g_origin_ll, on != 0); xbg_game_set_window_origin(on != 0, atomic_load(&g_queue_origin_ll)); }
-void mtl_set_queue_origin_lower_left(int on) { atomic_store(&g_queue_origin_ll, on != 0); xbg_game_set_window_origin(atomic_load(&g_origin_ll), on != 0); }
+// NVN window origin: the engine flips the viewports (xbg_game_set_window_origin) and the winding (xbg_game_set_queue_origin), the front end flips the
+// window image at present (vulkan_present.cpp reads dm_vk_present_flip), as nvn_mtl.m does for its lower-left origin. Each setter passes on only its own
+// value: hle_nvn.c sets the device origin from any guest thread without the submit lock and the queue origin under it before each submission, so a
+// setter that also re-sent the other value could put back a stale queue origin over the one a concurrent submit had just selected. The engine captures
+// both per submission (xbg_game.cpp sub_origin).
+static _Atomic int g_origin_ll;
+void mtl_set_origin_lower_left(int on) { atomic_store(&g_origin_ll, on != 0); xbg_game_set_window_origin(on != 0); }
+void mtl_set_queue_origin_lower_left(int on) { xbg_game_set_queue_origin(on != 0); }
 int dm_vk_present_flip(void) { return atomic_load(&g_origin_ll); }
 uint64_t mtl_snap_acquire_wait(void) { return 0; }
 int mtl_snap_on(void) { return 0; }

@@ -179,6 +179,7 @@ int main(void) {
     config.present = on_present;
     config.log = on_log;
     config.fatal = on_fatal;
+    config.instance_api_version = app.apiVersion;   // 1.1: the engine then asks no 1.2 feature struct, whatever the loader is
 
     char error[512] = {0};
     printf("config: size=%u/%zu physical=%p device=%p queue=%p family=%u draw_params=%u timeout=%" PRIu64

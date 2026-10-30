@@ -385,9 +385,14 @@ bool viewport_index_supported=false,multiview_supported=false,viewport_index_ena
 // NVN's window origin (xbg_game_set_window_origin, from the host's mtl_set_origin_lower_left / mtl_set_queue_origin_lower_left): with the lower-left
 // (GL) origin the picture is stored bottom-up, as nvn_mtl.m does it, so every viewport is flipped about its centre at the draw and the front end
 // flips the window image at present; the raster flip that decides winding is queue state captured when the queue was created (queue_origin_ll),
-// independent of later device-origin changes (docs/reference/rendering.md, "Queue initialization captures the raster origin"). Atomics: the host
-// sets them between submissions, the replay reads them at every draw.
+// independent of later device-origin changes (docs/reference/rendering.md, "Queue initialization captures the raster origin"). The atomics are the
+// host's current values, each written by its own setter: the device origin from any guest thread (nvnDeviceSetWindowOriginMode takes no submit lock),
+// the queue origin under the host's submit lock before each submission.
 std::atomic<int> origin_ll{0},queue_origin_ll{0};
+// The two origins of the submission being translated, captured from the atomics by xbg_submit when the host hands the submission over: a later host
+// call (another thread's device-origin change, the next queue's submit) reaches the next submission, never one already handed over, whether it is
+// translated on the caller's thread or queued for the graphics thread (gfx_async). draw() reads only these, under the engine mutex.
+struct SubmitOrigin{bool device_ll=false,queue_ll=false;} sub_origin;
 void need(bool condition,const char *text) { if (!condition) xbg_fatalf("%s",text); }
 void check(VkResult r,const char *call) { if(r!=VK_SUCCESS) xbg_fatalf("%s failed: %d",call,int(r)); }
 #define VK(call) check((call),#call)
@@ -1900,14 +1905,14 @@ struct State {
 // the Android app sets to 1); marker gfx-pipe-memo = 1 / 0; A/B target pipememo.
 struct PipeMemoKey{const void *shader[5];const void *layout,*pass_def;VkRenderPass pass;VkPipelineLayout pipeline_layout;int32_t prim;uint32_t samples,rt_n,colors,depth,depth_format;
     uint32_t viewports;                                                          // VkPipelineViewportStateCreateInfo::viewportCount (draw_viewports)
-    uint32_t origin;                                                             // queue_origin_ll: it decides rs.frontFace
+    uint32_t origin;                                                             // sub_origin.queue_ll: it decides rs.frontFace
     uint8_t fixed[offsetof(State,viewport)-offsetof(State,attrib)];               // attrib, stream, blend, color, mask, ms, poly, ds
     uint8_t restart[offsetof(State,viewport)-offsetof(State,depth_clamp)];        // depth_clamp, rast_discard, restart on / index, viewport swizzles
     uint8_t stencil[offsetof(State,copy_stride)-offsetof(State,blend_color)];      // blend_color, bias, stencil compare / write / reference
     uint8_t tail[offsetof(State,count_samples)-offsetof(State,patch_size)];};      // patch_size, bounds
 PipeMemoKey pipe_memo_key,pipe_memo_next;VkPipeline pipe_memo_pipeline=VK_NULL_HANDLE;bool pipe_memo=false;uint64_t pipe_memo_hits=0,pipe_memo_misses=0;
 void pipe_memo_fill(PipeMemoKey &k,const void *layout,const void *pass_def,VkRenderPass pass,VkPipelineLayout pipeline_layout,int prim,VkSampleCountFlagBits samples,uint32_t colors,uint32_t viewports){
-    memset(&k,0,sizeof k);for(unsigned i=0;i<5;i++)k.shader[i]=state.shader[i];k.layout=layout;k.pass_def=pass_def;k.pass=pass;k.pipeline_layout=pipeline_layout;k.prim=prim;k.samples=uint32_t(samples);k.viewports=viewports;k.origin=uint32_t(queue_origin_ll.load(std::memory_order_relaxed));
+    memset(&k,0,sizeof k);for(unsigned i=0;i<5;i++)k.shader[i]=state.shader[i];k.layout=layout;k.pass_def=pass_def;k.pass=pass;k.pipeline_layout=pipeline_layout;k.prim=prim;k.samples=uint32_t(samples);k.viewports=viewports;k.origin=uint32_t(sub_origin.queue_ll);
     k.rt_n=uint32_t(state.rt.n);k.colors=colors;k.depth=state.rt.depth!=nullptr;k.depth_format=state.rt.depth?uint32_t(state.rt.depth->d.format):0;
     const uint8_t *b=reinterpret_cast<const uint8_t*>(&state);memcpy(k.fixed,b+offsetof(State,attrib),sizeof k.fixed);memcpy(k.restart,b+offsetof(State,depth_clamp),sizeof k.restart);memcpy(k.stencil,b+offsetof(State,blend_color),sizeof k.stencil);memcpy(k.tail,b+offsetof(State,patch_size),sizeof k.tail);
 }
@@ -3159,7 +3164,7 @@ bool first_draw_covers(const Pass &p,int prim,int first,int count,const p_draw_i
     if(state.bounds.enable){++noload_why[2];return false;}
     if(state.ms.a2c || state.poly.mode!=2 || p.samples!=VK_SAMPLE_COUNT_1_BIT){++noload_why[3];return false;}
     if(draw_viewports()>1){++noload_why[3];return false;}   // nvn_cover takes one viewport; a draw that selects among several keeps its load
-    {uint32_t sw;memcpy(&sw,state.vp_sw[0],4);if(sw || origin_ll.load(std::memory_order_relaxed) || queue_origin_ll.load(std::memory_order_relaxed)){++noload_why[3];return false;}}   // a swizzled viewport 0 or a lower-left origin (draw() flips the viewport, the queue origin the winding) keeps its load: the proof is not told about the flips
+    {uint32_t sw;memcpy(&sw,state.vp_sw[0],4);if(sw || sub_origin.device_ll || sub_origin.queue_ll){++noload_why[3];return false;}}   // a swizzled viewport 0 or a lower-left origin (draw() flips the viewport, the queue origin the winding) keeps its load: the proof is not told about the flips
     if((prim!=NVN_COVER_TRIANGLES && prim!=NVN_COVER_TRIANGLE_STRIP) || count<3 || count>64){++noload_why[4];return false;}
     va_st a;memcpy(&a,&state.attrib[vs->raster.pos_input],4);
     const VkFormat f=a.fmt?format(a.fmt):VK_FORMAT_UNDEFINED;const int nc=f==VK_FORMAT_R32G32_SFLOAT?2:f==VK_FORMAT_R32G32B32_SFLOAT?3:f==VK_FORMAT_R32G32B32A32_SFLOAT?4:0;
@@ -3264,7 +3269,7 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
      need(vpn==1 || s==state.shader[3] || viewport_index_enabled,"ViewportIndex from a vertex or tessellation stage needs shaderOutputViewportIndex enabled at device creation (xbg_game_set_viewport_features)");}
     VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};vp.viewportCount=vp.scissorCount=vpn;
     // rs.frontFace: NVN's raster flip is the queue's captured origin, as nvn_mtl.m decides winding (the device origin flips the viewport instead)
-    VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};rs.depthClampEnable=state.depth_clamp!=0;need(!rs.depthClampEnable || cfg.enabled_core.depthClamp,"Depth clamp disabled");rs.rasterizerDiscardEnable=state.rast_discard!=0;rs.polygonMode=state.poly.mode==2?VK_POLYGON_MODE_FILL:state.poly.mode==1?VK_POLYGON_MODE_LINE:VK_POLYGON_MODE_POINT;need(rs.polygonMode==VK_POLYGON_MODE_FILL || cfg.enabled_core.fillModeNonSolid,"Non-solid polygon mode disabled");rs.cullMode=state.poly.cull;rs.frontFace=((state.poly.front!=0)!=(queue_origin_ll.load(std::memory_order_relaxed)!=0))?VK_FRONT_FACE_COUNTER_CLOCKWISE:VK_FRONT_FACE_CLOCKWISE;rs.lineWidth=1;rs.depthBiasEnable=state.poly.offset_en!=0;rs.depthBiasConstantFactor=state.bias[1]*(state.rt.depth && state.rt.depth->d.format==0x32 && depth16_as_d24?256.0f:1.0f);
+    VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};rs.depthClampEnable=state.depth_clamp!=0;need(!rs.depthClampEnable || cfg.enabled_core.depthClamp,"Depth clamp disabled");rs.rasterizerDiscardEnable=state.rast_discard!=0;rs.polygonMode=state.poly.mode==2?VK_POLYGON_MODE_FILL:state.poly.mode==1?VK_POLYGON_MODE_LINE:VK_POLYGON_MODE_POINT;need(rs.polygonMode==VK_POLYGON_MODE_FILL || cfg.enabled_core.fillModeNonSolid,"Non-solid polygon mode disabled");rs.cullMode=state.poly.cull;rs.frontFace=((state.poly.front!=0)!=sub_origin.queue_ll)?VK_FRONT_FACE_COUNTER_CLOCKWISE:VK_FRONT_FACE_CLOCKWISE;rs.lineWidth=1;rs.depthBiasEnable=state.poly.offset_en!=0;rs.depthBiasConstantFactor=state.bias[1]*(state.rt.depth && state.rt.depth->d.format==0x32 && depth16_as_d24?256.0f:1.0f);
     rs.depthBiasSlopeFactor=state.bias[0];rs.depthBiasClamp=state.bias[2];need(!rs.depthBiasClamp || cfg.enabled_core.depthBiasClamp,"Depth bias clamp disabled");   // constant bias units: 2^-16 for D16, 2^-24 for the X8_D24 stand-in; slope and clamp do not depend on the format
     VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};ms.rasterizationSamples=p.samples;ms.alphaToCoverageEnable=state.ms.a2c;need(!state.ms.sl_en,"Custom sample locations unsupported");need(!state.ms.samples || state.ms.samples==uint32_t(p.samples),"NVN sample count differs from attachments");need(p.samples==VK_SAMPLE_COUNT_1_BIT || state.ms.enable,"Disabled multisampling on multisample target needs coverage emulation");
     VkPipelineDepthStencilStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};ds.depthTestEnable=state.ds.dt;ds.depthWriteEnable=state.ds.dw;ds.depthCompareOp=VkCompareOp(state.ds.df-1);ds.stencilTestEnable=state.ds.st;ds.front=stencil(false);ds.back=stencil(true);ds.depthBoundsTestEnable=state.bounds.enable;ds.minDepthBounds=state.bounds.minimum;ds.maxDepthBounds=state.bounds.maximum;need(!ds.depthBoundsTestEnable || cfg.enabled_core.depthBounds,"Depth bounds feature disabled");
@@ -3337,7 +3342,7 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
         // Viewport swizzle (OP_VP_SWIZZLE, XOR the identity): NEGATIVE_Y negates clip y, the same as the viewport flipped about its centre, as nvn_mtl.m
         // applies it; facing is decided after the viewport transform on the GPU, so the winding stays. Other swizzles (axis exchanges, negated x / z / w)
         // are no viewport change: one red line, drawn unswizzled.
-        if(origin_ll.load(std::memory_order_relaxed)){viewport.y+=viewport.height;viewport.height=-viewport.height;}   // lower-left window origin: the picture is stored bottom-up (origin_ll)
+        if(sub_origin.device_ll){viewport.y+=viewport.height;viewport.height=-viewport.height;}   // lower-left window origin: the picture is stored bottom-up (origin_ll, as captured for this submission)
         {uint32_t sw;memcpy(&sw,state.vp_sw[i],4);if(sw==0x100){viewport.y+=viewport.height;viewport.height=-viewport.height;}
          else if(sw){static unsigned notes=0;if(notes++<1)xbg_logf("[RED] NVN viewport %u swizzle %d,%d,%d,%d not implemented (drawn unswizzled)",i,state.vp_sw[i][0],state.vp_sw[i][1]^2,state.vp_sw[i][2]^4,state.vp_sw[i][3]^6);}}
         need(viewport.width<=properties.limits.maxViewportDimensions[0] && fabsf(viewport.height)<=properties.limits.maxViewportDimensions[1] && viewport.x>=properties.limits.viewportBoundsRange[0] && viewport.x+viewport.width<=properties.limits.viewportBoundsRange[1] && viewport.y>=properties.limits.viewportBoundsRange[0] && viewport.y<=properties.limits.viewportBoundsRange[1] && viewport.y+viewport.height>=properties.limits.viewportBoundsRange[0] && viewport.y+viewport.height<=properties.limits.viewportBoundsRange[1],"NVN viewport exceeds device bounds");}
@@ -4113,10 +4118,10 @@ extern "C" int xbg_game_initialize(const xbg_game_config *c,char *error,size_t b
     for(auto &sl:slots)sl=Slot{};slot_index=0;pass_prof_enabled=false;pass_prof_next=300;pass_prof_period=600;pass_prof_until=UINT64_MAX;pass_prof_frame=UINT64_MAX;pass_prof_draws=0;pass_prof_queries=pass_prof_slots=pass_prof_skipped_slots=0;perf=Perf{};for(auto &c:perf_timing_before)c=XbgCpuTiming::Counter{};static_arena.cached=false;support_static.clear();format_property_cache.clear();for(auto &k:format_flat_known)k=false;
     VkPhysicalDeviceShaderDrawParametersFeatures draw_parameters{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES};VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};features.pNext=&draw_parameters;vkGetPhysicalDeviceFeatures2(cfg.physical,&features);if(cfg.enabled_shader_draw_parameters && !draw_parameters.shaderDrawParameters){if(error&&bytes)snprintf(error,bytes,"shaderDrawParameters unsupported");return -1;}
     {VkPhysicalDeviceMultiviewFeatures mv{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES};VkPhysicalDeviceVulkan12Features v12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};f2.pNext=&mv;
-     // The 1.2 feature struct is asked for only when the loader and the device are 1.2: the front end (dm/android/vulkan_present.cpp) creates the instance at
-     // 1.2 exactly when the loader has it (vkEnumerateInstanceVersion), so this is the instance version it chose; the engine itself is handed no instance.
-     // Validation target: a front end that asks 1.1 on a 1.2 loader would make this query a 1.2 struct under a 1.1 instance.
-     uint32_t loader_api=VK_API_VERSION_1_0;if(vkEnumerateInstanceVersion(&loader_api)!=VK_SUCCESS)loader_api=VK_API_VERSION_1_0;const bool api12=loader_api>=VK_API_VERSION_1_2 && properties.apiVersion>=VK_API_VERSION_1_2;
+     // The 1.2 feature struct is asked for only when the instance and the device are both 1.2: the engine is handed no instance, so the caller states the
+     // version it created it with (cfg.instance_api_version: dm/android/vulkan_present.cpp asks 1.2 when the loader has it, the desktop smoke harness 1.1).
+     // The loader's own version (vkEnumerateInstanceVersion) is not the instance's: a 1.1 instance on a 1.2 loader would get a 1.2 struct here.
+     const bool api12=cfg.instance_api_version>=VK_API_VERSION_1_2 && properties.apiVersion>=VK_API_VERSION_1_2;
      mv.pNext=api12?&v12:nullptr;vkGetPhysicalDeviceFeatures2(cfg.physical,&f2);
      // The same two routes the front end takes at vkCreateDevice: the 1.2 features (both, as the front end enables both) on a 1.2 device under a 1.2 instance,
      // or the extension when the device lists it; so what the host reports enabled is always something seen here.
@@ -4195,16 +4200,18 @@ extern "C" int xbg_game_set_sampler_mirror_clamp_to_edge(VkBool32 enabled){
         uint32_t count=0;VkResult result=vkEnumerateDeviceExtensionProperties(cfg.physical,nullptr,&count,nullptr);if(result!=VK_SUCCESS)return result;
         std::vector<VkExtensionProperties> extensions(count);result=vkEnumerateDeviceExtensionProperties(cfg.physical,nullptr,&count,extensions.data());if(result!=VK_SUCCESS)return result;
         bool supported=false;for(const auto &e:extensions)if(!strcmp(e.extensionName,VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME))supported=true;
-        if(!supported && properties.apiVersion>=VK_API_VERSION_1_2){VkPhysicalDeviceVulkan12Features core{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};VkPhysicalDeviceFeatures2 f{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};f.pNext=&core;vkGetPhysicalDeviceFeatures2(cfg.physical,&f);supported=core.samplerMirrorClampToEdge;}
+        // The 1.2 struct only when the instance is 1.2 too (cfg.instance_api_version), as for the viewport features at initialization
+        if(!supported && cfg.instance_api_version>=VK_API_VERSION_1_2 && properties.apiVersion>=VK_API_VERSION_1_2){VkPhysicalDeviceVulkan12Features core{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};VkPhysicalDeviceFeatures2 f{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};f.pNext=&core;vkGetPhysicalDeviceFeatures2(cfg.physical,&f);supported=core.samplerMirrorClampToEdge;}
         if(!supported)return -2;
     }
     sampler_mirror_clamp_enabled=enabled;xbg_logf("NVN sampler mirror-clamp-to-edge actualEnabled=%u",enabled);return 0;
 }
-// NVN's window origin, from the host at any time between submissions (the replay reads the atomics at the draw): see origin_ll above
-extern "C" void xbg_game_set_window_origin(VkBool32 lower_left,VkBool32 queue_lower_left){
+// NVN's window origins, from the host (see origin_ll above): each setter writes only its own value, so a device-origin change on one guest thread cannot
+// overwrite the queue origin another thread's submit has just selected; xbg_submit captures both for the submission it is handed (sub_origin).
+extern "C" void xbg_game_set_window_origin(VkBool32 lower_left){
     if(origin_ll.exchange(lower_left!=0)!=(lower_left!=0))xbg_logf("NVN window origin: %s",lower_left?"lower left (GL: viewports flipped, the window image stored bottom-up and flipped at present)":"upper left");
-    queue_origin_ll.store(queue_lower_left!=0);
 }
+extern "C" void xbg_game_set_queue_origin(VkBool32 lower_left){queue_origin_ll.store(lower_left!=0);}
 // The viewport features the host enabled at vkCreateDevice (the mirror-clamp setter's shape): shaderOutputViewportIndex (with
 // shaderOutputLayer, or VK_EXT_shader_viewport_index_layer) lets a vertex or tessellation stage write ViewportIndex, multiview
 // is reserved for the viewport-mask fan-out. Before the first shader load: validate_capabilities reads them.
@@ -4299,7 +4306,7 @@ extern "C" void xbg_copy_commands(cmd_t *command,int count,const uint64_t *handl
     for(size_t offset=0;offset<bytes;){op_hdr h;memcpy(&h,snapshot.data()+offset,8);xbg_record_command(command,snapshot.data()+offset,h.size);offset+=h.size;}
 }
 extern "C" void xbg_invoke_command_callback(cmd_t *c,size_t n){uint64_t args[]={uint64_t(c),NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_COMMAND_MEMORY,n,uint64_t(c->cb_data)};if(cfg.invoke_guest)cfg.invoke_guest(cfg.userdata,reinterpret_cast<void*>(c->cb),args,4);else c->cb(reinterpret_cast<NVNcommandBuffer*>(c),NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_COMMAND_MEMORY,n,c->cb_data);}
-static void xbg_submit_now(int n,const uint64_t *handles){std::lock_guard<std::recursive_mutex> lock(mutex);
+static void xbg_submit_now(int n,const uint64_t *handles,SubmitOrigin origin){std::lock_guard<std::recursive_mutex> lock(mutex);sub_origin=origin;
     if(deferred_live_profile && !timing.top){uint64_t current=stats.presents.load();timing=XbgCpuTiming(timing_clock);timing_first=current+2;timing_last=timing_first+deferred_live_profile-1;deferred_live_profile=0;}
    TimingRoot timing_root;CPU_SCOPE(Other);need(initialized && !failed,"Game Vulkan backend not initialized/healthy");uint64_t begin=timing_clock();snapshot_reset();uint64_t budget=0;for(int i=0;i<n;i++)execute(reinterpret_cast<const uint8_t*>(handles[i]),0,budget);++stats.submissions;++submitted;if(sync_mode)complete_all();perf.submit_cpu_ns+=timing_clock()-begin;}
 extern "C" uint64_t xbg_legacy_last_fence(){return gfx_async?gfx_enqueued.load():[]{std::lock_guard<std::recursive_mutex> lock(mutex);return submitted;}();}
@@ -4403,9 +4410,11 @@ extern "C" void xbg_legacy_tex_release(tex_t *t){if(!t)return;if(!gfx_async){xbg
 extern "C" void xbg_legacy_prog_release(prog_t *p){if(!p)return;if(!gfx_async){xbg_legacy_prog_release_now(p);return;}prog_t copy=*p;gfx_enqueue([copy]()mutable{xbg_legacy_prog_release_now(&copy);});}
 extern "C" void xbg_texture_invalidate(const tex_t *t){if(!t)return;if(!gfx_async){xbg_texture_invalidate_now(t);return;}tex_t copy=*t;gfx_enqueue([copy]{xbg_texture_invalidate_now(&copy);});}
 extern "C" void xbg_submit(int n,const uint64_t *handles){
-    if(!gfx_async){xbg_submit_now(n,handles);return;}
+    // The window origins this submission is translated with are the host's at hand-over (sub_origin), not at the draw
+    const SubmitOrigin origin{origin_ll.load()!=0,queue_origin_ll.load()!=0};
+    if(!gfx_async){xbg_submit_now(n,handles,origin);return;}
     std::vector<uint64_t> list(handles,handles+n);++gfx_enqueued;
-    gfx_enqueue([list]{xbg_submit_now(int(list.size()),list.data());gfx_executed.store(submitted);});}
+    gfx_enqueue([list,origin]{xbg_submit_now(int(list.size()),list.data(),origin);gfx_executed.store(submitted);});}
 extern "C" void xbg_present_texture(const win_t *window,const tex_t *texture){
     if(!gfx_async){xbg_present_texture_now(window,texture);return;}
     // At most two frames queued ahead of the graphics thread.

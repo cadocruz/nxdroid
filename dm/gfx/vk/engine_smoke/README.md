@@ -69,7 +69,10 @@ The harness creates the instance and device itself (Vulkan 1.1, one graphics+com
 `xbg_game_initialize`, one entry point through `xbg_nvn_get_proc_address`, `xbg_game_get_stats`,
 `xbg_game_set_sampler_mirror_clamp_to_edge(VK_FALSE)` and `xbg_game_shutdown`. There is no surface,
 no window and no guest. `present` counts calls (the run makes none), `log` prints the engine's own
-`NVN ...` lines, `fatal` exits 97 rather than returning.
+`NVN ...` lines, `fatal` exits 97 rather than returning. It states its instance version in
+`xbg_game_config.instance_api_version` (1.1), so the engine asks the device no 1.2 feature struct even
+on a 1.2 loader; that field came after the run below, which printed `size=320/320` (328 with it on
+x86_64; not re-run).
 
 ## What it produced
 

@@ -32,6 +32,10 @@ typedef struct xbg_game_config {
     /* Called immediately before abort for unsupported called APIs/GPU errors.
      * May terminate/unwind the runtime. It must not return to guest execution. */
     void (*fatal)(void *userdata,const char *message);
+    /* The apiVersion the caller created its VkInstance with (VkApplicationInfo.apiVersion; 0 is 1.0). The engine is handed no
+     * instance, and a physical-device query chains a core 1.2 structure only when the instance and the device are both 1.2:
+     * the loader's version (vkEnumerateInstanceVersion) can be higher than the instance's. */
+    uint32_t instance_api_version;
 } xbg_game_config;
 
 int xbg_game_initialize(const xbg_game_config *config,char *error,size_t error_bytes);
@@ -49,12 +53,15 @@ int xbg_game_set_sampler_mirror_clamp_to_edge(VkBool32 enabled);
  * ViewportIndex is then refused at load. Returns 0, -1 (bad value or too late), -2 (the
  * device lacks it). Existing config ABI intact. */
 int xbg_game_set_viewport_features(VkBool32 shader_output_viewport_index,VkBool32 multiview);
-/* NVN's window origin (nvnDeviceSetWindowOriginMode; the host's mtl_set_origin_lower_left /
- * mtl_set_queue_origin_lower_left). lower_left: the picture is stored bottom-up, so every
- * viewport is flipped about its centre and the host flips the window image at present.
- * queue_lower_left: the raster flip captured when the NVN queue was created, which decides
- * the front face. Any time between submissions; the replay reads them at each draw. */
-void xbg_game_set_window_origin(VkBool32 lower_left,VkBool32 queue_lower_left);
+/* NVN's window origin (nvnDeviceSetWindowOriginMode; the host's mtl_set_origin_lower_left),
+ * from any thread at any time. lower_left: the picture is stored bottom-up, so every
+ * viewport is flipped about its centre and the host flips the window image at present. */
+void xbg_game_set_window_origin(VkBool32 lower_left);
+/* The raster flip captured when the NVN queue about to submit was created (the host's
+ * mtl_set_queue_origin_lower_left, under its submit lock before each submission), which
+ * decides the front face. xbg_submit captures both origins for the submission it is
+ * handed: a later call reaches the next submission, never one already handed over. */
+void xbg_game_set_queue_origin(VkBool32 lower_left);
 /* CPU访问事件前解析覆盖该地址的延后SignalEvent。
  * Resolve deferred SignalEvents covering this address before CPU event access. */
 void xbg_game_event_read(const void *addr);

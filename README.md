@@ -19,7 +19,7 @@ Android is the only target. The Mac and iOS builds are not kept: the Apple code 
 The build is `dm/android/CMakeLists.txt`:
 
 - **One game per build.** `-DGAME=<title id>` picks the profile in `dm/games/<id>/`, as `GAME=` does for `make -C dm/host`. There is no default: without it the configure stops and lists the profiles. `DM_GAMES_DIR` points it at a profile outside the repository.
-- **Target.** `arm64-v8a` only, with `ANDROID_PLATFORM` 28 or later (the configure stops below it). The Android NDK is required; `dm/android/docker/` pins one build environment (NDK 29.0.14206865).
+- **Target.** `arm64-v8a` only, with `ANDROID_PLATFORM` 29 or later (the configure stops below it). The Android NDK is required; `dm/android/docker/` pins one build environment (NDK 29.0.14206865).
 - **Sources.** The host sources are read from `dm/host/Makefile`. The graphics layer is `dm/gfx/vulkan` in place of the Metal replay (`dm/gfx/nvn/nvn_mtl.m`), presented through `dm/android/vulkan_present.cpp`.
 - **Output.** The target is `dmhost`. The app shell (`jni_android.c`, the Java activity, touch input, Gradle) does not exist yet, so there is no APK.
 
