@@ -4172,7 +4172,7 @@ extern "C" int xbg_game_initialize(const xbg_game_config *c,char *error,size_t b
       xbg_logf("NVN background builds for skippable draws=%d (marker gfx-async-pipelines)",int(warm::async_on));}
      {uint32_t n=0;vkEnumerateDeviceExtensionProperties(cfg.physical,nullptr,&n,nullptr);std::vector<VkExtensionProperties> ext(n);vkEnumerateDeviceExtensionProperties(cfg.physical,nullptr,&n,ext.data());
       std::string list;for(auto &e:ext){list+=e.extensionName;list+=' ';}
-      format_feature_flags2=properties.apiVersion>=VK_API_VERSION_1_3;for(auto &e:ext)if(!strcmp(e.extensionName,VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME))format_feature_flags2=true;
+      format_feature_flags2=cfg.instance_api_version>=VK_API_VERSION_1_3 && properties.apiVersion>=VK_API_VERSION_1_3;for(auto &e:ext)if(!strcmp(e.extensionName,VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME))format_feature_flags2=true;
       xbg_logf("NVN format-feature-flags2=%d (formatless storage checks %s)",int(format_feature_flags2),format_feature_flags2?"per format":"by the pre-1.3 format list");
       capability_report();
       {const VkFormatProperties &d16=format_properties(VK_FORMAT_D16_UNORM),&d24=format_properties(VK_FORMAT_X8_D24_UNORM_PACK32);

@@ -12,7 +12,7 @@
 #   page addressing for adrp / add: sym@PAGE → sym, sym@PAGEOFF → :lo12:sym
 #   local labels: Lxxx defined in this file → .Lxxx (the ELF local label prefix)
 #   .cstring → read-only string section; .private_extern → .hidden; a non-executable stack note is appended at the end of the file
-import re, sys
+import os, re, sys
 
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src, encoding='utf-8').read()
@@ -28,4 +28,5 @@ for line in text.split('\n'):
     code = re.sub(r'^(\s*)\.private_extern\b', r'\1.hidden', code)
     out.append(code + sep + comment)
 out.append('    .section .note.GNU-stack,"",@progbits')
+os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
 open(dst, 'w', encoding='utf-8', newline='\n').write('\n'.join(out) + '\n')

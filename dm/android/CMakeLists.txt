@@ -161,7 +161,7 @@ target_include_directories(dmcore PUBLIC ${HOST} ${GAME_GEN} ${DM}/gfx/nvn/inclu
   ${DM}/third_party/stb_vorbis ${CMAKE_CURRENT_SOURCE_DIR}/compat/include ${CMAKE_CURRENT_SOURCE_DIR}/apple_stubs/include)
 # Same optimization level as the Makefile (-O1 -g); dm_android_compat.h force-included; -fno-strict-aliasing matches the host's habit of reading and
 # writing guest memory under Apple clang's default behaviour
-set(DM_CFLAGS -O1 -g -Wall -Wno-unused-function -fno-strict-aliasing -include ${CMAKE_CURRENT_SOURCE_DIR}/compat/include/dm_android_compat.h)
+set(DM_CFLAGS -O1 -g -Wall -Wno-unused-function -D_GNU_SOURCE -fno-strict-aliasing -include ${CMAKE_CURRENT_SOURCE_DIR}/compat/include/dm_android_compat.h)
 target_compile_options(dmcore PUBLIC $<$<COMPILE_LANGUAGE:C>:${DM_CFLAGS} -std=gnu17>)
 # The C++ side (vulkan_present.cpp): the same level and aliasing rule, without the compat force-include (it includes no host header)
 target_compile_options(dmcore PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-O1 -g -Wall -fno-strict-aliasing>)

@@ -66,9 +66,10 @@ typedef void *dm_qos_boost_t;   // NULL = no boost in effect
 //   block out of __reserved into tmp (NULL when the kernel left none). dm_uc_fault_write: whether a data abort was a write (the WnR bit, 6, of the ESR: Apple's __es.__esr;
 //   Linux's esr record in __reserved, 0 when the kernel left none).
 // dm_vm_region: the mapping that holds addr (start, length, PROT_* bits): 0, or -1 when nothing is mapped there (vm_region_64; /proc/self/maps on Linux).
-// dm_vm_alias: a second mapping of the same pages at to (NULL = anywhere): the pointer, or NULL with errno. Apple: vm_remap with copy = FALSE. bionic: ENOTSUP, said once: an
-//   anonymous private mapping cannot be aliased on Linux (mremap duplicates nothing; only a shared memfd-backed object maps twice), and the guest block is not memfd-backed yet.
-//   Open: back the guest address space with a memfd (hle_svc.c) so that virtual pools (hle_nvn.c) and the write watch (probe.c) alias; until then those report [RED].
+// dm_guest_as_reserve / dm_guest_as_release: reserve and release the guest address space block. Apple: anonymous private mmap.
+//   Linux/Android: memfd_create + MAP_SHARED so that dm_vm_alias can duplicate physical page mappings.
+// dm_vm_alias: a second mapping of the same pages at to (NULL = anywhere): the pointer, or NULL with errno. Apple: vm_remap with copy = FALSE.
+//   Linux/Android: mmap from the guest block's memfd with MAP_SHARED.
 // dm_thread_rt_set / dm_thread_rt_live: the time-constraint (real-time) scheduling policy of this thread (Apple's THREAD_TIME_CONSTRAINT_POLICY: period and computation in ns;
 //   bionic: not available to an app, SCHED_FIFO needs CAP_SYS_NICE, said once; live is then 0).
 // dm_thread_sched: this thread's current priority, base priority and policy number as the platform counts them (Apple's THREAD_EXTENDED_INFO; Linux: nice, nice, sched policy).
@@ -168,6 +169,13 @@ static inline int dm_vm_region(uintptr_t addr, uintptr_t *start, size_t *len, in
     *start = at; *len = sz; *prot = (info.protection & VM_PROT_READ ? PROT_READ : 0) | (info.protection & VM_PROT_WRITE ? PROT_WRITE : 0) | (info.protection & VM_PROT_EXECUTE ? PROT_EXEC : 0);
     return 0;
 }
+static inline void *dm_guest_as_reserve(size_t reserve) {
+    void *p = mmap(NULL, reserve, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    return p == MAP_FAILED ? NULL : p;
+}
+static inline void dm_guest_as_release(void *as, size_t reserve) {
+    if (as) munmap(as, reserve);
+}
 static inline void *dm_vm_alias(void *to, const void *from, size_t size) {
     vm_address_t a = (vm_address_t)to; vm_prot_t cur = 0, max = 0;
     kern_return_t kr = vm_remap(mach_task_self(), &a, size, 0, to ? VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE : VM_FLAGS_ANYWHERE, mach_task_self(), (vm_address_t)from, FALSE, &cur, &max, VM_INHERIT_NONE);
@@ -214,6 +222,7 @@ static inline void *dm_heap_memalign(dm_heap_t *h, size_t align, size_t n) { ret
 static inline void *dm_heap_realloc(dm_heap_t *h, void *p, size_t n) { return malloc_zone_realloc((malloc_zone_t *)h, p, n); }
 static inline void dm_heap_free(dm_heap_t *h, void *p) { malloc_zone_free((malloc_zone_t *)h, p); }
 static inline size_t dm_heap_size(dm_heap_t *h, const void *p) { (void)h; return malloc_size(p); }
+static inline size_t dm_heap_good_size(size_t n) { return malloc_good_size(n); }
 static inline dm_sem_t dm_sem_new(long value) { return (dm_sem_t)dispatch_semaphore_create(value); }
 static inline void dm_sem_signal(dm_sem_t s) { dispatch_semaphore_signal((dispatch_semaphore_t)s); }
 static inline int dm_sem_wait(dm_sem_t s, int64_t timeout_ns) {   // 0 = taken, -1 = timed out; timeout_ns < 0 waits forever
@@ -261,6 +270,8 @@ arm_thread_state64_t *dm_uc_ss(ucontext_t *uc);
 const dm_neon_t *dm_uc_ns(ucontext_t *uc, dm_neon_t *tmp);
 int dm_uc_fault_write(ucontext_t *uc);
 int dm_vm_region(uintptr_t addr, uintptr_t *start, size_t *len, int *prot);
+void *dm_guest_as_reserve(size_t reserve);
+void dm_guest_as_release(void *as, size_t reserve);
 void *dm_vm_alias(void *to, const void *from, size_t size);
 int dm_thread_rt_set(uint64_t period_ns, uint64_t comp_ns);
 int dm_thread_rt_live(void);
@@ -274,6 +285,7 @@ void *dm_heap_memalign(dm_heap_t *h, size_t align, size_t n);
 void *dm_heap_realloc(dm_heap_t *h, void *p, size_t n);
 void dm_heap_free(dm_heap_t *h, void *p);
 size_t dm_heap_size(dm_heap_t *h, const void *p);
+static inline size_t dm_heap_good_size(size_t n) { return n; }
 dm_sem_t dm_sem_new(long value);
 void dm_sem_signal(dm_sem_t s);
 int dm_sem_wait(dm_sem_t s, int64_t timeout_ns);

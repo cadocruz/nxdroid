@@ -19,6 +19,7 @@
 // Fixed addresses: each row runs only on the main build it was found in (AGENTS.md)
 #include "hle.h"
 #include "port.h"   // dm_heap_*: a malloc zone of its own (Apple) or bionic's malloc; dm_vm_region
+#include <sys/mman.h>
 #include <stdatomic.h>
 
 // Slot layouts: which slots the host fills and which do nothing (up to 6; 0 ends the list); the others keep the guest's own functions
@@ -86,8 +87,8 @@ static void *m_Realloc(void *self, void *p, size_t n, uint32_t a) {
 }
 static void *m_TryRealloc(void *self, void *p, size_t n, uint32_t a) { (void)self; return realloc_aligned(p, n, a); }
 static void m_Free(void *self, void *p) { (void)self; release(p); }
-static size_t m_QuantizeSize(void *self, size_t n, uint32_t a) { (void)self; (void)a; return malloc_good_size(n); }
-static bool m_GetAllocationSize(void *self, void *p, size_t *out) { (void)self; if (!p) return false; *out = malloc_size(p); return true; }
+static size_t m_QuantizeSize(void *self, size_t n, uint32_t a) { (void)self; (void)a; return dm_heap_good_size(n); }
+static bool m_GetAllocationSize(void *self, void *p, size_t *out) { (void)self; if (!p) return false; *out = dm_heap_size(g_zone, p); return true; }
 static void m_Nothing(void *self) { (void)self; }   // Trim (its bool argument is ignored), the thread-local cache setup and teardown, DumpAllocatorStats
 static void *g_vt[NSLOT];
 static const char *g_what;

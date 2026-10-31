@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 // dm/host/port.h on bionic: the platform primitives the host names there, over dm/android/compat/ (which carries the Apple spellings: clonefile, CC_SHA256, the QoS class
 // values and their nice mapping) and POSIX. Built only into the Android host (dm/android/CMakeLists.txt ANDROID_SRCS); the Apple build has these inline in port.h.
 #include "compat/include/dm_android_compat.h"   // clonefile (dm/android/compat/clonefile.c); force-included by the CMake build as well
@@ -17,10 +18,35 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <android/api-level.h>          // android_get_device_api_level (a function from API 29, the build's floor)
 #include <unistd.h>
+
+#ifndef MFD_CLOEXEC
+#define MFD_CLOEXEC 0x0001U
+#endif
+
+#ifndef __NR_memfd_create
+#if defined(__aarch64__)
+#define __NR_memfd_create 279
+#elif defined(__x86_64__)
+#define __NR_memfd_create 319
+#elif defined(SYS_memfd_create)
+#define __NR_memfd_create SYS_memfd_create
+#endif
+#endif
+
+static inline int dm_memfd_create(const char *name, unsigned int flags) {
+#if defined(__NR_memfd_create)
+    return (int)syscall(__NR_memfd_create, name, flags);
+#elif defined(SYS_memfd_create)
+    return (int)syscall(SYS_memfd_create, name, flags);
+#else
+    return memfd_create(name, flags);
+#endif
+}
 
 _Static_assert(sizeof(CC_SHA256_CTX) <= sizeof(dm_sha256_t), "dm_sha256_t must hold compat's CC_SHA256_CTX");
 _Static_assert(_Alignof(CC_SHA256_CTX) <= _Alignof(dm_sha256_t), "dm_sha256_t must align compat's CC_SHA256_CTX");
@@ -245,10 +271,68 @@ int dm_vm_region(uintptr_t addr, uintptr_t *start, size_t *len, int *prot) {
     }
     fclose(f); return found;
 }
+// ---- Guest address space and aliasing (memfd-backed for dm_vm_alias) ----
+static int g_as_fd = -1;
+static uint8_t *g_as_base = NULL;
+static size_t g_as_size = 0;
+
+void *dm_guest_as_reserve(size_t reserve) {
+    if (g_as_fd >= 0) {
+        LOG("[RED] dm_guest_as_reserve: guest address space already reserved");
+        errno = EBUSY;
+        return NULL;
+    }
+    int fd = dm_memfd_create("guest_as", MFD_CLOEXEC);
+    if (fd < 0) {
+        LOG("[RED] dm_guest_as_reserve: memfd_create failed (errno %d)", errno);
+        return NULL;
+    }
+    if (ftruncate(fd, (off_t)reserve) != 0) {
+        LOG("[RED] dm_guest_as_reserve: ftruncate failed (errno %d)", errno);
+        close(fd);
+        return NULL;
+    }
+    void *p = mmap(NULL, reserve, PROT_NONE, MAP_SHARED, fd, 0);
+    if (p == MAP_FAILED) {
+        LOG("[RED] dm_guest_as_reserve: mmap failed (errno %d)", errno);
+        close(fd);
+        return NULL;
+    }
+    g_as_fd = fd;
+    g_as_base = (uint8_t *)p;
+    g_as_size = reserve;
+    return p;
+}
+
+void dm_guest_as_release(void *as, size_t reserve) {
+    if (as) munmap(as, reserve);
+    if (g_as_fd >= 0) {
+        close(g_as_fd);
+        g_as_fd = -1;
+    }
+    g_as_base = NULL;
+    g_as_size = 0;
+}
+
 void *dm_vm_alias(void *to, const void *from, size_t size) {
-    static int said;
-    if (!said++) LOG("[RED] dm_vm_alias: Linux cannot map an anonymous private page twice (mremap duplicates nothing); %zu bytes at %p are not aliased to %p. Virtual pools and the write watch need a memfd-backed guest block (open, port.h)", size, from, to);
-    errno = ENOTSUP; return NULL;
+    if (g_as_fd < 0 || !g_as_base) {
+        LOG("[RED] dm_vm_alias: guest address space not reserved with memfd");
+        errno = ENOTSUP;
+        return NULL;
+    }
+    uintptr_t f = (uintptr_t)from;
+    uintptr_t b = (uintptr_t)g_as_base;
+    if (f < b || f + size > b + g_as_size || f + size < f) {
+        LOG("[RED] dm_vm_alias: source %p (+%zu) outside guest address space %p..%p",
+            from, size, (void *)b, (void *)(b + g_as_size));
+        errno = EINVAL;
+        return NULL;
+    }
+    off_t off = (off_t)(f - b);
+    int flags = MAP_SHARED | (to ? MAP_FIXED : 0);
+    void *p = mmap(to, size, PROT_READ | PROT_WRITE, flags, g_as_fd, off);
+    if (p == MAP_FAILED) return NULL;
+    return p;
 }
 
 // ---- Scheduling and power facts ----

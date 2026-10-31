@@ -671,6 +671,7 @@ dm/host/motion_pro_mac.h	objc-framework	f746c60e426653812617a339996ff70f2af328ca
 dm/host/motion_pro_mac.h	objc-framework	fbe6475f6f3566b4b4b75f6a9927085763e87971	CFRelease(g_pro_manager); g_pro_manager = NULL;
 dm/host/motion_pro_mac.h	objc-framework	ff99023b72971576cda884e07e6f1ec820be8a10	typedef struct pro_device { IOHIDDeviceRef hid; uint8_t report[512]; pro_motion motion; struct pro_device *next; } pro_device;
 dm/host/pad_slots.h	objc-framework	f0cc38072f813a4da19d4d07e9f4dbfef61fe1e3	// GCController); a holder that never disconnects (the keyboard with DM_KBD_PLAYER=own) takes slot 0 first and keeps it.
+dm/host/port.h	apple-api	0c87fed8bfd4ac2c8f661b3cd1ed51b23ec7fb8e	// dm_vm_alias: a second mapping of the same pages at to (NULL = anywhere): the pointer, or NULL with errno. Apple: vm_remap with copy = FALSE.
 dm/host/port.h	apple-api	0cb23348a35d1e0b1dd35e0da5d140a86e91e4a2	static inline void dm_sha256_final(dm_sha256_t *c, uint8_t out[32]) { CC_SHA256_Final(out, &c->cc); }
 dm/host/port.h	apple-api	122f361e8f066349d995ebc61ca117c2b1373741	return dispatch_semaphore_wait((dispatch_semaphore_t)s, timeout_ns < 0 ? DISPATCH_TIME_FOREVER : dispatch_time(DISPATCH_TIME_NOW, timeout_ns)) ? -1 : 0;
 dm/host/port.h	apple-api	16ba8ab5171d1512e80edaad1b21c2c66ccbab29	// dm_clone_tree: clone a directory tree (or one file) to a path that does not exist yet: 0, or -1 with errno. Apple: an APFS copy-on-write clone (clonefile, nearly free, every
@@ -689,7 +690,6 @@ dm/host/port.h	apple-api	5ade966289e2a74a9499895f0cdcaec25cce59b2	// dm_sem: a c
 dm/host/port.h	apple-api	5d8b77437dc989f7dc092e7ba28947c9ed5c6d5b	static inline int dm_clone_tree(const char *src, const char *dst) { return clonefile(src, dst, 0); }
 dm/host/port.h	apple-api	615a43d9e403957d0d08e80fe2a2cf336baa4121	static inline void dm_qos_boost_end(dm_qos_boost_t b) { if (b) pthread_override_qos_class_end_np((pthread_override_t)b); }
 dm/host/port.h	apple-api	629ff6375bd7acfb61230bfc8b6749c4facccac0	static inline int dm_qos_set_self(qos_class_t c) { return pthread_set_qos_class_self_np(c, 0); }
-dm/host/port.h	apple-api	64df860d516fbddc511f86575e7f94ffd91f233d	// dm_vm_alias: a second mapping of the same pages at to (NULL = anywhere): the pointer, or NULL with errno. Apple: vm_remap with copy = FALSE. bionic: ENOTSUP, said once: an
 dm/host/port.h	apple-api	6508f89dd39068e0256f8593e9664c2bec6f21e3	dispatch_source_set_event_handler(src, ^{ fn("SIGTERM"); });
 dm/host/port.h	apple-api	70b21a0ebcd5d6cab209fe3731db935998c1c4fa	if (sysctl(mib, 4, &kp, &n, NULL, 0) || !n) return mono;
 dm/host/port.h	apple-api	77912511476934daa2e2c9e447f951bb98a5b2bc	// dm_proc_start_ns: when this process started, on the dm_clock_ns base (Apple: p_starttime from sysctl; Linux: /proc/self/stat starttime on CLOCK_BOOTTIME).

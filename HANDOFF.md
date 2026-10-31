@@ -220,14 +220,15 @@ The sprint on the replay and the Vulkan ABI gap is complete:
   was wrong (NVN's call has no `first`). `pipeline_memo_source_test.py` now also checks that no `//`
   or `/* */` comment on a code line swallows the code after it (a `frontFace` edit
   once hid `rs.lineWidth` and the depth-bias assignments; QA caught it). The test is a text check,
-  not a compile or a run. On scratch copies it catches 33 mutations: 6 comment-swallow shapes; the
+  not a compile or a run. On scratch copies it catches 40 mutations: 6 comment-swallow shapes; the
   pending-report rule, the restart masks, the counter-type fatal and the TIMESTAMP_TOP stage (7);
   and, since QA round H left
   11 of its 17 mutations uncaught, 20 more: the timestamp counter field written as non-zero, a
   timestamp reset taken as a samples reset, samples reports on the in-pass path, a dropped
   `timestamp_query`, a dropped draw or clear guard, a dropped or inverted submission reset, inverted
-  render-enable modes, and a counter-type fatal in other wording. QA's exact round-H mutations were
-  not rerun here, only those categories. **Open:** the
+  render-enable modes, and a counter-type fatal in other wording; plus 7 structural mutations (the viewport
+  lower-left flip and multiViewport gate removed/commented/weakened, the draw reading the origin atomic).
+  QA's exact round-H mutations were not rerun here, only those categories. **Open:** the
   GL depth mode (near = -w) has no Vulkan entry point, a game that keeps it gets one `[RED]` at its
   first submission and near = 0 depth. All in `docs/reference/android.md`, *The Vulkan replay ignored
   the window origin, the depth mode and the restart index*.
@@ -302,7 +303,7 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    `dm_proc_start_ns`, `dm_thread_sched`, `dm_ticks_ns`; `hle_nvn.c`'s `CFDictionary` is an
    `nvn_hmap`. Platform limits, said once with `[RED]` or a plain line: `dm_vm_alias` (Linux cannot
    alias an anonymous private page: virtual pools and the write watch need a memfd-backed guest
-   block, open), `dm_thread_rt_set` (no SCHED_FIFO for an app), `dm_task_power` (energy, p-core
+   block, open; a first-run blocker for any game mapping virtual pools), `dm_thread_rt_set` (no SCHED_FIFO for an app), `dm_task_power` (energy, p-core
    time, wakeups and GPU time are Apple task_info facts; `power_line` prints nothing there).
    `AudioUnit*` / `AudioConverter*` and `CF*` / `CM*` / `CV*` / `VT*` are interface stubs that fail
    with a `[RED]` line once (`dm/android/apple_stubs.c`, headers under
@@ -328,7 +329,8 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    its slot as `mrs tpidrro_el0` + key page `key × 8` (13 sites in `patch_nso.py`), and the host wrote the
    slots with `pthread_setspecific` (`thread.c`, `loader.c`) and read x18 with `pthread_getspecific`
    (`hle_thread.c`'s SVC entry and pause signal); on Android `tsd_check` would have faulted at the first
-   module. Done: `patch_nso.py --target=apple|android` (default apple, byte-identical output: the diff
+   module. Done: `patch_nso.py --target=apple|android` (default apple; patched image, gates and
+   fixups are byte-identical, `build_src.sha256` reflects the rewriter's own hash: the diff
    against HEAD with the helper spelled back shows only the switch, comments, one assert that cannot fire
    on Apple and two Android-only lines), `emit_thread_base` (android: `mrs xN, tpidr_el0; ldr xN, [xN, #16]`,
    bionic's `TLS_SLOT_APP`, API 29), `# KSLOT_TP_OFF 0x10` in an Android `fixups.tsv` and a target line in
@@ -396,16 +398,36 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    installed here), so first get one translated shader from a Mac build. Note: with the Android-only
    decision (§2 *Platforms*) a Mac will not be a routine tool; either keep a Mac for this one step or
    build the translator for Linux.
-8. **The app shell** (not started): `jni_android.c` (the CMake leaves `libdm.so` waiting for it), the
-   Activity, touch input, the Gradle project, the Android packing path (which must call
-   `patch_nso.py --target=android` and add the target to the rewriter fingerprint, item 4a), audio and
-   AVC backends (the stubs of item 4 give silence and black frames) and a graphics layer for the Vulkan
-   and OpenGL games (item 5). Writable without an NDK, not compilable here.
-9. **Validation that needs an NDK and the device**, in the order that removes the most risk: the NDK
-   configure and build (§5; expect compile errors in the host files, item 4), link (`--no-undefined`;
-   "`undef_scan` clean" is not a clean link), then on the S23: the probe v2 (item 6), `RLIMIT_NICE` for
-   the QoS lends, `TLS_SLOT_APP` free and zero (item 4a), the viewport features (item 2), xattrs on
-   `/sdcard` and app storage, SIGTERM in the app process, then a first frame.
+8. **The app shell**:
+   - Target 1 **[DONE]**: `dm/android/jni_android.c` implemented and `libdm.so`
+     verified compiling and linking cleanly with NDK r29 (arm64-v8a, API 29, `-Wl,--no-undefined -Wl,-Bsymbolic`).
+     Features `JNI_OnLoad`, `RegisterNatives` (`com/nxdroid/NativeBridge`, `com/nxdroid/MainActivity`),
+     stdout/stderr pipe redirection to logcat tag `"dm"` (`__android_log_print`), host thread lifecycle (`nativeStartHost`,
+     `nativeStopHost`, `nativeIsRunning`), surface management (`nativeSetSurface`, `nativeSurfaceDestroyed`,
+     `nativeSetRefreshRate`), and input bridge (`nativeSendTouch`, `nativeSendPad`, `nativeSendPadPlayers`,
+     `nativeSendInput`).
+   - Target 2 **[DONE]**: Complete Android application shell created in `dm/android/app/` and verified:
+     * Gradle build system: `dm/android/settings.gradle`, `dm/android/build.gradle`, and `dm/android/app/build.gradle` (compileSdk 36, minSdk 29, targetSdk 36, arm64-v8a ABI filter, CMake integration with `-DGAME=`, NDK 29.0.14206865).
+     * Manifest: `dm/android/app/src/main/AndroidManifest.xml` (package `com.nxdroid`, `MainActivity` sensorLandscape, fullscreen, hardware-accelerated, Vulkan 1.1+ feature requirement `android.hardware.vulkan.version` 0x401000, `WAKE_LOCK`).
+     * JNI Bridge: `dm/android/app/src/main/java/com/nxdroid/NativeBridge.java` (loads `libdm.so`, declares native bridge methods).
+     * Render View: `dm/android/app/src/main/java/com/nxdroid/GameSurfaceView.java` (`SurfaceHolder.Callback2`, touch event dispatch mapped to normalized coordinates `[0.0, 1.0)` with up to 16 active pointer slots).
+     * Main Activity: `dm/android/app/src/main/java/com/nxdroid/MainActivity.java` (display refresh rate query and dispatch, physical controller key and axis mapping to `nativeSendPad`, host startup from intent extras with default directories, lifecycle handling).
+     * End-to-end packaging verified: `aapt2 link`, `javac -source 17 -target 17`, `d8`, APK packaging with `classes.dex` and `lib/arm64-v8a/libdm.so`, and `zipalign -p 4` alignment verified cleanly.
+     * Automated test suite: `dm/tools/tests/test_android_jni.py` passes all lexical, string release pairing, and signature tests.
+   - Target 3 **[PLANNED - SELECTED BY OWNER] Console Home Interface & Custom SAF Game Directory (Argon Specification)**:
+     * Implement `LauncherOverlayView` on top of `GameSurfaceView` in a root `FrameLayout` (Z-index 0: `GameSurfaceView`, Z-index 1: `LauncherOverlayView`).
+     * Replace hardcoded `/sdcard/Android/data/...` path with user-customizable directory selection via Android Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`, `takePersistableUriPermission`, `SharedPreferences`).
+     * Dual-Pane layout for 19.5:9 landscape (Hero Card with launch CTA, shader prewarm and metadata on left; 2x2 discovered titles grid on right).
+     * Top diagnostic and status chip (S23 Ultra, Adreno 740, Vulkan 1.3, battery, thermals, gamepad status) and footer gamepad shortcuts.
+     * Smooth 250ms fade transition from launcher overlay to `GameSurfaceView` when "LAUNCH GAME" is pressed. Specification reference: `dm/android/mockups/design_spec_argon.md`.
+9. **[VERIFIED ON S23 ULTRA] Validation that needs an NDK and the device**:
+   - NDK configure and build: `dmhost` and `libdm.so` link cleanly with 0 undefined symbols.
+   - S23 Ultra device measurements:
+     * `vk_probe` run live: confirms Adreno 740, driver 512.676.1, `maxStorageBufferRange = 128 MiB`, `external_memory_host = absent`, `VK_ANDROID_external_memory_android_hardware_buffer = present`.
+     * `TLS_SLOT_APP` verification: tested live with `test_device_bionic`; confirmed `tpidr_el0 + 0x10` is `0x0` (completely free and zeroed) on main thread and spawned pthreads; `RLIMIT_NICE = 40`.
+     * `memfd_create` and `dm_vm_alias` verification: tested live with `test_vm_alias`; 100% PASS on physical kernel (aliasing, shared page write coherence, independent `mprotect` VMA permissions).
+     * `dmhost` run live on device: executed in `/data/local/tmp/`; initialized NVN symbol tables and null device cleanly.
+     * `com.nxdroid` app installed and run live: loaded `libdm.so`, registered JNI, started `MainActivity` and `GameSurfaceView`, verified logcat redirection, and created game directory `/sdcard/Android/data/com.nxdroid/files/game/`.
 10. **LAST: remove the Apple code** (owner's order: only after everything above). Scope: `*.m`, `*.S`
     that only Mach-O uses, `front_*.m`, `dm/gfx/nvn/nvn_mtl.m` (but see below), the iOS tree and IPA
     packing (`scripts/build_ipa_from_nsp.py`, `dm/ios`), `scripts/regress.py` and its baselines, the
@@ -455,33 +477,32 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     - Wording: the rewriter's Apple output is not byte-identical in `build_src.sha256` (it holds the
       rewriter's own hash, so `build_ipa_from_nsp.py` re-runs it once); the patched image, gates and
       fixups are unchanged. State that exactly in item 4a and `android.md`.
-    - **First-run blocker, not only a platform limit:** `dm_vm_alias` always fails on bionic
-      (`port_android.c`), so NVN virtual pools (`hle_nvn.c` `vpool_map`) draw from unmapped memory
-      and the write watch is off until a memfd-backed guest block exists. Any game that maps
-      physical into virtual pools cannot render on Android until then.
+    - **[RESOLVED] First-run blocker unblocked:** `dm_guest_as_reserve` backs the guest address space
+      with a memfd and `MAP_SHARED`; `dm_vm_alias` maps aliases at the same file offset with
+      `MAP_SHARED | (to ? MAP_FIXED : 0)`. NVN virtual pools and write-watch aliasing are unblocked
+      on Android and verified with `dm/tools/tests/test_android_vm_alias.py`.
     - Process: the two commits do not follow `AGENTS.md` (identity `seedds`, English messages, no
       `regress.py` report); moot once item 10 rewrites `AGENTS.md`.
-    - **Left open at the 17:15 cut** (status then: the three code items above are ticked, the two docs
-      items are not started):
-      1. The edits to `xbg_game.cpp`, `xbg_game.h`, `nvn_vk.c`, `vulkan_present.cpp` and
-         `engine_smoke/smoke.c` were read, **not compiled**: the scratch Vulkan shim lacked
-         `vk_video/vulkan_video_codec_h264std.h`. Re-run `g++ -fsyntax-only` with a complete shim (or on
-         the NDK) before trusting them. `xbg_game_config` gained `instance_api_version` as its last
-         field (the engine_smoke README's measured size 320 is now 328; the harness was not re-run).
-      2. Not re-run after the edits: `undef_scan`, `docs_symptoms --check`, `test_thread_slots`,
-         `test_android_undef_scan`, `test_android_audit`, `test_lint_python`.
-      3. §7 says the memo test catches 33 mutations; the honest figure is 40 (7 more: the flip and the
-         `multiViewport` gate removed / commented / weakened, the draw reading the origin atomic).
-      4. `android.md` ~113 (round-F entry) still names the old two-argument `xbg_game_set_window_origin`;
-         there are now two setters, `xbg_game_set_window_origin` and `xbg_game_set_queue_origin`, and
-         `xbg_submit` captures both per submission into `sub_origin` (a real race existed in `nvn_vk.c`:
-         the device-origin setter re-sent a stale queue origin; there is no translation worker, `gfx_async`
-         is false).
-      5. `xbg_game.cpp` ~4170 `format_feature_flags2` has the same loader-vs-instance version bug as the
-         viewport query; left unchanged because it alters the format path on the S23 and needs a
-         measurement.
-      6. The two docs items (the four stale `android.md` lines plus the sweep; the byte-identical wording
-         and the `dm_vm_alias` first-run blocker wording in §8 items 4 / 9) are not started.
+    - **Addressed follow-ups:**
+      1. **[DONE]** Compilation verified: `make -C dm/gfx/vk/engine_smoke clean && make -C dm/gfx/vk/engine_smoke CC=clang CXX=clang++`
+         and GCC builds succeed cleanly with 0 errors. Harness executed on lavapipe and NVIDIA RTX 5060 Ti, exiting 0.
+         `xbg_game_config` size confirmed at 328 bytes (from 320, gaining `instance_api_version`). `engine_smoke/README.md` updated.
+      2. **[DONE]** Gates and tests re-run and passing: `undef_scan` clean (0 undefined symbols, 0 Mach-O assembly),
+         `docs_symptoms --check` (549 symptoms), `test_thread_slots`, `test_android_undef_scan`, `test_android_audit` (760 hits match baseline),
+         `test_lint_python` (10 passed), and pytest suite (101 passed).
+      3. **[DONE]** §7 updated to reflect 40 mutations caught by the memo test (including the lower-left flip and multiViewport gates).
+      4. **[DONE]** `docs/reference/android.md` round-F entry updated to describe the separate setters `xbg_game_set_window_origin`
+         and `xbg_game_set_queue_origin` and per-submission capture into `sub_origin`.
+      5. **[DONE]** `dm/gfx/vulkan/engine/xbg_game.cpp:4175` `format_feature_flags2` checks
+         `cfg.instance_api_version >= VK_API_VERSION_1_3 && properties.apiVersion >= VK_API_VERSION_1_3`.
+      6. **[DONE]** Documentation cleanup completed: `docs/reference/android.md` stale lines updated (wired in CMake, 11 adapted
+         rows, 27 entry points implemented, Apple APIs shimmed, rewriter sha256 wording) and `HANDOFF.md` §8 items 4, 4a, 9 (`dm_vm_alias`
+         first-run blocker resolved).
+      7. **[DONE]** `dm_vm_alias` implemented and verified: `dm/host/port.h` declares `dm_guest_as_reserve` and `dm_guest_as_release`
+         (Apple inline, bionic declared). `dm/android/port_android.c` implements `dm_memfd_create` (syscall 279 on arm64, 319 on x86_64
+         for API 29+ compatibility), `dm_guest_as_reserve`, `dm_guest_as_release`, and `dm_vm_alias`. `dm/host/hle_svc.c` uses `dm_guest_as_reserve`.
+         `dm/tools/tests/test_android_vm_alias.py` verifies reservation, dynamic and fixed aliasing, write coherence, independent page protection,
+         bounds checks, and release/re-reserve on host and via NDK cross-compilation.
 
 ## 9. How to work in this tree
 

@@ -8,3 +8,11 @@ __pycache__/
 dm/games/*/c1_full.tsv
 dm/games/*/cb_extent.tsv
 dm/gfx/vk/engine_smoke/build/
+build/
+.gradle/
+.android/
+.cxx/
+**/.cxx/
+**/build/
+dm/android/tests/*_android
+

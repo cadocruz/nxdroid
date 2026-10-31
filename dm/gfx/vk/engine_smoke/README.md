@@ -71,8 +71,7 @@ The harness creates the instance and device itself (Vulkan 1.1, one graphics+com
 no window and no guest. `present` counts calls (the run makes none), `log` prints the engine's own
 `NVN ...` lines, `fatal` exits 97 rather than returning. It states its instance version in
 `xbg_game_config.instance_api_version` (1.1), so the engine asks the device no 1.2 feature struct even
-on a 1.2 loader; that field came after the run below, which printed `size=320/320` (328 with it on
-x86_64; not re-run).
+on a 1.2 loader; with that field present, x86_64 prints `size=328/328`.
 
 ## What it produced
 
@@ -81,7 +80,7 @@ Both devices, exit 0:
 ```
 device 0: llvmpipe (LLVM 21.1.8, 256 bits) vendor 0x10005 api 1.4.335   # make run
 device 0: NVIDIA GeForce RTX 5060 Ti vendor 0x10de api 1.4.312          # make run-gpu
-config: size=320/320 physical=... device=... queue=... family=0 draw_params=1 timeout=1000000000
+config: size=328/328 physical=... device=... queue=... family=0 draw_params=1 timeout=1000000000
 xbg_game_initialize -> 0
 xbg_nvn_get_proc_address("nvnDeviceGetInteger") -> 0x...
   entry point call -> 0, value 7
