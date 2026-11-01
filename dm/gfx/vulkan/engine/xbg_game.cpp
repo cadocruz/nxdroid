@@ -382,6 +382,14 @@ VkPhysicalDeviceSubgroupProperties subgroup{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SU
 // what the host says it enabled at vkCreateDevice (xbg_game_set_viewport_features, the shape of the mirror-clamp setter;
 // default false), and only that gates a shader or a draw. multiViewport itself is a core feature, in cfg.enabled_core.
 bool viewport_index_supported=false,multiview_supported=false,viewport_index_enabled=false,multiview_enabled=false;
+bool depth_clip_control_supported=false;std::atomic<bool> game_depth_zero{false};
+extern "C" int xbg_game_set_depth_clip_control(VkBool32 enabled){
+    depth_clip_control_supported=enabled!=VK_FALSE;
+    xbg_logf("NVN depth clip control (VK_EXT_depth_clip_control)=%d",int(depth_clip_control_supported));
+    return 0;
+}
+extern "C" int xbg_game_has_depth_clip_control(void){return depth_clip_control_supported?1:0;}
+extern "C" void xbg_game_set_depth_zero(VkBool32 zero){game_depth_zero.store(zero!=VK_FALSE);}
 // NVN's window origin (xbg_game_set_window_origin, from the host's mtl_set_origin_lower_left / mtl_set_queue_origin_lower_left): with the lower-left
 // (GL) origin the picture is stored bottom-up, as nvn_mtl.m does it, so every viewport is flipped about its centre at the draw and the front end
 // flips the window image at present; the raster flip that decides winding is queue state captured when the queue was created (queue_origin_ll),
@@ -1738,7 +1746,7 @@ Image &get_image_slow(const tex_t *t,bool upload){CPU_SCOPE(Image);
         {static int bc8=-1;if(bc8<0){VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(cfg.physical,VK_FORMAT_R16G16_UNORM,&q);bc8=!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);if(bc8)xbg_logf("NVN caps bc 8bit: R16G16_UNORM optimalFeatures=%#x lacks SAMPLED_IMAGE_FILTER_LINEAR",q.optimalTilingFeatures);}if(bc8)xbg_bc_8bit_channels=1;}
         xbg_bc_format info;p->decoded=xbg_bc_format_info(t->d.format,&info)==0;
         if(p->decoded && native_bc && p->samples==VK_SAMPLE_COUNT_1_BIT){const VkFormatFeatureFlags need_bc=VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT|VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT|VK_FORMAT_FEATURE_TRANSFER_SRC_BIT|VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
-            VkFormatProperties np;vkGetPhysicalDeviceFormatProperties(cfg.physical,format(t->d.format),&np);if((np.optimalTilingFeatures&need_bc)==need_bc)p->decoded=false;}
+            VkFormatProperties np;vkGetPhysicalDeviceFormatProperties(cfg.physical,format(t->d.format),&np);if((np.optimalTilingFeatures&need_bc)==need_bc && !xbg_bc_astc_destination(t->d.format) && t->d.target!=8 && t->d.target!=9)p->decoded=false;}
         if(xbg_bc_format_info(t->d.format,&info)==0)++(p->decoded?decoded_bc_images:native_bc_images);
         if(p->decoded){p->bpp=info.bytes_per_pixel;p->fmt=decoded_format(info.pixels);need(p->samples==VK_SAMPLE_COUNT_1_BIT,"BC texture cannot be multisampled");}
         else {p->fmt=format(t->d.format);p->bpp=t->L.bpb;if(t->d.format==0x32 && depth16_as_d24)p->fmt=VK_FORMAT_X8_D24_UNORM_PACK32;}
@@ -1962,6 +1970,7 @@ struct State {
 struct PipeMemoKey{const void *shader[5];const void *layout,*pass_def;VkRenderPass pass;VkPipelineLayout pipeline_layout;int32_t prim;uint32_t samples,rt_n,colors,depth,depth_format;
     uint32_t viewports;                                                          // VkPipelineViewportStateCreateInfo::viewportCount (draw_viewports)
     uint32_t origin;                                                             // sub_origin.queue_ll: it decides rs.frontFace
+    uint32_t depth_zero;                                                         // game_depth_zero: 0 = GL near=-w, 1 = Vulkan near=0
     uint8_t fixed[offsetof(State,viewport)-offsetof(State,attrib)];               // attrib, stream, blend, color, mask, ms, poly, ds
     uint8_t restart[offsetof(State,viewport)-offsetof(State,depth_clamp)];        // depth_clamp, rast_discard, restart on / index, viewport swizzles
     uint8_t stencil[offsetof(State,copy_stride)-offsetof(State,blend_color)];      // blend_color, bias, stencil compare / write / reference
@@ -1969,7 +1978,7 @@ struct PipeMemoKey{const void *shader[5];const void *layout,*pass_def;VkRenderPa
 PipeMemoKey pipe_memo_key,pipe_memo_next;VkPipeline pipe_memo_pipeline=VK_NULL_HANDLE;bool pipe_memo=false;uint64_t pipe_memo_hits=0,pipe_memo_misses=0;
 void pipe_memo_fill(PipeMemoKey &k,const void *layout,const void *pass_def,VkRenderPass pass,VkPipelineLayout pipeline_layout,int prim,VkSampleCountFlagBits samples,uint32_t colors,uint32_t viewports){
     memset(&k,0,sizeof k);for(unsigned i=0;i<5;i++)k.shader[i]=state.shader[i];k.layout=layout;k.pass_def=pass_def;k.pass=pass;k.pipeline_layout=pipeline_layout;k.prim=prim;k.samples=uint32_t(samples);k.viewports=viewports;k.origin=uint32_t(sub_origin.queue_ll);
-    k.rt_n=uint32_t(state.rt.n);k.colors=colors;k.depth=state.rt.depth!=nullptr;k.depth_format=state.rt.depth?uint32_t(state.rt.depth->d.format):0;
+    k.rt_n=uint32_t(state.rt.n);k.colors=colors;k.depth=state.rt.depth!=nullptr;k.depth_format=state.rt.depth?uint32_t(state.rt.depth->d.format):0;k.depth_zero=uint32_t(game_depth_zero.load());
     const uint8_t *b=reinterpret_cast<const uint8_t*>(&state);memcpy(k.fixed,b+offsetof(State,attrib),sizeof k.fixed);memcpy(k.restart,b+offsetof(State,depth_clamp),sizeof k.restart);memcpy(k.stencil,b+offsetof(State,blend_color),sizeof k.stencil);memcpy(k.tail,b+offsetof(State,patch_size),sizeof k.tail);
 }
 static void sanitize_capabilities(std::vector<uint32_t> &w){
@@ -3533,6 +3542,8 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
      need(vpn==1 || (cfg.enabled_core.multiViewport && vpn<=properties.limits.maxViewports),"Multi-viewport draw needs the multiViewport feature");
      need(vpn==1 || s==state.shader[3] || viewport_index_enabled,"ViewportIndex from a vertex or tessellation stage needs shaderOutputViewportIndex enabled at device creation (xbg_game_set_viewport_features)");}
     VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};vp.viewportCount=vp.scissorCount=vpn;
+    VkPipelineViewportDepthClipControlCreateInfoEXT dcc{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_DEPTH_CLIP_CONTROL_CREATE_INFO_EXT};dcc.negativeOneToOne=VK_TRUE;
+    if(depth_clip_control_supported && !game_depth_zero.load())vp.pNext=&dcc;
     // rs.frontFace: NVN's raster flip is the queue's captured origin, as nvn_mtl.m decides winding (the device origin flips the viewport instead)
     VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};rs.depthClampEnable=state.depth_clamp!=0;need(!rs.depthClampEnable || cfg.enabled_core.depthClamp,"Depth clamp disabled");rs.rasterizerDiscardEnable=state.rast_discard!=0;rs.polygonMode=state.poly.mode==2?VK_POLYGON_MODE_FILL:state.poly.mode==1?VK_POLYGON_MODE_LINE:VK_POLYGON_MODE_POINT;need(rs.polygonMode==VK_POLYGON_MODE_FILL || cfg.enabled_core.fillModeNonSolid,"Non-solid polygon mode disabled");rs.cullMode=state.poly.cull;rs.frontFace=((state.poly.front!=0)!=sub_origin.queue_ll)?VK_FRONT_FACE_COUNTER_CLOCKWISE:VK_FRONT_FACE_CLOCKWISE;rs.lineWidth=1;rs.depthBiasEnable=state.poly.offset_en!=0;rs.depthBiasConstantFactor=state.bias[1]*(state.rt.depth && state.rt.depth->d.format==0x32 && depth16_as_d24?256.0f:1.0f);
     rs.depthBiasSlopeFactor=state.bias[0];rs.depthBiasClamp=state.bias[2];need(!rs.depthBiasClamp || cfg.enabled_core.depthBiasClamp,"Depth bias clamp disabled");   // constant bias units: 2^-16 for D16, 2^-24 for the X8_D24 stand-in; slope and clamp do not depend on the format

@@ -45,6 +45,12 @@ std::mutex render_mutex;
 ANativeWindow *desired=nullptr,*active=nullptr;uint64_t generation=0,active_generation=0;
 VkInstance instance;VkPhysicalDevice physical;VkDevice device;VkQueue queue;uint32_t family;
 VkSurfaceKHR surface;VkSwapchainKHR swapchain;VkFormat swap_format;VkExtent2D extent;
+// The swapchain takes the sRGB-ness of the image the game presents. vkCmdBlitImage decodes an sRGB source to linear and
+// encodes an sRGB destination, so an sRGB source blitted into a UNORM swapchain reaches the screen decoded once more: the
+// picture comes out darker and more saturated than on the Switch, which scans out the stored bytes. Matching the two
+// makes the blit a pass-through. nvn_mtl.m does the same by sampling the source through a non-sRGB view (present_raw_src).
+bool want_srgb=false,swap_srgb=false,have_srgb=false,have_linear=false;
+bool is_srgb(VkFormat f){return f==VK_FORMAT_R8G8B8A8_SRGB||f==VK_FORMAT_B8G8R8A8_SRGB||f==VK_FORMAT_A8B8G8R8_SRGB_PACK32;}
 VkSurfaceTransformFlagBitsKHR created_transform;VkExtent2D created_surface_extent;
 // 无旋转 blit 由系统合成器旋转；记录属性以免 SUBOPTIMAL 触发逐帧重建。
 // The compositor rotates our unrotated blit; cache properties to avoid rebuilding every SUBOPTIMAL frame.
@@ -144,7 +150,21 @@ int create_swap(){
     uint32_t n=0;r=vkGetPhysicalDeviceSurfaceFormatsKHR(physical,surface,&n,nullptr);if(r||!n)return r?r:VK_ERROR_FORMAT_NOT_SUPPORTED;
     std::vector<VkSurfaceFormatKHR> formats(n);r=vkGetPhysicalDeviceSurfaceFormatsKHR(physical,surface,&n,formats.data());if(r)return r;
     VkSurfaceFormatKHR sf=formats[0];if(sf.format==VK_FORMAT_UNDEFINED)sf.format=VK_FORMAT_R8G8B8A8_UNORM;
-    for(auto f:formats)if(f.format==VK_FORMAT_R8G8B8A8_UNORM||f.format==VK_FORMAT_B8G8R8A8_UNORM){sf=f;break;}
+    // Take the 8-bit RGBA/BGRA surface format whose sRGB-ness matches the presented image (see want_srgb above), because a
+    // blit between two formats of the same encoding leaves the bytes alone. Fall back to the other encoding when the device
+    // offers only that one, then to any blittable format of the wanted encoding, so a device without an sRGB surface still
+    // presents (decoded once, as before). have_srgb / have_linear keep present() from asking for a swapchain it cannot get.
+    have_srgb=have_linear=false;
+    for(auto &f:formats){VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
+        if(is_srgb(f.format))have_srgb=true;else have_linear=true;}
+    auto pick=[&](bool srgb)->const VkSurfaceFormatKHR*{
+        const VkSurfaceFormatKHR *any=nullptr;
+        for(auto &f:formats){if(is_srgb(f.format)!=srgb)continue;VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
+            if(f.format==VK_FORMAT_R8G8B8A8_UNORM||f.format==VK_FORMAT_B8G8R8A8_UNORM||f.format==VK_FORMAT_R8G8B8A8_SRGB||f.format==VK_FORMAT_B8G8R8A8_SRGB)return &f;
+            if(!any)any=&f;}
+        return any;};
+    const VkSurfaceFormatKHR *chosen=pick(want_srgb);if(!chosen)chosen=pick(!want_srgb);if(chosen)sf=*chosen;
+    swap_srgb=is_srgb(sf.format);
     extent=cap.currentExtent;if(extent.width==UINT32_MAX){extent.width=std::clamp(uint32_t(std::max(1,ANativeWindow_getWidth(active))),cap.minImageExtent.width,cap.maxImageExtent.width);extent.height=std::clamp(uint32_t(std::max(1,ANativeWindow_getHeight(active))),cap.minImageExtent.height,cap.maxImageExtent.height);}if(!extent.width||!extent.height)return VK_NOT_READY;
     VkSwapchainCreateInfoKHR ci{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};ci.surface=surface;
 #ifdef __OHOS__
@@ -159,7 +179,7 @@ int create_swap(){
     // Even failed creation retires oldSwapchain; never pass that retired handle on retry.
     destroy_present_semaphores();if(swapchain)vkDestroySwapchainKHR(device,swapchain,nullptr);swapchain=r?VK_NULL_HANDLE:replacement;images.clear();if(r)return r;swap_format=sf.format;
     created_transform=cap.currentTransform;created_surface_extent=cap.currentExtent;
-    vlog("Swapchain: window=%dx%d extent=%ux%u currentTransform=%u supported=%u selected=%u",ANativeWindow_getWidth(active),ANativeWindow_getHeight(active),extent.width,extent.height,unsigned(cap.currentTransform),unsigned(cap.supportedTransforms),unsigned(ci.preTransform));
+    vlog("Swapchain: window=%dx%d extent=%ux%u currentTransform=%u supported=%u selected=%u format=%u srgb=%d source_srgb=%d",ANativeWindow_getWidth(active),ANativeWindow_getHeight(active),extent.width,extent.height,unsigned(cap.currentTransform),unsigned(cap.supportedTransforms),unsigned(ci.preTransform),unsigned(sf.format),int(swap_srgb),int(want_srgb));
     r=vkGetSwapchainImagesKHR(device,swapchain,&n,nullptr);if(r)return r;images.resize(n);r=vkGetSwapchainImagesKHR(device,swapchain,&n,images.data());if(r)return r;images.resize(n);
     // 呈现完成信号量按交换链图像分配；重新获取该图像后才能再次发信号。
     // Index present-wait semaphores by acquired image, not by CPU frame/fence.
@@ -208,6 +228,9 @@ int present(void*,void*,VkImage source,VkFormat source_format,uint32_t width,uin
     pin_update();
     VkFormatProperties sp;vkGetPhysicalDeviceFormatProperties(physical,source_format,&sp);if(!(sp.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_SRC_BIT))return VK_ERROR_FORMAT_NOT_SUPPORTED;
     int x=0,y=0,w=int(width),h=int(height);if(crop&&crop[2]>0&&crop[3]>0){x=std::clamp(crop[0],0,w);y=std::clamp(crop[1],0,h);w=std::min(crop[2],int(width)-x);h=std::min(crop[3],int(height)-y);}if(w<=0||h<=0)return VK_ERROR_INITIALIZATION_FAILED;
+    // The swapchain's encoding follows the presented image, so the blit converts neither way (see want_srgb). A change asks
+    // for one rebuild, and only when the device can offer the other encoding; otherwise the swapchain stays as it is.
+    {const bool src_srgb=is_srgb(source_format);if(src_srgb!=want_srgb){want_srgb=src_srgb;if(surface && (src_srgb?have_srgb:have_linear))swap_dirty=true;}}
     for(;;){
     if(present_native && surface && active && (native_w!=w || native_h!=h)){   // the next swapchain takes this size (currentExtent follows the buffer geometry)
         int g=ANativeWindow_setBuffersGeometry(active,w,h,0);native_w=w;native_h=h;swap_dirty=true;
@@ -326,8 +349,10 @@ extern "C" int dm_android_vk_initialize(const char *path,char *error,size_t byte
     // under a 1.2 instance, the 1.2 features the multi-viewport draw needs. Only a feature the device has is chained into vkCreateDevice.
     VkPhysicalDeviceProperties props{};vkGetPhysicalDeviceProperties(physical,&props);const bool api12=instance_api>=VK_API_VERSION_1_2 && props.apiVersion>=VK_API_VERSION_1_2;
     VkPhysicalDeviceShaderDrawParametersFeatures draw{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES};VkPhysicalDeviceMultiviewFeatures multiview_have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES};VkPhysicalDeviceVulkan12Features v12_have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceDepthClipControlFeaturesEXT depth_clip_have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_CONTROL_FEATURES_EXT};
     VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};features.pNext=&draw;draw.pNext=&multiview_have;if(api12)multiview_have.pNext=&v12_have;vkGetPhysicalDeviceFeatures2(physical,&features);draw.pNext=nullptr;
-    vkEnumerateDeviceExtensionProperties(physical,nullptr,&n,nullptr);std::vector<VkExtensionProperties> available(n);vkEnumerateDeviceExtensionProperties(physical,nullptr,&n,available.data());bool mirror=false,viewport_index_ext=false;for(auto e:available){if(std::string(e.extensionName)==VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME)mirror=true;if(std::string(e.extensionName)==VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME)viewport_index_ext=true;}
+    vkEnumerateDeviceExtensionProperties(physical,nullptr,&n,nullptr);std::vector<VkExtensionProperties> available(n);vkEnumerateDeviceExtensionProperties(physical,nullptr,&n,available.data());bool mirror=false,viewport_index_ext=false,depth_clip_control_ext=false;for(auto e:available){if(std::string(e.extensionName)==VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME)mirror=true;if(std::string(e.extensionName)==VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME)viewport_index_ext=true;if(std::string(e.extensionName)==VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME)depth_clip_control_ext=true;}
+    if(depth_clip_control_ext){VkPhysicalDeviceFeatures2 dcf{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};dcf.pNext=&depth_clip_have;vkGetPhysicalDeviceFeatures2(physical,&dcf);}
     {std::string all;for(auto &e:available){all+=e.extensionName;all+=' ';}   // 诊断：设备扩展全表（每次启动一行）| Diagnostics: the full device extension list (one line per launch)
      for(size_t at=0;at<all.size();at+=900)vlog("Device extensions [%zu]: %s",at/900,all.substr(at,900).c_str());
      VkPhysicalDeviceExternalMemoryHostPropertiesEXT host{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT};VkPhysicalDeviceProperties2 pr{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};pr.pNext=&host;vkGetPhysicalDeviceProperties2(physical,&pr);
@@ -348,7 +373,9 @@ extern "C" int dm_android_vk_initialize(const char *path,char *error,size_t byte
     if(api12 && v12_have.shaderOutputViewportIndex && v12_have.shaderOutputLayer){v12.shaderOutputViewportIndex=v12.shaderOutputLayer=VK_TRUE;v12.samplerMirrorClampToEdge=mirror && v12_have.samplerMirrorClampToEdge;v12.pNext=draw.pNext;draw.pNext=&v12;viewport_index_on=true;}
     else if(viewport_index_ext){dext.push_back(VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME);viewport_index_on=true;}
     if(multiview_have.multiview){multiview.multiview=VK_TRUE;multiview.pNext=draw.pNext;draw.pNext=&multiview;multiview_on=true;}
-    vlog("Vulkan instance %u.%u device %u.%u: shaderOutputViewportIndex=%d (%s) multiview=%d multiViewport=%u",VK_VERSION_MAJOR(instance_api),VK_VERSION_MINOR(instance_api),VK_VERSION_MAJOR(props.apiVersion),VK_VERSION_MINOR(props.apiVersion),int(viewport_index_on),api12 && v12.shaderOutputViewportIndex?"Vulkan12Features":viewport_index_ext?"VK_EXT_shader_viewport_index_layer":"not supported",int(multiview_on),unsigned(features.features.multiViewport));
+    VkPhysicalDeviceDepthClipControlFeaturesEXT depth_clip{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_CONTROL_FEATURES_EXT};bool depth_clip_control_on=false;
+    if(depth_clip_control_ext && depth_clip_have.depthClipControl){depth_clip.depthClipControl=VK_TRUE;depth_clip.pNext=draw.pNext;draw.pNext=&depth_clip;dext.push_back(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);depth_clip_control_on=true;}
+    vlog("Vulkan instance %u.%u device %u.%u: shaderOutputViewportIndex=%d (%s) multiview=%d multiViewport=%u depthClipControl=%d",VK_VERSION_MAJOR(instance_api),VK_VERSION_MINOR(instance_api),VK_VERSION_MAJOR(props.apiVersion),VK_VERSION_MINOR(props.apiVersion),int(viewport_index_on),api12 && v12.shaderOutputViewportIndex?"Vulkan12Features":viewport_index_ext?"VK_EXT_shader_viewport_index_layer":"not supported",int(multiview_on),unsigned(features.features.multiViewport),int(depth_clip_control_on));
     float priority=1;VkDeviceQueueCreateInfo qc{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};qc.queueFamilyIndex=family;qc.queueCount=1;qc.pQueuePriorities=&priority;VkDeviceCreateInfo dc{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};dc.pNext=&draw;dc.pEnabledFeatures=&features.features;dc.queueCreateInfoCount=1;dc.pQueueCreateInfos=&qc;dc.enabledExtensionCount=uint32_t(dext.size());dc.ppEnabledExtensionNames=dext.data();if((r=vkCreateDevice(physical,&dc,nullptr,&device)))return fail("vkCreateDevice",r);vkGetDeviceQueue(device,family,0,&queue);
     for(;;){
         wait_window();
@@ -376,6 +403,6 @@ extern "C" int dm_android_vk_initialize(const char *path,char *error,size_t byte
     if(overlap){if((r=vkCreateCommandPool(device,&cp,nullptr,&overlap_pool)))return fail("Present command pool",r);ca.commandPool=overlap_pool;if((r=vkAllocateCommandBuffers(device,&ca,&overlap_command)))return fail("Present command",r);
         if((r=vkCreateSemaphore(device,&sc,nullptr,&overlap_acquired)))return fail("Acquire semaphore",r);if((r=vkCreateFence(device,&fc,nullptr,&overlap_fence)))return fail("Present fence",r);}
     vlog("Present overlap=%d (marker gfx-present-overlap)",int(overlap));
-    shader_path=path;dm_vk_config config{};config.size=sizeof(config);config.game.size=sizeof(config.game);config.game.physical=physical;config.game.device=device;config.game.queue=queue;config.game.queue_family=family;config.game.enabled_core=features.features;config.game.enabled_shader_draw_parameters=draw.shaderDrawParameters;config.game.fence_timeout_ns=10000000000ull;config.game.shader_directory=shader_path.c_str();config.game.present=present;config.game.log=log_message;config.game.fatal=fatal;config.game.instance_api_version=instance_api;config.sampler_mirror_clamp_to_edge=mirror;config.shader_output_viewport_index=viewport_index_on;config.multiview=multiview_on;config.has_window=has_window;config.display_hz=0; // Query actual display refresh in frontend; do not guess 60 Hz.
+    shader_path=path;dm_vk_config config{};config.size=sizeof(config);config.game.size=sizeof(config.game);config.game.physical=physical;config.game.device=device;config.game.queue=queue;config.game.queue_family=family;config.game.enabled_core=features.features;config.game.enabled_shader_draw_parameters=draw.shaderDrawParameters;config.game.fence_timeout_ns=10000000000ull;config.game.shader_directory=shader_path.c_str();config.game.present=present;config.game.log=log_message;config.game.fatal=fatal;config.game.instance_api_version=instance_api;config.sampler_mirror_clamp_to_edge=mirror;config.shader_output_viewport_index=viewport_index_on;config.multiview=multiview_on;config.depth_clip_control=depth_clip_control_on;config.has_window=has_window;config.display_hz=0; // Query actual display refresh in frontend; do not guess 60 Hz.
     int status=dm_vk_initialize(&config,error,bytes);if(!status)ready=true;else cleanup_initialization();return status;
 }

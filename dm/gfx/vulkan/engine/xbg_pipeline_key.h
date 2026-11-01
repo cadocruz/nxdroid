@@ -53,13 +53,20 @@ inline bool xbg_graphics_pipeline_key(XbgPipelineKey &k,const VkGraphicsPipeline
     k.u(1);k.piece(layout);k.piece(pass);k.u(p.flags);k.u(p.subpass);k.u(p.stageCount);
     for(uint32_t i=0;i<p.stageCount;i++)if(!xbg_stage_key(k,p.pStages[i]))return false;
     const auto &v=*p.pVertexInputState;const auto &a=*p.pInputAssemblyState;const auto &vp=*p.pViewportState;const auto &r=*p.pRasterizationState;const auto &m=*p.pMultisampleState;const auto &d=*p.pDepthStencilState;const auto &b=*p.pColorBlendState;const auto &dy=*p.pDynamicState;
-    if(v.pNext || a.pNext || vp.pNext || r.pNext || m.pNext || d.pNext || b.pNext || dy.pNext || (p.pTessellationState && p.pTessellationState->pNext))return false;
+    const VkPipelineViewportDepthClipControlCreateInfoEXT *dcc=nullptr;
+    if(vp.pNext){
+        const VkBaseInStructure *s=reinterpret_cast<const VkBaseInStructure*>(vp.pNext);
+        if(s->sType==VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_DEPTH_CLIP_CONTROL_CREATE_INFO_EXT && !s->pNext){
+            dcc=reinterpret_cast<const VkPipelineViewportDepthClipControlCreateInfoEXT*>(s);
+        } else return false;
+    }
+    if(v.pNext || a.pNext || (vp.pNext && !dcc) || r.pNext || m.pNext || d.pNext || b.pNext || dy.pNext || (p.pTessellationState && p.pTessellationState->pNext))return false;
     if((v.vertexBindingDescriptionCount && !v.pVertexBindingDescriptions) || (v.vertexAttributeDescriptionCount && !v.pVertexAttributeDescriptions) || (b.attachmentCount && !b.pAttachments) || (dy.dynamicStateCount && !dy.pDynamicStates))return false;
     k.u(v.flags);k.u(v.vertexBindingDescriptionCount);for(uint32_t i=0;i<v.vertexBindingDescriptionCount;i++){const auto &x=v.pVertexBindingDescriptions[i];k.u(x.binding);k.u(x.stride);k.u(x.inputRate);}
     k.u(v.vertexAttributeDescriptionCount);for(uint32_t i=0;i<v.vertexAttributeDescriptionCount;i++){const auto &x=v.pVertexAttributeDescriptions[i];k.u(x.location);k.u(x.binding);k.u(x.format);k.u(x.offset);}
     k.u(a.flags);k.u(a.topology);k.u(a.primitiveRestartEnable);
     k.u(p.pTessellationState!=nullptr);if(p.pTessellationState){k.u(p.pTessellationState->flags);k.u(p.pTessellationState->patchControlPoints);}
-    k.u(vp.flags);k.u(vp.viewportCount);k.u(vp.scissorCount);k.u(vp.pViewports!=nullptr);k.u(vp.pScissors!=nullptr);
+    k.u(vp.flags);k.u(vp.viewportCount);k.u(vp.scissorCount);k.u(vp.pViewports!=nullptr);k.u(vp.pScissors!=nullptr);k.u(dcc?dcc->negativeOneToOne:0);
     if(vp.pViewports)for(uint32_t i=0;i<vp.viewportCount;i++){const auto &x=vp.pViewports[i];k.f(x.x);k.f(x.y);k.f(x.width);k.f(x.height);k.f(x.minDepth);k.f(x.maxDepth);}
     if(vp.pScissors)for(uint32_t i=0;i<vp.scissorCount;i++){const auto &x=vp.pScissors[i];k.u(x.offset.x);k.u(x.offset.y);k.u(x.extent.width);k.u(x.extent.height);}
     k.u(r.flags);k.u(r.depthClampEnable);k.u(r.rasterizerDiscardEnable);k.u(r.polygonMode);k.u(r.cullMode);k.u(r.frontFace);k.u(r.depthBiasEnable);k.f(r.depthBiasConstantFactor);k.f(r.depthBiasClamp);k.f(r.depthBiasSlopeFactor);k.f(r.lineWidth);

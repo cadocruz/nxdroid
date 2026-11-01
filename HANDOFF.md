@@ -17,7 +17,8 @@ rule goes with the Apple removal (§8 item 10).
 ## Status at this cut (Sprint 6 – Physical Device Bring-Up & Live Diagnostics)
 
 The Android port has been compiled with the NDK, packaged as an APK, and successfully executed on a
-physical **Samsung Galaxy S23 Ultra** (Snapdragon 8 Gen 2, Adreno 740, 12 GB RAM, Android 14) via `com.nxdroid`.
+physical **Samsung Galaxy S23 Ultra** (Snapdragon 8 Gen 2, Adreno 740, 12 GB RAM, Android 16 / SDK 36, the
+version the probe measured) via `com.nxdroid`.
 
 The first fully running title is **Mario Kart 8 Deluxe** (`0100152000022000`, Update 4.0.1 `[v1507328]`):
 - **Native AArch64 execution:** Horizon SVCs and SDK services handled by `dm/host`, NSO modules rewritten via `dm/tools/patch_nso.py --target=android`.
@@ -35,15 +36,16 @@ Detailed diagnostics and live GPU/CPU telemetry were gathered during 3D race exe
    - *Cause:* `present_native = true` in `vulkan_present.cpp` called `ANativeWindow_setBuffersGeometry(active, 1920, 1080)`. Because the S23 Ultra display is a physical portrait panel (1544x720 landscape, 90° rotation), Qualcomm's Hardware Composer (DPU) performed non-integer column decimation across macroblock boundaries.
    - *Fix:* Kept the swapchain at native window resolution (`1544x720`), disabled `ANativeWindow_setBuffersGeometry` override (`present_native = false`), and enabled `VK_FILTER_LINEAR` in `vkCmdBlitImage`. The Adreno GPU now performs smooth bilinear downscaling with zero DPU decimation stripes.
 
-2. **3D Scene Color Solarization / High Contrast (Under Investigation):**
+2. **3D Scene Color Solarization / High Contrast (open):**
    - *Symptom:* 2D UI elements and MP4 video playback have accurate colors and sharpness, but 3D track scenes (e.g. Mario Kart Stadium) display neon green grass, crushed blacks on stadium roofs, and contour banding on asphalt.
-   - *Cause:* The Nintendo `agl` / `gsys` engine renders 3D passes into an intermediate HDR framebuffer (`VK_FORMAT_B10G11R11_UFLOAT_PACK32` / `R16G16B16A16_SFLOAT`) before tonemapping to the LDR swapchain. On Adreno Vulkan, sRGB vs UNORM sampler interpretation or the OpenGL depth convention (`near=-w` mapped to `near=0`) causes luminance overflow and tone curve crushing.
+   - *Suspects named at the time:* the Nintendo `agl` / `gsys` engine renders 3D passes into an intermediate HDR framebuffer (`VK_FORMAT_B10G11R11_UFLOAT_PACK32` / `R16G16B16A16_SFLOAT`) before tonemapping to the LDR swapchain, so either an sRGB-vs-UNORM interpretation in the 3D chain or the OpenGL depth convention was suspected of overflowing luminance and crushing the tone curve. Neither was confirmed: no pass, format or view census of the 3D chain has been taken on the device yet.
+   - *Fixed since, unmeasured:* the present blit decoded an sRGB swapchain texture a second time (`vulkan_present.cpp` always took the surface's UNORM format; `vkCmdBlitImage` decodes an sRGB source and encodes back only into an sRGB destination), which is exactly "darker and more saturated" for any game whose swapchain texture is `RGBA8_SRGB` / `BGRA8_SRGB`. The swapchain now follows the presented image's encoding and the `Swapchain:` line reports `format=`, `srgb=` and `source_srgb=`. See `docs/reference/android.md`, *The present blit decoded an sRGB swapchain texture a second time*. If the 3D picture is still wrong with `srgb=0 source_srgb=0` in that line, the fault is inside the 3D chain and the engine's existing `NVN viewfmt …` and `NVN mutable upgrade …` lines are the next evidence to read.
 
 3. **Framerate Telemetry (~12–19 FPS with 100ms spikes):**
    - *Telemetry:* `submit_cpu_ms = 58 ms`, `gpu_ms = 19.5 ms`, `parts_ms_per_frame fence = 28 ms, image = 13.4 ms, draw = 4.8 ms, snapshot = 4.2 ms`.
    - *Bottlenecks:*
      a) Double buffering caused the CPU render thread to stall waiting on fences (`fence = 28 ms`) because SurfaceFlinger holds one buffer during presentation. Resolved by enforcing triple buffering (`ci.minImageCount = 3`).
-     b) Synchronous memory snapshotting (`1,028 MB` per frame) for CPU-written texture detection adds ~13–18 ms CPU overhead per frame.
+     b) The texture content check hashed every bound texture on its 4th and then every 16th submission (`image = 13.4 ms`). **Resolved in code, unmeasured on the device:** `nativeStartHost` set no `DM_GFX_*` variable at all, so the whole set of switches the engine documents as "the Android app sets …" ran at its desktop default. It now sets them (`docs/reference/android.md`, *Every `DM_GFX_*` switch the engine documents for Android was unset*): the dirty-tracker check (`TEX_DIRTY=1`) is the one that removes the hashing, with the vertex/index cache, the pipeline memo, the async command-pool reset, native BC, deferred events, writeback skipping, shader reuse and the two translator clean-ups beside it, and `PERF_SAMPLE=0` so the timing scopes themselves stop costing ~4 ms in every 32nd frame.
 
 ---
 
@@ -96,15 +98,15 @@ The dump itself is not in the repository (it is a device artifact); regenerate i
 | Path | What it is | State |
 |---|---|---|
 | `dm/gfx/vulkan/` (85 files) | the vendored Vulkan engine and its `nvn_vk.c` adapter | imported, pinned, adapted (`xbg_game.cpp` 12 handlers, `nvn_vk.c` 27 entry points) |
-| `dm/android/` (compat, docker, front end, CMake) | the vendored bionic compatibility layer and build environment | imported; `CMakeLists.txt` (any profile, `-DGAME=`), `front_android.c` (our `front.h`) and `vulkan_present.cpp` (viewport features) are adapted; `tools/host_sources.py` is ours; NDK build not run |
+| `dm/android/` (compat, docker, front end, CMake) | the vendored bionic compatibility layer and build environment | imported; `CMakeLists.txt` (any profile, `-DGAME=`), `front_android.c` (our `front.h`) and `vulkan_present.cpp` (viewport features) are adapted; `tools/host_sources.py` is ours; configured and built with NDK r29, linked into `libdm.so` and `dmhost`, both run on the device (§8 item 9) |
 | `dm/tools/android_vendor.py` + `.tsv` | provenance gate: 108 rows, 11 adapted | green on Linux; on a Windows checkout (autocrlf, no file modes) compare against the HEAD blobs |
 | `dm/gfx/vk/probe/` | the device capability probe: `vk_probe.c`, a Makefile with a desktop and an `android` target, a frozen output contract in `tests/test_probe_output.py` | built and run on the device, 0 breaches |
 | `dm/gfx/vk/engine_smoke/` | the out-of-tree harness that compiles the vendored engine against **our** headers and initializes it, plus the two generated vocabulary reports and `README.md` | green on desktop (llvmpipe + RTX 5060 Ti) |
 | `dm/gfx/vk/address_space.md` | the 64-bit-address-space decision | written, unreviewed by hand |
-| `dm/host/port.h`, `dm/android/port_android.c`, `dm/android/apple_stubs.c` (+ `apple_stubs/include`) | the host's platform layer (Apple inline, bionic real) and the interface stubs for AudioUnit / CF / CV / VT | written, read and syntax-checked only (§8 items 4, 4a) |
+| `dm/host/port.h`, `dm/android/port_android.c`, `dm/android/apple_stubs.c` (+ `apple_stubs/include`) | the host's platform layer (Apple inline, bionic real) and the Android implementations of the Apple media interfaces (AAudio output, MediaCodec H.264) with the remaining stubs (AAC) | compiled for arm64 with the NDK and run on the device; AAC through `AudioConverter` is still a stub (§8 items 4, 4a) |
 | `dm/android/tools/{host_sources,undef_scan}.py`, `dm/tools/tests/test_{thread_slots,android_undef_scan}.py` | the source-list expander, the undefined-symbol and Mach-O assembly gate, and their tests | green |
 | `dm/tools/android_audit.py` + baseline + tests | "is this file portable to Android?", with a baseline that only shrinks | green; 760 hits in 38 files |
-| `README.md` | rewritten for nxdroid: Android-only, status (not built, not run), build structure, open list | current; its gallery block is generated from Apple builds (§8 item 10) |
+| `README.md` | rewritten for nxdroid: Android-only, status (built and running on the S23 Ultra), build structure, open list | current; its gallery block is generated from Apple builds (§8 item 10) |
 | `docs/reference/android.md` | the vendored engine reference: pin, gate, device, Adreno gates, ABI gaps, licensing | current |
 | `.opencode/agents/android-{dev,qa,shaders,upstream}.md` | the four specialist agents this work was coordinated through | in use / active |
 
@@ -157,9 +159,8 @@ Building and running on the device:
 podman run --rm --userns=keep-id -v "$PWD:/src:rw" -w /src dm-android-tools:1 \
     make -C dm/gfx/vk/probe android NDK=/opt/android-sdk/ndk/29.0.14206865
 
-# the host for one profile (GAME as in make -C dm/host; no default): configure + dmhost. Not yet run on an NDK
-# (only a desktop configure and gcc -fsyntax-only of the Android sources were run); expect the bionic
-# compile errors §8 item 4 lists first. ANDROID_PLATFORM >= 29 (the guest thread slots are in bionic's TLS_SLOT_APP,
+# the host for one profile (GAME as in make -C dm/host; no default): configure + dmhost. Built with this
+# NDK (r29) and run on the device (§8 item 9). ANDROID_PLATFORM >= 29 (the guest thread slots are in bionic's TLS_SLOT_APP,
 # the app's from 29, §8 item 4a; the Vulkan 1.1 entry points need 28; the CMake stops below 29) and arm64-v8a only.
 # The game's modules must be rewritten with dm/tools/patch_nso.py --target=android: the loader refuses the default (Apple) output. A profile outside the repository:
 # mount its folder and pass DM_GAMES_DIR in the environment (-e DM_GAMES_DIR=/games -v <folder>:/games:ro);
@@ -218,7 +219,8 @@ The sprint on the replay and the Vulkan ABI gap is complete:
   and clears, reset on submission boundary (`depth == 0`); 4-byte alignment checked on `OP_CLEAR_BUF`.
 - **ABI Gaps Closed:** all 27 missing `mtl_*` entry points defined in `dm/gfx/vulkan/nvn_vk.c`,
   and `mtl_sub_fill` routes directly to `OP_CLEAR_BUF`.
-- **4 KiB page fix in host probe:** comment regex trigger resolved, audit baseline reduced to 832 hits.
+- **4 KiB page fix in host probe:** comment regex trigger resolved; the audit baseline is 760 hits in
+  38 files (§6), down from 832 before the host bring-up.
 - **`P6` (n > 1 viewports) handled in the draw, not reachable end to end yet:** `OP_VIEWPORTS`
   keeps the 16-entry array and its length; a draw declares and sets `viewport_n` viewports (dynamic
   state, the one recorded scissor and depth range for each, per-viewport swizzle applied, an unset
@@ -284,7 +286,8 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    S23 Ultra until it is run again. `P8` (barrier cache bits) is benign: the reader's single full
    barrier is stronger, so it is recorded and left.
 3. **[DONE] The 27 missing `mtl_*` entry points.** Implemented in `dm/gfx/vulkan/nvn_vk.c`.
-4. **Host bring-up**: `dm/host` on bionic, with the audit as the checklist. **Started**: the four
+4. **[DONE, with the audit as the checklist] Host bring-up**: `dm/host` on bionic. Built for arm64 with
+   NDK r29 and run on the device (§8 item 9). **First step**: the four
    isolated APIs (`clonefile`, QoS, Mach absolute time, CommonCrypto) are behind `dm/host/port.h`
    (Apple inline) and `dm/android/port_android.c` (bionic, over `dm/android/compat/`); see
    `docs/reference/android.md` § *The host's platform primitives live in `dm/host/port.h`*.
@@ -329,23 +332,27 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    `dm_fd_path`, `dm_heap_*` (`hle_uemalloc.c` on bionic's malloc), `dm_sem_*` / `dm_after_ns` /
    `dm_on_sigterm` (GCD's semaphore, `dispatch_after` and signal source), `dm_cpu_perf_levels`,
    `dm_proc_start_ns`, `dm_thread_sched`, `dm_ticks_ns`; `hle_nvn.c`'s `CFDictionary` is an
-   `nvn_hmap`. Platform limits, said once with `[RED]` or a plain line: `dm_vm_alias` (Linux cannot
-   alias an anonymous private page: virtual pools and the write watch need a memfd-backed guest
-   block, open; a first-run blocker for any game mapping virtual pools), `dm_thread_rt_set` (no SCHED_FIFO for an app), `dm_task_power` (energy, p-core
+   `nvn_hmap`. Platform limits, said once with `[RED]` or a plain line:
+   `dm_thread_rt_set` (no SCHED_FIFO for an app), `dm_task_power` (energy, p-core
    time, wakeups and GPU time are Apple task_info facts; `power_line` prints nothing there).
-   `AudioUnit*` / `AudioConverter*` and `CF*` / `CM*` / `CV*` / `VT*` are interface stubs that fail
-   with a `[RED]` line once (`dm/android/apple_stubs.c`, headers under
-   `dm/android/apple_stubs/include`): the silent sink plays the audio, an AAC track is silent, an
-   AVC movie shows black frames; no backend was designed. Measured here: `gcc -fsyntax-only` of
+   `dm_vm_alias` was one of these and is no longer: `dm_guest_as_reserve` backs the guest address
+   space with a `memfd` and `MAP_SHARED`, and `dm_vm_alias` maps an alias at the same file offset, so
+   virtual pools and the write watch work (item 11, *[RESOLVED] First-run blocker unblocked*).
+   The Apple media interfaces in `dm/android/apple_stubs.c` (headers under
+   `dm/android/apple_stubs/include`) are split: the `AudioUnit` output is real (AAudio, 48 kHz stereo)
+   and the H.264 decoder is real (`AMediaCodec`, NV12 into a `CVPixelBufferRef`), while AAC through
+   `AudioConverter` is still a stub that says so once with `[RED]`, so an AAC track is silent.
+   Measured here: `gcc -fsyntax-only` of
    the Apple branch of `port.h` (shim headers for every Apple type it names), of `port_android.c`
-   and of `apple_stubs.c`; the four QoS probes still green; audit 816 → 759 (the 43 new rows are
-   `port.h`'s inline Apple branch and comments naming the APIs). **Unverified:** no arm64 or NDK
-   compile of the host files (the mingw shims cannot take `hle.h`'s includes), so the call-site
+   and of `apple_stubs.c`; the four QoS probes still green; audit 816 → 759 in this step (760 after the
+   `thread-register` row, §6; the 43 new rows are
+   `port.h`'s inline Apple branch and comments naming the APIs). **Compiled since:** the NDK build of the
+   host files and the device run (§8 item 9) cover the call-site
    edits in `crash.c`, `probe.c`, `hle_thread.c`, `hle_nvn.c`, `hle_audio.c`, `hle_fs.c`,
-   `hle_uemalloc.c`, `loader.c`, `main.c`, `hle_lifecycle.c`, `hle_movie.c`, `hle_fdstat.c` are
-   read, not compiled; `DM_SECTION`'s ELF sections need `-z nostart-stop-gc` (present) and the
-   weak `__start_*` references resolve only when at least one entry exists; the bare-symbol /
-   `:lo12:` spellings of `HLE_FORCE_BIG` and `hle_bigstack.c` have not been through the NDK assembler; `dm_uc_ns`'s fpsimd
+   `hle_uemalloc.c`, `loader.c`, `main.c`, `hle_lifecycle.c`, `hle_movie.c`, `hle_fdstat.c`, the
+   `DM_SECTION` ELF sections and the bare-symbol / `:lo12:` spellings of `HLE_FORCE_BIG` and
+   `hle_bigstack.c`. **Unverified:** that the
+   weak `__start_*` references resolve when no entry exists; `dm_uc_ns`'s fpsimd
    record walk and `dm_proc_start_ns` are untested on a device. **CMake:**
    `dm/android/apple_stubs.c` is in `ANDROID_SRCS` and `dm/android/apple_stubs/include` is on `dmcore`'s
    include path (done after QA round F). `pthread_gettid_np` (used by `port_android.c` and compat's
@@ -377,23 +384,25 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    mutation QA listed fails it: the raw Darwin word in six sites, the wrong register in `site_window`, the
    `KSLOT_TP_OFF` line dropped / changed / renamed, the table load removed, `tpidrro_el0` on Android, word 3.
    The Apple word sequence is pinned; `gcc -fsyntax-only -Wall` of `port_android.c`, `loader.c`, `thread.c`,
-   `hle_thread.c`, `crash.c`, `hle_nvn.c` over MinGW with Linux shim headers (scratch, not in the tree). **Unverified:** an NDK
-   build and a device run; that a new thread's word 2 is 0 (bionic zeroes the control block with the static
+   `hle_thread.c`, `crash.c`, `hle_nvn.c` over MinGW with Linux shim headers (scratch, not in the tree). **Verified since:** an NDK
+   build and a device run of the slot mechanism (§8 item 9: `test_device_bionic` on the S23 Ultra confirms
+   `tpidr_el0 + 0x10` is zero on the main thread and on spawned pthreads). **Unverified:** that a new thread's word 2 is 0 (bionic zeroes the control block with the static
    TLS, from memory); that no library in the app process writes word 2 (the GL / Vulkan loaders, the
    sanitizers and ART use other words per bionic's `tls_defines.h`, quoted from memory: no bionic source in
-   the tree); the inline assembly of `dm_kslot_guest_read`; and the packing step: nothing in the tree runs
-   the rewriter for Android yet (no Android packing path), so the first one must pass `--target=android`.
-   `scripts/build_ipa_from_nsp.py`'s `rewrite()` reuses its output by a fingerprint of the rewriter's files,
-   the patch files, the modules and capstone's version, with no target in it, and calls `patch_nso.py`
-   without `--target`: an Android packing path built on it must add the target to that fingerprint (or keep
-   its own output directory) and pass `--target=android`, or an Apple rewrite would be reused.
+   the tree); the inline assembly of `dm_kslot_guest_read`; and the packing step, which is settled:
+   `scripts/prepare_game_android.py` runs the rewriter with `--target=android` for every module on every
+   run and caches no output, so an Apple rewrite cannot be reused there. `scripts/build_ipa_from_nsp.py`'s
+   `rewrite()` still reuses its output by a fingerprint of the rewriter's files, the patch files, the modules
+   and capstone's version, with no target in it, and calls `patch_nso.py` without `--target`; that is the
+   Apple path, and any Android path built on it later must add the target to that fingerprint (or keep its
+   own output directory).
    Open (Go and other third parties): Go's runtime with cgo keeps `g` in `TLS_SLOT_APP` on android/arm64
    from API 29 (golang/go#29674, as QA reported): a Go library in the app process cannot share it.
 4b. **[CODE DONE] Event reads on the Vulkan replay** (round I): `hle_nvn.c` now calls `mtl_event_read`
    (declared in `nvn_mtl.h`, weak no-op beside the callers for the Metal replay, `nvn_vk.c`'s strong
    definition on Android) before `nvnEventInitialize` / `Finalize` / `GetValue` and `ev_signal`'s
    read-modify-write; `event_order_test.py` passes (it failed at HEAD), `abi_gaps` extra 29 → 28.
-5. **[WIRED, NDK build not run] Wire it into a build**: `dm/android/CMakeLists.txt` takes `-DGAME=<id>`
+5. **[DONE] Wire it into a build**: `dm/android/CMakeLists.txt` takes `-DGAME=<id>`
    like `make -C dm/host` (stops and lists the profiles without it; `DM_GAMES_DIR` honoured),
    generates `game_profile.h` with `dm/games/game.py header`, reads the source list from
    `dm/host/Makefile` through `dm/android/tools/host_sources.py` (ours), builds libvpx, and compiles
@@ -411,9 +420,10 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    one-time `[RED]` "not collected / not implemented on this platform", and `mtl_display_hz` reads
    `front_screen_max_fps`. Measured: the desktop configure
    (MinGW gcc) in the three `GAME` cases and the `game_profile` target; `gcc -fsyntax-only` of
-   `front_android.c`, `nvn_vk.c` and `vulkan_present.cpp`; `undef_scan.py` clean. **Open:** the NDK
-   configure and build (§5), the app shell (`jni_android.c`, Java activity, touch, Gradle), the bionic
-   compile errors of the host files (item 4), and a graphics layer for the Vulkan / OpenGL games:
+   `front_android.c`, `nvn_vk.c` and `vulkan_present.cpp`; `undef_scan.py` clean. **Done since:** the NDK
+   configure and build, the app shell (`jni_android.c`, Java activity, touch, Gradle) and the bionic
+   compile of the host files all landed and ran on the device (§8 items 8, 9). **Open:** a graphics
+   layer for the Vulkan / OpenGL games:
    `dm/gfx/vk/hle_vk.m` and `dm/gfx/gl/hle_gl.m` are Metal and dropped, so a profile whose game
    renders through them has no graphics HLE on Android yet (the games table names them).
 6. **Probe v2, the last chance for zero-copy**: `vkGetPhysicalDeviceExternalBufferProperties` for
@@ -531,6 +541,30 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
          for API 29+ compatibility), `dm_guest_as_reserve`, `dm_guest_as_release`, and `dm_vm_alias`. `dm/host/hle_svc.c` uses `dm_guest_as_reserve`.
          `dm/tools/tests/test_android_vm_alias.py` verifies reservation, dynamic and fixed aliasing, write coherence, independent page protection,
          bounds checks, and release/re-reserve on host and via NDK cross-compilation.
+12. **The graphics work on the device (open, needs a build and a log).** Both changes are in the
+    working tree and compile with the NDK (`-fsyntax-only`, `aarch64-linux-android29`): the graphics
+    defaults in `dm/android/jni_android.c` (§Status item 3b) and the present encoding in
+    `dm/android/vulkan_present.cpp` (§Status item 2). Neither has been measured. To measure:
+    1. Build and install the APK (README, *How to build*), run a race, then collect
+       `adb logcat -d -s dm > log.txt`.
+    2. Read, in the log, the `nativeStartHost: DM_GFX_…` lines (the value in effect for each switch),
+       the engine's own `NVN texture checks through the dirty tracker=`, `NVN vertex/index cross-frame
+       cache=`, `NVN pipeline memo=`, `NVN native BC textures=` and `NVN defer events=` lines, then
+       `NVN PERF` for `fps`, `submit_cpu_ms`, `gpu_ms`, `parts_ms_per_frame` (`fence`, `image`,
+       `draw`, `snapshot`) and `NVN PERF texdirty tracked/checks/changed`. The `image` scope is the
+       one the defaults were meant to remove.
+    3. Read `Swapchain: … format= srgb= source_srgb=` once per rebuild: if `source_srgb=1` the
+       present fix applies; if it is 0 the 3D colour fault is inside the 3D chain, and the engine's
+       `NVN viewfmt image=… view=… nvn=0x38->0x25` and `NVN mutable upgrade …` lines are the next
+       evidence (each prints once per distinct pair).
+    4. A/B any single switch without a rebuild: the engine reads a marker file from the parent of the
+       shader directory (`<game folder>/shaders` → `<game folder>`, and the game folder's parent when
+       the game has no `shaders` subdirectory; `MainActivity` passes `<game folder>/shaders` as the
+       shader directory). Write `gfx-tex-dirty`, `gfx-vcache`, `gfx-pipe-memo`, `gfx-native-bc`,
+       `gfx-perf-sample`, `gfx-defer-events`, `gfx-wb-skip`, `gfx-shader-reuse`,
+       `gfx-upload-prologue`, `gfx-xview-guard`, `gfx-ldc-fold`, `gfx-forward-temps`,
+       `gfx-quad-derivatives` or `gfx-warp32` with `0` in it to turn that switch off. A marker wins
+       over the environment, so this needs no rebuild at all.
 
 ## 9. How to work in this tree
 

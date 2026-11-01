@@ -1,6 +1,9 @@
-// The Apple media frameworks the host names, on bionic: every function fails, and each family says so once with a [RED] line. These are interfaces only, so that the Android
-// link set is complete; the backends (an AAudio output for hle_audio.c, MediaCodec for hle_movie.c's AAC and hle_movie_avc.c's H.264) are separate work. The host's own fallbacks
-// then apply: the silent sink paces the game's audio in real time, an AAC track is silent, an AVC movie shows black frames.
+// The Apple media frameworks the host names, on bionic. Two families have real backends: the AudioUnit
+// output plays through AAudio (hle_audio.c's 48 kHz stereo PCM) and VideoToolbox's H.264 decoder decodes
+// through MediaCodec into an NV12 CVPixelBufferRef (hle_movie_avc.c). The rest fail, each family saying so
+// once with a [RED] line, so that the Android link set is complete: an AAC track through AudioConverter is
+// silent, an unsupported AudioUnit component type is refused. The host's own fallbacks then apply: the
+// silent sink paces the game's audio in real time.
 #include "../host/dm.h"   // LOG
 #include <AudioToolbox/AudioToolbox.h>
 #include <VideoToolbox/VideoToolbox.h>

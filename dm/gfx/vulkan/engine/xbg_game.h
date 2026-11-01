@@ -53,6 +53,12 @@ int xbg_game_set_sampler_mirror_clamp_to_edge(VkBool32 enabled);
  * ViewportIndex is then refused at load. Returns 0, -1 (bad value or too late), -2 (the
  * device lacks it). Existing config ABI intact. */
 int xbg_game_set_viewport_features(VkBool32 shader_output_viewport_index,VkBool32 multiview);
+/* VK_EXT_depth_clip_control: true only if the device was created with VK_EXT_depth_clip_control
+ * enabled (VkPhysicalDeviceDepthClipControlFeaturesEXT.depthClipControl). */
+int xbg_game_set_depth_clip_control(VkBool32 enabled);
+int xbg_game_has_depth_clip_control(void);
+/* NVN's depth mode: 1 = near is 0 (Vulkan default); 0 = near is -w (OpenGL convention). */
+void xbg_game_set_depth_zero(VkBool32 zero);
 /* NVN's window origin (nvnDeviceSetWindowOriginMode; the host's mtl_set_origin_lower_left),
  * from any thread at any time. lower_left: the picture is stored bottom-up, so every
  * viewport is flipped about its centre and the host flips the window image at present. */

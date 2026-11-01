@@ -4,7 +4,7 @@ nxdroid is an Android-only port of [nxnative](https://github.com/seedds/nxnative
 
 ## Status
 
-**The Android port is running on a physical device.** Built and verified on a Samsung Galaxy S23 Ultra (Snapdragon 8 Gen 2 / Adreno 740, 12 GB RAM, Android 14) with **Mario Kart 8 Deluxe** (`0100152000022000`, Update 4.0.1 `[v1507328]`):
+**The Android port is running on a physical device.** Built and verified on a Samsung Galaxy S23 Ultra (Snapdragon 8 Gen 2 / Adreno 740, 12 GB RAM, Android 16 / SDK 36) with **Mario Kart 8 Deluxe** (`0100152000022000`, Update 4.0.1 `[v1507328]`):
 
 - **Native Execution:** The game's AArch64 code runs natively with rewrites from `dm/tools/patch_nso.py --target=android`. Horizon SVCs and system services are handled by `dm/host`.
 - **Vulkan Graphics:** NVN commands are replayed via the Vulkan replay engine (`dm/gfx/vulkan`) with triple buffering (`ci.minImageCount = 3`) and bilinear scaling blits (`VK_FILTER_LINEAR`) to the native display extent (`1544x720`).
@@ -55,7 +55,7 @@ The Android build is organized under `dm/android/`:
 
 ## Games
 
-The profiles are the games nxnative supports; see the [per-game notes](dm/games/README.md#games) for each game's build, SDK, engine and graphics API. Those notes and the screenshots and sizes below come from the Mac and iPhone builds of nxnative. They say nothing about Android: none of these games has been run on Android.
+The profiles are the games nxnative supports; see the [per-game notes](dm/games/README.md#games) for each game's build, SDK, engine and graphics API. Those notes and the screenshots and sizes below come from the Mac and iPhone builds of nxnative. They say nothing about Android: apart from Mario Kart 8 Deluxe, whose Android status is the one in [Status](#status) above, none of these games has been run on Android.
 
 The size under each game is its IPA size on iOS; "60 fps with 1.2.0" marks a game that nxnative runs at 60 fps (30 on the Switch) with that update.
 

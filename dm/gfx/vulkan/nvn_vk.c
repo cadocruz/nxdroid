@@ -48,6 +48,7 @@ int dm_vk_initialize(const dm_vk_config *config,char *error,size_t bytes){
     r=xbg_game_set_viewport_features(config->shader_output_viewport_index,config->multiview);
     if(r==-2)LOG("[RED] viewport features: the front end enabled shaderOutputViewportIndex=%u multiview=%u but the engine does not see them on this device; multi-viewport shaders will be refused at load",(unsigned)config->shader_output_viewport_index,(unsigned)config->multiview);
     else if(r){if(error&&bytes)snprintf(error,bytes,"xbg_game_set_viewport_features(%u,%u)=%d",(unsigned)config->shader_output_viewport_index,(unsigned)config->multiview,r);xbg_game_shutdown();return r;}
+    xbg_game_set_depth_clip_control(config->depth_clip_control);
     g_config=*config;g_ready=1;return 0;
 }
 void mtl_init(void){if(!g_ready)die("真实Vulkan后端未初始化（Surface/设备/着色器目录需先接入）");}
@@ -167,8 +168,16 @@ void mtl_queue_forget(uint64_t serial) { (void)serial; }
 // mode gets its depth mapped as near = 0. Said once, at the first submission (the host sets the default at device creation and the game changes it before
 // drawing, so the value at the first submit is the game's).
 static _Atomic int g_depth_zero, g_depth_said;
-void mtl_set_depth_zero(int on) { atomic_store(&g_depth_zero, on != 0); }
-static void vk_depth_mode_check(void) { if (!atomic_load(&g_depth_zero) && !atomic_exchange(&g_depth_said, 1)) LOG("[RED] NVN depth mode near=-w (GL) kept by the game: the Vulkan replay has no near=-w vertex entry point (nvn_mtl.m entry_z), depth is mapped as near=0; not implemented"); }
+void mtl_set_depth_zero(int on) { atomic_store(&g_depth_zero, on != 0); xbg_game_set_depth_zero(on != 0); }
+static void vk_depth_mode_check(void) {
+    if (!atomic_load(&g_depth_zero) && !atomic_exchange(&g_depth_said, 1)) {
+        if (xbg_game_has_depth_clip_control()) {
+            LOG("NVN depth mode near=-w (GL) kept by the game: active via VK_EXT_depth_clip_control (negativeOneToOne)");
+        } else {
+            LOG("[RED] NVN depth mode near=-w (GL) kept by the game: the Vulkan replay has no near=-w vertex entry point (nvn_mtl.m entry_z), depth is mapped as near=0; not implemented");
+        }
+    }
+}
 // NVN window origin: the engine flips the viewports (xbg_game_set_window_origin) and the winding (xbg_game_set_queue_origin), the front end flips the
 // window image at present (vulkan_present.cpp reads dm_vk_present_flip), as nvn_mtl.m does for its lower-left origin. Each setter passes on only its own
 // value: hle_nvn.c sets the device origin from any guest thread without the submit lock and the queue origin under it before each submission, so a

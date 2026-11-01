@@ -282,6 +282,35 @@ static jboolean nativeStartHost(JNIEnv *env, jclass clazz, jstring gameDir, jstr
     // Enable AAudio real audio by default on Android
     setenv("DM_AUDIO", "1", 0);
 
+    // The Vulkan engine's Android defaults. Each switch below is documented in dm/gfx/vulkan/engine/xbg_game.cpp as
+    // "the Android app sets ...", and until now nothing set them, so every one of them ran at its desktop default: the
+    // texture content check hashed every bound texture on its 4th and then every 16th submission (the "image" scope of
+    // the frame time), the cross-frame vertex and index copies and the pipeline memo were off, and the two shader
+    // rewrites the Android build needs for correct output on 64-lane subgroups were off. Set before the host starts,
+    // and an existing value wins (overwrite 0), so a profile or a shell export can still override any of them. A marker
+    // file in the shader directory's parent (gfx-tex-dirty, gfx-vcache, ...) still takes precedence over these.
+    static const struct { const char *name, *value, *why; } gfx_defaults[] = {
+        {"DM_GFX_TEX_DIRTY", "1", "hash a bound texture only after a guest write to its pages"},
+        {"DM_GFX_VCACHE", "1", "reuse the previous frame's vertex and index copies"},
+        {"DM_GFX_PIPE_MEMO", "1", "reuse the previous draw's pipeline when every input matches"},
+        {"DM_GFX_ASYNC_POOL_RESET", "1", "reset a command pool off the render thread"},
+        {"DM_GFX_PERF_SAMPLE", "0", "time one frame in 32 (the timing scopes cost more than they show)"},
+        {"DM_GFX_NATIVE_BC", "1", "sample BC textures in their own formats instead of decoding on upload"},
+        {"DM_GFX_DEFER_EVENTS", "2", "publish an event value when its slot retires"},
+        {"DM_GFX_WB_SKIP", "1", "drop a writeback a newer GPU result covers"},
+        {"DM_GFX_SHADER_REUSE", "1", "load the SPIR-V the warm-up threads already rewrote"},
+        {"DM_GFX_UPLOAD_PROLOGUE", "1", "upload an unused image before the submission, in the prologue buffer"},
+        {"DM_GFX_XVIEW_GUARD", "1", "guard a readback buffer reused while the GPU still reads the old one"},
+        {"DM_GFX_LDC_FOLD", "1", "fold a constant-buffer component the shader addresses dynamically"},
+        {"DM_GFX_FORWARD_TEMPS", "1", "forward single-store temporaries into the access chains"},
+        {"DM_GFX_QUAD_DERIVATIVES", "1", "rewrite quad shuffles to fine derivatives (off again on Adreno 740-799)"},
+        {"DM_GFX_WARP32", "1", "run 32-lane warp shaders as 32 lanes on a wider subgroup (off again on Adreno 740-799)"},
+    };
+    for (size_t i = 0; i < sizeof gfx_defaults / sizeof *gfx_defaults; i++) {
+        setenv(gfx_defaults[i].name, gfx_defaults[i].value, 0);
+        LOG("nativeStartHost: %s=%s (%s)", gfx_defaults[i].name, getenv(gfx_defaults[i].name), gfx_defaults[i].why);
+    }
+
     // Set working directory
     if (save_str && *save_str) {
         chdir(save_str);
