@@ -8,9 +8,9 @@ Todas as propostas atendem ao requisito fundamental: **permitir que o usuário a
 
 ## 1. Proposta Gemini 4 Argon (Agente Especialista Android UI/UX)
 
-- **Arquivo de Imagem:** [`mockup_argon.png`](file:///home/cado/Documentos/projetos/python/nxdroid/dm/android/mockups/mockup_argon.png)
-- **Especificação Técnica Completa:** [`design_spec_argon.md`](file:///home/cado/Documentos/projetos/python/nxdroid/dm/android/mockups/design_spec_argon.md)
-- **Script Gerador:** [`render_argon.py`](file:///home/cado/Documentos/projetos/python/nxdroid/dm/android/mockups/render_argon.py)
+- **Arquivo de Imagem:** [`mockup_argon.png`](mockup_argon.png)
+- **Especificação Técnica Completa:** [`design_spec_argon.md`](design_spec_argon.md)
+- **Script Gerador:** [`render_argon.py`](render_argon.py)
 
 ![Mockup Argon](mockup_argon.png)
 
@@ -33,8 +33,8 @@ Todas as propostas atendem ao requisito fundamental: **permitir que o usuário a
 
 ## 2. Proposta Codex (OpenAI)
 
-- **Arquivo de Imagem:** [`mockup_codex.png`](file:///home/cado/Documentos/projetos/python/nxdroid/dm/android/mockups/mockup_codex.png)
-- **Script Gerador:** [`render_mockup.py`](file:///home/cado/Documentos/projetos/python/nxdroid/dm/android/mockups/render_mockup.py)
+- **Arquivo de Imagem:** [`mockup_codex.png`](mockup_codex.png)
+- **Script Gerador:** [`render_mockup.py`](render_mockup.py)
 
 ![Mockup Codex](mockup_codex.png)
 
@@ -53,7 +53,7 @@ Todas as propostas atendem ao requisito fundamental: **permitir que o usuário a
 
 ## 3. Proposta OpenCode
 
-- **Arquivo de Imagem:** [`mockup_opencode.png`](file:///home/cado/Documentos/projetos/python/nxdroid/dm/android/mockups/mockup_opencode.png)
+- **Arquivo de Imagem:** [`mockup_opencode.png`](mockup_opencode.png)
 
 ![Mockup OpenCode](mockup_opencode.png)
 

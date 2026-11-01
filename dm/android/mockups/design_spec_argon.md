@@ -204,6 +204,6 @@ MainActivity (Activity)
 ---
 
 ## 6. Verification and Output
-- **Mockup File:** `/home/cado/Documentos/projetos/python/nxdroid/dm/android/mockups/mockup_argon.png`
+- **Mockup File:** `dm/android/mockups/mockup_argon.png`
 - **Resolution:** 1920 × 1080 pixels (8-bit RGB PNG)
 - **Generator Script:** `dm/android/mockups/render_argon.py`

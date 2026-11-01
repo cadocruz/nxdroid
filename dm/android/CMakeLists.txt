@@ -166,7 +166,7 @@ target_compile_options(dmcore PUBLIC $<$<COMPILE_LANGUAGE:C>:${DM_CFLAGS} -std=g
 # The C++ side (vulkan_present.cpp): the same level and aliasing rule, without the compat force-include (it includes no host header)
 target_compile_options(dmcore PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-O1 -g -Wall -fno-strict-aliasing>)
 target_compile_features(dmcore PUBLIC cxx_std_17)
-target_link_libraries(dmcore PUBLIC dm_vulkan_engine dm_vpx aaudio android log m dl)
+target_link_libraries(dmcore PUBLIC dm_vulkan_engine dm_vpx aaudio mediandk android log m dl)
 
 # Command-line host: main.c as is
 add_executable(dmhost ${HOST}/main.c)

@@ -49,38 +49,90 @@ static void mii_default(mii_charinfo *c, int gender, int index) {
     c->mole_scale = 4; c->mole_x = 2; c->mole_y = 20;
 }
 
+static mii_charinfo g_db[100];
+static int g_ndb;
+static pthread_mutex_t g_mii_mu = PTHREAD_MUTEX_INITIALIZER;
+
 // The object keeps its service pointer at +0, which the constructor zeroes and the destructor releases through its vtable when set; the host never sets it
 HLE_FORCE("_ZN2nn3mii8Database10InitializeEv", "mii:u service; the host's database: the six default Miis, none of the console's own", Result, h_mii_Init, void *self) {
     (void)self; LOG("mii: Database::Initialize (the six default Miis, none of the console's own)"); return RES_OK;
 }
 HLE_FORCE("_ZN2nn3mii8Database8FinalizeEv", "mii:u service; nothing to release", void, h_mii_Fin, void *self) { (void)self; }
 HLE_FORCE("_ZNK2nn3mii8Database11IsAvailableEv", "mii:u service; always available", int, h_mii_Avail, const void *self) { (void)self; return 1; }
-HLE_FORCE("_ZN2nn3mii8Database9IsUpdatedEi", "mii:u service; the empty database never changes", int, h_mii_Updated, void *self, int src) { (void)self; (void)src; return 0; }
-HLE_FORCE("_ZNK2nn3mii8Database14IsFullDatabaseEv", "mii:u service; empty, so not full", int, h_mii_Full, const void *self) { (void)self; return 0; }
-// Source flags: 1 the console's database (empty here), 2 the six default Miis every console has. Mario Kart 8 Deluxe asks for the defaults with room for 6 and never reads the count
-// (main+0x81e954): its boot-time list of Mii icons (main+0x419dc8) builds a head for each of the six, and zeroed entries failed the model's CharInfo check
+HLE_FORCE("_ZN2nn3mii8Database9IsUpdatedEi", "mii:u service; the database state", int, h_mii_Updated, void *self, int src) { (void)self; (void)src; return 0; }
+HLE_FORCE("_ZNK2nn3mii8Database14IsFullDatabaseEv", "mii:u service; check if database is full", int, h_mii_Full, const void *self) {
+    (void)self; pthread_mutex_lock(&g_mii_mu); int full = g_ndb >= 100; pthread_mutex_unlock(&g_mii_mu); return full;
+}
+// Source flags: 1 the console's database, 2 the six default Miis every console has.
 enum { MII_SRC_DATABASE = 1, MII_SRC_DEFAULT = 2, MII_DEFAULTS = 6 };
 static int mii_get(void *buf, int n, int src, size_t stride) {
+    if (!buf || n <= 0) return 0;
     int k = 0;
-    for (; (src & MII_SRC_DEFAULT) && buf && k < n && k < MII_DEFAULTS; k++) {
-        uint8_t *e = (uint8_t *)buf + (size_t)k * stride;
-        mii_default((mii_charinfo *)e, k >= 3, k);
-        if (stride > sizeof(mii_charinfo)) { uint32_t source = 1; memcpy(e + sizeof(mii_charinfo), &source, 4); }   // CharInfoElement: the CharInfo and its source (1 = default)
+    pthread_mutex_lock(&g_mii_mu);
+    if (src & MII_SRC_DATABASE) {
+        for (int i = 0; i < g_ndb && k < n; i++, k++) {
+            uint8_t *e = (uint8_t *)buf + (size_t)k * stride;
+            memcpy(e, &g_db[i], sizeof(mii_charinfo));
+            if (stride > sizeof(mii_charinfo)) { uint32_t source = 0; memcpy(e + sizeof(mii_charinfo), &source, 4); }
+        }
     }
+    if (src & MII_SRC_DEFAULT) {
+        for (int i = 0; i < MII_DEFAULTS && k < n; i++, k++) {
+            uint8_t *e = (uint8_t *)buf + (size_t)k * stride;
+            mii_default((mii_charinfo *)e, i >= 3, i);
+            if (stride > sizeof(mii_charinfo)) { uint32_t source = 1; memcpy(e + sizeof(mii_charinfo), &source, 4); }
+        }
+    }
+    pthread_mutex_unlock(&g_mii_mu);
     return k;
 }
-HLE_FORCE("_ZNK2nn3mii8Database8GetCountEi", "mii:u service; the six default Miis", int, h_mii_Count, const void *self, int src) { (void)self; return src & MII_SRC_DEFAULT ? MII_DEFAULTS : 0; }
-HLE_FORCE("_ZN2nn3mii8Database3GetEPiPNS0_15CharInfoElementEii", "mii:u service; the six default Miis", Result, h_mii_GetE, void *self, int *out, void *buf, int n, int src) {
+HLE_FORCE("_ZNK2nn3mii8Database8GetCountEi", "mii:u service; database and default count", int, h_mii_Count, const void *self, int src) {
+    (void)self; pthread_mutex_lock(&g_mii_mu);
+    int count = ((src & MII_SRC_DATABASE) ? g_ndb : 0) + ((src & MII_SRC_DEFAULT) ? MII_DEFAULTS : 0);
+    pthread_mutex_unlock(&g_mii_mu); return count;
+}
+HLE_FORCE("_ZN2nn3mii8Database3GetEPiPNS0_15CharInfoElementEii", "mii:u service; database and default Miis", Result, h_mii_GetE, void *self, int *out, void *buf, int n, int src) {
     (void)self; *out = mii_get(buf, n, src, sizeof(mii_charinfo) + 4); return RES_OK;
 }
-HLE_FORCE("_ZN2nn3mii8Database3GetEPiPNS0_8CharInfoEii", "mii:u service; the six default Miis", Result, h_mii_Get, void *self, int *out, void *buf, int n, int src) {
+HLE_FORCE("_ZN2nn3mii8Database3GetEPiPNS0_8CharInfoEii", "mii:u service; database and default Miis", Result, h_mii_Get, void *self, int *out, void *buf, int n, int src) {
     (void)self; *out = mii_get(buf, n, src, sizeof(mii_charinfo)); return RES_OK;
 }
-HLE_FORCE("_ZNK2nn3mii8Database8GetIndexEPiRKNS0_8CharInfoE", "mii:u service; no Mii is in the database", Result, h_mii_Index, const void *self, int *out, const void *info) {
-    (void)self; (void)info; *out = -1; return MII_RES_NOT_FOUND;
+HLE_FORCE("_ZNK2nn3mii8Database8GetIndexEPiRKNS0_8CharInfoE", "mii:u service; look up Mii in database", Result, h_mii_Index, const void *self, int *out, const void *info) {
+    (void)self; if (!out) return MII_RES_NOT_FOUND; *out = -1;
+    if (!info) return MII_RES_NOT_FOUND;
+    const uint8_t *id = (const uint8_t *)info;
+    pthread_mutex_lock(&g_mii_mu);
+    for (int i = 0; i < g_ndb; i++) {
+        if (!memcmp(g_db[i].create_id, id, 16)) {
+            *out = i; pthread_mutex_unlock(&g_mii_mu); return RES_OK;
+        }
+    }
+    pthread_mutex_unlock(&g_mii_mu);
+    return MII_RES_NOT_FOUND;
 }
-HLE_FORCE("_ZNK2nn3mii8Database12UpdateLatestEPNS0_8CharInfoEi", "mii:u service; no Mii is in the database", Result, h_mii_Latest, const void *self, void *info, int src) {
-    (void)self; (void)info; (void)src; return MII_RES_NOT_FOUND;
+HLE_FORCE("_ZNK2nn3mii8Database12UpdateLatestEPNS0_8CharInfoEi", "mii:u service; update latest Mii", Result, h_mii_Latest, const void *self, void *info, int src) {
+    (void)self; if (!info) return MII_RES_NOT_FOUND;
+    const uint8_t *id = (const uint8_t *)info;
+    pthread_mutex_lock(&g_mii_mu);
+    if (src & MII_SRC_DATABASE) {
+        for (int i = 0; i < g_ndb; i++) {
+            if (!memcmp(g_db[i].create_id, id, 16)) {
+                memcpy(info, &g_db[i], sizeof(mii_charinfo));
+                pthread_mutex_unlock(&g_mii_mu); return RES_OK;
+            }
+        }
+    }
+    if (src & MII_SRC_DEFAULT) {
+        for (int i = 0; i < MII_DEFAULTS; i++) {
+            mii_charinfo def; mii_default(&def, i >= 3, i);
+            if (!memcmp(def.create_id, id, 16)) {
+                memcpy(info, &def, sizeof(mii_charinfo));
+                pthread_mutex_unlock(&g_mii_mu); return RES_OK;
+            }
+        }
+    }
+    pthread_mutex_unlock(&g_mii_mu);
+    return MII_RES_NOT_FOUND;
 }
 // RandomDesc {age, gender, race}: gender 0 male, 1 female, 2 either. The host's "random" Mii is the default one of that gender
 HLE_FORCE("_ZN2nn3mii8Database11BuildRandomEPNS0_8CharInfoERKNS0_10RandomDescE", "mii:u service; the default Mii", Result, h_mii_Random, void *self, mii_charinfo *out, const int *desc) {
@@ -141,6 +193,16 @@ int dm_mii_standin(const char *dir) {   // written once per process (the query a
     char p[1024]; strlcpy(p, dir, sizeof p);
     for (char *s = p + 1; *s; s++) if (*s == '/') { *s = 0; mkdir(p, 0755); *s = '/'; }
     mkdir(p, 0755);
+
+    char check_p[1024]; snprintf(check_p, sizeof check_p, "%s/NXTextureMidSRGB.dat", dir);
+    struct stat st;
+    if (stat(check_p, &st) == 0 && st.st_size > MII_TEX_SIZE) {
+        LOG("mii: real MiiModel system data already present in %s", dir);
+        done = 1;
+        pthread_mutex_unlock(&mu);
+        return 1;
+    }
+
     static const char *tex[] = {"NXTextureLowLinear.dat", "NXTextureLowSRGB.dat", "NXTextureMidLinear.dat", "NXTextureMidSRGB.dat"}, *shape[] = {"ShapeMid.dat", "ShapeHigh.dat"};
     int ok = 1;
     for (int i = 0; i < 4; i++) ok &= mii_write(dir, tex[i], 11, MII_TEX_SIZE);
@@ -151,6 +213,24 @@ int dm_mii_standin(const char *dir) {   // written once per process (the query a
     return ok;
 }
 
-// The Mii editor (MiiEdit library applet): the player closed it without adding a Mii
-HLE_FORCE("_ZN2nn3mii9AppendMiiEPi", "MiiEdit applet; cancelled", Result, h_mii_Append, int *index) { (void)index; LOG("mii: AppendMii (the host has no Mii editor: cancelled)"); return MII_RES_CANCELED; }
+// The Mii editor (MiiEdit library applet): create a new default Mii in the database
+HLE_FORCE("_ZN2nn3mii9AppendMiiEPi", "MiiEdit applet; create and append Mii to database", Result, h_mii_Append, int *index) {
+    pthread_mutex_lock(&g_mii_mu);
+    if (g_ndb >= 100) {
+        pthread_mutex_unlock(&g_mii_mu);
+        LOG("[RED] mii: AppendMii failed: database is full (100)");
+        return MII_RES_CANCELED;
+    }
+    int idx = g_ndb++;
+    mii_default(&g_db[idx], idx & 1, 6 + idx);
+    char name[12];
+    snprintf(name, sizeof name, "Mii %d", idx + 1);
+    for (size_t i = 0; i < sizeof(g_db[idx].nickname) / sizeof(g_db[idx].nickname[0]); i++) {
+        g_db[idx].nickname[i] = i < strlen(name) ? (uint16_t)name[i] : 0;
+    }
+    if (index) *index = idx;
+    LOG("mii: AppendMii created '%s' at database index %d (total %d)", name, idx, g_ndb);
+    pthread_mutex_unlock(&g_mii_mu);
+    return RES_OK;
+}
 HLE_FORCE("_ZN2nn3mii11ShowMiiEditEv", "MiiEdit applet; closed at once", Result, h_mii_Edit, void) { LOG("mii: ShowMiiEdit (the host has no Mii editor)"); return RES_OK; }

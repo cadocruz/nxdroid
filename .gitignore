@@ -14,5 +14,6 @@ build/
 .cxx/
 **/.cxx/
 **/build/
+dm/tools/bin/
 dm/android/tests/*_android
 

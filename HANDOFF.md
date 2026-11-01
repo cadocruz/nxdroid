@@ -102,7 +102,7 @@ python3 dm/tools/android_audit.py --summary
 python3 dm/tools/android_audit.py --check
 
 # docs, vendor gate, audit, probe contract, the rewriter's thread slot stubs, undef_scan's Mach-O gate
-/home/cado/.venv/bin/python -m pytest dm/tools/tests/test_docs.py \
+python3 -m pytest dm/tools/tests/test_docs.py \
     dm/tools/tests/test_android_vendor.py dm/tools/tests/test_android_audit.py \
     dm/tools/tests/test_thread_slots.py dm/tools/tests/test_android_undef_scan.py \
     dm/gfx/vk/probe/tests/test_probe_output.py -q
@@ -116,7 +116,7 @@ python3 dm/gfx/vulkan/engine/tests/event_order_test.py
 On the Windows machine this round was done on: use LibreOffice's python with `-X utf8`, `CC=gcc` for
 `opcode_map.py`, `pytest` is absent (run the modules with `unittest`), and read §10 for the CRLF false reds.
 
-The system `python3` has no pytest; use `/home/cado/.venv/bin/python -m pytest`. The full
+The system `python3` has no pytest; use `python3 -m pytest`. The full
 `dm/tools/tests` suite is **not** green on this machine and was not before this work: five modules
 fail to import (`/usr/lib/libproc.dylib`, a macOS-only dependency) and the fuzz corpus needs
 `lz4`, which the venv does not have. Those are environment gaps, not regressions — but say so

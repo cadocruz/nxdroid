@@ -1,4 +1,6 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <jni.h>
 #include <android/log.h>
 #include <android/native_window.h>
@@ -254,6 +256,31 @@ static jboolean nativeStartHost(JNIEnv *env, jclass clazz, jstring gameDir, jstr
             LOG("nativeStartHost: found shader_map.tsv: %s", shmap_path);
         }
     }
+    if (game_str && *game_str && !getenv("DM_NVN_SHMAP")) {
+        char shmap_game[1024];
+        snprintf(shmap_game, sizeof(shmap_game), "%s/shader_map.tsv", game_str);
+        struct stat st;
+        if (stat(shmap_game, &st) == 0) {
+            setenv("DM_NVN_SHMAP", shmap_game, 0);
+            LOG("nativeStartHost: found shader_map.tsv in game dir: %s", shmap_game);
+        }
+    }
+
+    const char *sys_font = "/system/fonts/Roboto-Regular.ttf";
+    if (access(sys_font, R_OK) == 0) {
+        setenv("DM_SHARED_FONT", sys_font, 0);
+        LOG("nativeStartHost: setenv DM_SHARED_FONT=%s", sys_font);
+    }
+    if (shader_str && *shader_str) {
+        setenv("DM_FONT_DIR", shader_str, 0);
+    }
+
+    // Docked mode default (1080p crisp graphics)
+    setenv("DM_OPMODE", "1", 1); // 1 = Docked/Console mode (1080p)
+    LOG("nativeStartHost: DM_OPMODE=%s", getenv("DM_OPMODE"));
+
+    // Enable AAudio real audio by default on Android
+    setenv("DM_AUDIO", "1", 0);
 
     // Set working directory
     if (save_str && *save_str) {

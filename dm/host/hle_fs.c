@@ -503,8 +503,39 @@ HLE_FORCE("_ZN2nn2fs17MountAddOnContentEPKciPvm", "fsp-srv; add-on content → D
 #define SYSDATA_MIIMODEL 0x0100000000000802ull
 int dm_mii_standin(const char *dir);
 static int sysdata_dir(char *dir, size_t n, uint64_t id) {
+    if (id != SYSDATA_MIIMODEL) return 0;
+
+    char romfs[1024];
+    const char *rf = envdir("DM_ROMFS", "romfs", romfs, sizeof romfs);
+    if (rf && *rf) {
+        char parent[1024]; strlcpy(parent, rf, sizeof parent);
+        char *slash = strrchr(parent, '/');
+        if (slash) {
+            *slash = '\0';
+            char cand[1024];
+            snprintf(cand, sizeof cand, "%s/sysdata/%016llx", parent, (unsigned long long)id);
+            char check_file[1024];
+            snprintf(check_file, sizeof check_file, "%s/NXTextureMidSRGB.dat", cand);
+            struct stat st;
+            if (stat(check_file, &st) == 0 && st.st_size > 0x2428) {
+                LOG("mii: using real MiiModel system data from %s", cand);
+                strlcpy(dir, cand, n);
+                return 1;
+            }
+        }
+    }
+
     char t[1024];
-    if (id != SYSDATA_MIIMODEL || snprintf(dir, n, "%s_sysdata/%016llx", envdir("DM_TEMP", "run/platform/temp", t, sizeof t), (unsigned long long)id) >= (int)n) return 0;
+    if (snprintf(dir, n, "%s_sysdata/%016llx", envdir("DM_TEMP", "run/platform/temp", t, sizeof t), (unsigned long long)id) >= (int)n) return 0;
+
+    char check_file[1024];
+    snprintf(check_file, sizeof check_file, "%s/NXTextureMidSRGB.dat", dir);
+    struct stat st;
+    if (stat(check_file, &st) == 0 && st.st_size > 0x2428) {
+        LOG("mii: using existing real MiiModel system data from %s", dir);
+        return 1;
+    }
+
     return dm_mii_standin(dir);
 }
 HLE_FORCE("_ZN2nn2fs29QueryMountSystemDataCacheSizeEPmNS_3ncm12SystemDataIdE", "fsp-srv; system data reads the host directory directly, the cache is the size of its RomFS file table", Result, h_fs_QuerySysDataCache, size_t *out, uint64_t id) {

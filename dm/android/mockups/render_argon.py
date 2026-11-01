@@ -9,7 +9,9 @@ import math
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 W, H = 1920, 1080
-OUT_PATH = "/home/cado/Documentos/projetos/python/nxdroid/dm/android/mockups/mockup_argon.png"
+import os
+
+OUT_PATH = os.path.join(os.path.dirname(__file__), "mockup_argon.png")
 
 # Color Palette (OLED Dark + Switch Neon Cyan/Crimson + Material You Dark Gaming)
 BG_OBSIDIAN = (10, 13, 20)

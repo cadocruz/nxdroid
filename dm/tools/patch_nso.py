@@ -483,22 +483,24 @@ def site_retry_window(parts):
 m0 = struct.unpack_from('<I', IMG, 4)[0]
 assert IMG[m0:m0 + 4] == b'MOD0'
 ehs = m0 + struct.unpack_from('<i', IMG, m0 + 16)[0]
-def rd(o, enc):
-    fmt, app = enc & 0xF, enc & 0x70
-    v, sz = {0x3: (struct.unpack_from('<I', IMG, o)[0], 4), 0xB: (struct.unpack_from('<i', IMG, o)[0], 4),
-             0x4: (struct.unpack_from('<Q', IMG, o)[0], 8)}[fmt]
-    if app == 0x10: v += o
-    if app == 0x30: v += ehs
-    return v, sz
-_, penc, cenc, tenc = IMG[ehs:ehs + 4]
-o = ehs + 4
-_, s = rd(o, penc); o += s
-nfde, s = rd(o, cenc); o += s
+ehe = m0 + struct.unpack_from('<i', IMG, m0 + 20)[0]
 starts = set()
-for _ in range(nfde):
-    a, s = rd(o, tenc); o += s
-    _, s = rd(o, tenc); o += s
-    starts.add(a)
+if ehe - ehs >= 12 and IMG[ehs] == 1 and IMG[ehs + 3] not in (0xFF, 0):
+    def rd(o, enc):
+        fmt, app = enc & 0xF, enc & 0x70
+        v, sz = {0x3: (struct.unpack_from('<I', IMG, o)[0], 4), 0xB: (struct.unpack_from('<i', IMG, o)[0], 4),
+                 0x4: (struct.unpack_from('<Q', IMG, o)[0], 8)}[fmt]
+        if app == 0x10: v += o
+        if app == 0x30: v += ehs
+        return v, sz
+    _, penc, cenc, tenc = IMG[ehs:ehs + 4]
+    o = ehs + 4
+    _, s = rd(o, penc); o += s
+    nfde, s = rd(o, cenc); o += s
+    for _ in range(nfde):
+        a, s = rd(o, tenc); o += s
+        _, s = rd(o, tenc); o += s
+        starts.add(a)
 starts = sorted(x for x in starts if x < TEXT_END)
 
 # ---- Linear scan to find all rewrite points (not relying on register read/write reports) ----
