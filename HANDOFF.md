@@ -14,10 +14,38 @@ identity `Ricardo A. F. da Cruz <7233682+cadocruz@users.noreply.github.com>` (`.
 is untouched) and Portuguese messages. `AGENTS.md` asks for the `seedds` identity and English text; that
 rule goes with the Apple removal (§8 item 10).
 
-**Status at this cut:** all the work is code, read and checked statically on a Windows machine (gcc
-`-fsyntax-only` with shims, the generated-report gates, scratch mutation tests). Nothing has been built with
-the NDK and nothing has run on the S23 Ultra since the probe (§6). The next real information comes from an
-NDK build (§8 item 5) and a device run; installing an NDK or podman needs the owner's approval.
+## Status at this cut (Sprint 6 – Physical Device Bring-Up & Live Diagnostics)
+
+The Android port has been compiled with the NDK, packaged as an APK, and successfully executed on a
+physical **Samsung Galaxy S23 Ultra** (Snapdragon 8 Gen 2, Adreno 740, 12 GB RAM, Android 14) via `com.nxdroid`.
+
+The first fully running title is **Mario Kart 8 Deluxe** (`0100152000022000`, Update 4.0.1 `[v1507328]`):
+- **Native AArch64 execution:** Horizon SVCs and SDK services handled by `dm/host`, NSO modules rewritten via `dm/tools/patch_nso.py --target=android`.
+- **H.264 Video Playback:** Implemented using Android's NDK `AMediaCodec` in `dm/android/apple_stubs.c` (decoding H.264 menu video previews into CVPixelBufferRef NV12 and rendering cleanly in real time).
+- **Audio Output:** Real audio enabled via AAudio in `dm/android/apple_stubs.c` (48 kHz stereo PCM).
+- **Frontend & Virtual Controller:** Argon launcher overlay (`LauncherOverlayView.java`, `GameScanner.java`) with storage picker and game catalog; on-screen multitouch virtual gamepad (`VirtualControllerOverlayView.java`) with left stick, D-Pad, triggers, face buttons, and show/hide toggle (`🎮`).
+- **Automated Game Deployment:** `scripts/prepare_game_android.py` automates base+update RomFS extraction, NSO rewriting, shader compilation, Mii database setup from emulator userdata, and ADB pushing.
+
+### Visual & Performance Diagnostics (`diagnostic_print_grafico.md`)
+
+Detailed diagnostics and live GPU/CPU telemetry were gathered during 3D race execution on device:
+
+1. **Vertical Banding / "Venetian Blinds" Decimation Artifacts (Resolved):**
+   - *Symptom:* Display exhibited 16 vertical columns of alternating brightness and sharpness across the screen.
+   - *Cause:* `present_native = true` in `vulkan_present.cpp` called `ANativeWindow_setBuffersGeometry(active, 1920, 1080)`. Because the S23 Ultra display is a physical portrait panel (1544x720 landscape, 90° rotation), Qualcomm's Hardware Composer (DPU) performed non-integer column decimation across macroblock boundaries.
+   - *Fix:* Kept the swapchain at native window resolution (`1544x720`), disabled `ANativeWindow_setBuffersGeometry` override (`present_native = false`), and enabled `VK_FILTER_LINEAR` in `vkCmdBlitImage`. The Adreno GPU now performs smooth bilinear downscaling with zero DPU decimation stripes.
+
+2. **3D Scene Color Solarization / High Contrast (Under Investigation):**
+   - *Symptom:* 2D UI elements and MP4 video playback have accurate colors and sharpness, but 3D track scenes (e.g. Mario Kart Stadium) display neon green grass, crushed blacks on stadium roofs, and contour banding on asphalt.
+   - *Cause:* The Nintendo `agl` / `gsys` engine renders 3D passes into an intermediate HDR framebuffer (`VK_FORMAT_B10G11R11_UFLOAT_PACK32` / `R16G16B16A16_SFLOAT`) before tonemapping to the LDR swapchain. On Adreno Vulkan, sRGB vs UNORM sampler interpretation or the OpenGL depth convention (`near=-w` mapped to `near=0`) causes luminance overflow and tone curve crushing.
+
+3. **Framerate Telemetry (~12–19 FPS with 100ms spikes):**
+   - *Telemetry:* `submit_cpu_ms = 58 ms`, `gpu_ms = 19.5 ms`, `parts_ms_per_frame fence = 28 ms, image = 13.4 ms, draw = 4.8 ms, snapshot = 4.2 ms`.
+   - *Bottlenecks:*
+     a) Double buffering caused the CPU render thread to stall waiting on fences (`fence = 28 ms`) because SurfaceFlinger holds one buffer during presentation. Resolved by enforcing triple buffering (`ci.minImageCount = 3`).
+     b) Synchronous memory snapshotting (`1,028 MB` per frame) for CPU-written texture detection adds ~13–18 ms CPU overhead per frame.
+
+---
 
 ## 1. The goal
 

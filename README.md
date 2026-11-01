@@ -4,40 +4,54 @@ nxdroid is an Android-only port of [nxnative](https://github.com/seedds/nxnative
 
 ## Status
 
-**The Android port has not been built or run.** No NDK build has been done, and nothing has run on a device. No game is known to run on Android. What exists:
+**The Android port is running on a physical device.** Built and verified on a Samsung Galaxy S23 Ultra (Snapdragon 8 Gen 2 / Adreno 740, 12 GB RAM, Android 14) with **Mario Kart 8 Deluxe** (`0100152000022000`, Update 4.0.1 `[v1507328]`):
 
-- The host and the game profiles from nxnative, with the Apple-only calls moved behind `dm/host/port.h` and bionic implementations in `dm/android/port_android.c`. These were read and syntax-checked only; no arm64 compile of the host files has been done.
-- A vendored Vulkan replay engine and its adapter (`dm/gfx/vulkan`), imported from [d2r-mobile](https://github.com/jhaizhou-ops/d2r-mobile) at a pinned commit. Its Vulkan device requirements were measured on the S23 Ultra with a probe, and the engine was compiled and initialized out of tree on desktop machines. No game frame has been drawn with it.
-- A CMake build for the host (`dm/android/CMakeLists.txt`), configured only with a desktop toolchain.
+- **Native Execution:** The game's AArch64 code runs natively with rewrites from `dm/tools/patch_nso.py --target=android`. Horizon SVCs and system services are handled by `dm/host`.
+- **Vulkan Graphics:** NVN commands are replayed via the Vulkan replay engine (`dm/gfx/vulkan`) with triple buffering (`ci.minImageCount = 3`) and bilinear scaling blits (`VK_FILTER_LINEAR`) to the native display extent (`1544x720`).
+- **Hardware Video Decoding:** H.264 video decoding (used by the menus' track video previews) is implemented via Android NDK `AMediaCodec` in `dm/android/apple_stubs.c`, decoding directly to NV12 / CVPixelBufferRef.
+- **Audio Output:** Real audio output is enabled via AAudio in `dm/android/apple_stubs.c` (48 kHz stereo PCM).
+- **Frontend & Controls:** An Android APK (`com.nxdroid`) with the Argon game launcher (`LauncherOverlayView.java`, `GameScanner.java`), folder picker, and an ergonomic multitouch virtual controller overlay (`VirtualControllerOverlayView.java`) with D-Pad, left stick, triggers, face buttons, and show/hide overlay toggle (`🎮`).
+- **Automation:** `scripts/prepare_game_android.py` automates RomFS extraction, NSO rewriting, shader compilation, Mii database generation, and deployment via ADB.
 
-The state in detail, with the open items and what is unverified, is in [HANDOFF.md](HANDOFF.md) and [docs/reference/android.md](docs/reference/android.md).
+Detailed diagnostics, findings, and live performance metrics are documented in [HANDOFF.md](HANDOFF.md) and [docs/reference/android.md](docs/reference/android.md).
 
-Android is the only target. The Mac and iOS builds are not kept: the Apple code (Metal, the iOS app, the Mac app, the IPA packing scripts) is still in the tree and is to be removed, so parts of the documentation still describe it.
+Android is the sole target. The legacy Apple code (Metal, iOS/Mac apps) remains in the repository as reference until final cleanup.
 
 ## How the Android build is structured
 
-The build is `dm/android/CMakeLists.txt`:
+The Android build is organized under `dm/android/`:
 
-- **One game per build.** `-DGAME=<title id>` picks the profile in `dm/games/<id>/`, as `GAME=` does for `make -C dm/host`. There is no default: without it the configure stops and lists the profiles. `DM_GAMES_DIR` points it at a profile outside the repository.
-- **Target.** `arm64-v8a` only, with `ANDROID_PLATFORM` 29 or later (the configure stops below it). The Android NDK is required; `dm/android/docker/` pins one build environment (NDK 29.0.14206865).
-- **Sources.** The host sources are read from `dm/host/Makefile`. The graphics layer is `dm/gfx/vulkan` in place of the Metal replay (`dm/gfx/nvn/nvn_mtl.m`), presented through `dm/android/vulkan_present.cpp`.
-- **Output.** The target is `dmhost`. The app shell (`jni_android.c`, the Java activity, touch input, Gradle) does not exist yet, so there is no APK.
-
-The configure and build commands are in [HANDOFF.md](HANDOFF.md#5-gates-and-the-exact-commands); they have not been run with an NDK.
+- **Gradle App Shell:** `dm/android/app` builds the debug APK (`:app:assembleDebug`) containing the Java activities, launcher UI, virtual controller, and the native host library `libdm.so`.
+- **Host Library (`dmcore` / `libdm.so`):** Defined in `dm/android/CMakeLists.txt` (`-DGAME=<title id>`). Reads host sources from `dm/host/Makefile` and links the Vulkan engine (`dm_vulkan_engine`), `mediandk` (for AMediaCodec), `aaudio`, `libvpx`, and Android platform libraries.
+- **Target Architecture:** `arm64-v8a` only, with `ANDROID_PLATFORM` 29 or higher.
+- **Build Container:** Podman build via `dm-android-tools:1` using `podman run --rm -v "$PWD":/workspace -w /workspace dm-android-tools:1 gradle -p dm/android :app:assembleDebug -PdmGame=<title id>`.
 
 ## How to play
 
-There are no Android instructions yet: packing a game for Android, installing it and its controls are pending until a build exists. The Mac and iOS instructions (the IPA packing script, sideloading) are not valid for this port and are not repeated here.
+1. **Build the APK:**
+   ```sh
+   podman run --rm -v "$PWD":/workspace -w /workspace dm-android-tools:1 \
+       gradle -p dm/android :app:assembleDebug -PdmGame=0100152000022000
+   ```
+2. **Install on the device:**
+   ```sh
+   adb install -r dm/android/app/build/outputs/apk/debug/app-debug.apk
+   ```
+3. **Prepare and Push Game Data:**
+   Run `scripts/prepare_game_android.py` pointing to the game NSP/XCI folder:
+   ```sh
+   python3 scripts/prepare_game_android.py /path/to/nsp_folder --game 0100152000022000 --push
+   ```
+   This automatically extracts base and updates, rewrites NSOs for Android, compiles shaders, configures the Mii database, and pushes all files to `/storage/emulated/0/nxdroid/game/`.
+4. **Launch:**
+   Open the **nxdroid** app on the device, select the game folder, and play using on-screen virtual controls or a connected USB/Bluetooth controller.
 
 ## Open
 
-- The NDK configure and build, and the compile errors the host files are expected to give on bionic.
-- The app shell: the JNI entry, the activity, touch input, packaging.
-- Graphics for the Vulkan and OpenGL games: `dm/gfx/vk/hle_vk.m` and `dm/gfx/gl/hle_gl.m` are Metal code, so a game that renders through them has no graphics layer on Android yet.
-- Guest memory: the Adreno 740 has no `VK_EXT_external_memory_host`, so the replay mirrors guest memory. Whether an `AHardwareBuffer` route can avoid the copy is not measured.
-- Shaders: the Adreno 740 limits a storage-buffer binding to 128 MiB and has no 64-bit integers in shaders; [the address-space decision](dm/gfx/vk/address_space.md) is written and not tested on a device.
-- Audio and movie decoding: the Apple audio and video APIs are stubs that log a `[RED]` line, so a game is silent where it uses AAC and shows black frames for AVC movies; no Android backend is designed.
-- Several viewports in one draw, and the other items listed in [the Android reference](docs/reference/android.md).
+- **3D HDR tonemapping tuning:** 2D UI and MP4 playback have accurate colors, while 3D tracks exhibit high contrast / neon green grass in some passes due to HDR framebuffer tonemapping / OpenGL depth mode mapping in Vulkan.
+- **Frame pacing & memory snapshotting:** Double/triple buffering optimizations and reduction of CPU texture snapshot overhead (`snap_mb`) to achieve a stable 60 fps.
+- **Graphics for Vulkan and OpenGL guest games:** `dm/gfx/vk/hle_vk.m` and `dm/gfx/gl/hle_gl.m` need Vulkan backends.
+- **Guest memory zero-copy:** Investigation of `AHardwareBuffer` memory import to eliminate the mirror copy.
 
 ## Games
 
