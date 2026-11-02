@@ -383,6 +383,9 @@ VkPhysicalDeviceSubgroupProperties subgroup{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SU
 // default false), and only that gates a shader or a draw. multiViewport itself is a core feature, in cfg.enabled_core.
 bool viewport_index_supported=false,multiview_supported=false,viewport_index_enabled=false,multiview_enabled=false;
 bool depth_clip_control_supported=false;std::atomic<bool> game_depth_zero{false};
+// Diagnostic (marker gfx-depth-clip = '0'): never chain negativeOneToOne, to A/B the depth convention against the
+// packed vertex shaders (scripts/prepare_game_android.py _rewrite_depth already converts GL clip z to [0, w]).
+bool depth_clip_marker_off=false;
 extern "C" int xbg_game_set_depth_clip_control(VkBool32 enabled){
     depth_clip_control_supported=enabled!=VK_FALSE;
     xbg_logf("NVN depth clip control (VK_EXT_depth_clip_control)=%d",int(depth_clip_control_supported));
@@ -1458,7 +1461,9 @@ struct Image {
         }
         uint32_t swz_key=uint32_t(comp.r)|(uint32_t(comp.g)<<4)|(uint32_t(comp.b)<<8)|(uint32_t(comp.a)<<12);
         std::array<uint32_t,9> key{base,n,layer,ls,uint32_t(vf),uint32_t(type),view_aspects,view_usage,swz_key};auto it=views.find(key);if(it!=views.end())return it->second;
-        VkImageViewCreateInfo vi{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};vi.image=image;vi.viewType=type;vi.format=vf;vi.subresourceRange={aspects,base,n,layer,ls};
+        uint32_t base_layer=(type==VK_IMAGE_VIEW_TYPE_3D)?0u:layer;
+        uint32_t layer_cnt=(type==VK_IMAGE_VIEW_TYPE_3D)?1u:ls;
+        VkImageViewCreateInfo vi{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};vi.image=image;vi.viewType=type;vi.format=vf;vi.subresourceRange={aspects,base,n,base_layer,layer_cnt};
         vi.subresourceRange.aspectMask=view_aspects;
         vi.components=comp;
         VkImageViewUsageCreateInfo vu{VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO};vu.usage=view_usage;vi.pNext=&vu;
@@ -1543,17 +1548,19 @@ static bool registered_texture_equal(const RegisteredTexture &a,const Registered
        x.d.width!=y.d.width || x.d.height!=y.d.height || x.d.depth!=y.d.depth || x.d.levels!=y.d.levels || x.d.stride!=y.d.stride || x.d.pkg_block_h!=y.d.pkg_block_h ||
        x.L.size!=y.L.size || x.L.layer_size!=y.L.layer_size ||
        x.L.align!=y.L.align || x.L.layers!=y.L.layers || x.L.bpb!=y.L.bpb || x.L.tileH!=y.L.tileH || x.L.tileD!=y.L.tileD ||
+       x.set_swz!=y.set_swz || (x.set_swz && x.swz!=y.swz) ||
        !!x.has_layout!=!!y.has_layout || (x.has_layout && memcmp(x.layout,y.layout,sizeof(x.layout))))return false;
     const view_t &u=a.view,&v=b.view;
     return a.has_view==b.has_view && (!a.has_view ||
         (!!u.set_levels==!!v.set_levels && (!u.set_levels || (u.base_level==v.base_level && u.nlevels==v.nlevels)) &&
          !!u.set_layers==!!v.set_layers && (!u.set_layers || (u.min_layer==v.min_layer && u.nlayers==v.nlayers)) &&
          !!u.set_format==!!v.set_format && (!u.set_format || u.format==v.format) &&
-         !!u.set_target==!!v.set_target && (!u.set_target || u.target==v.target)));
+         !!u.set_target==!!v.set_target && (!u.set_target || u.target==v.target) &&
+         !!u.set_swizzle==!!v.set_swizzle && (!u.set_swizzle || !memcmp(u.swz,v.swz,4))));
 }
 static bool register_texture_record(RegisteredTexture &slot,const tex_t &texture,const view_t *view){
     RegisteredTexture next;next.texture=texture;
-    if(view && (view->set_levels || view->set_layers || view->set_format || view->set_target)){next.view=*view;next.has_view=true;}
+    if(view && (view->set_levels || view->set_layers || view->set_format || view->set_target || view->set_swizzle)){next.view=*view;next.has_view=true;}
     bool changed=!slot.revision || !registered_texture_equal(slot,next);
     next.revision=slot.revision+uint64_t(changed);slot=next;if(changed)++memo_check_gen;return changed;
 }
@@ -1578,17 +1585,22 @@ void invalidate_cpu_range(uint64_t address,uint64_t bytes){CPU_SCOPE(CpuWrite);
     need(address+bytes>=address,"CPU write range overflow");cpu_access(address,bytes,4);snapshot_invalidate(address,bytes);
     for_images_overlapping(address,bytes,[&](Image &im){if(draw_detail)draw_timing.image();uint64_t begin=uintptr_t(im.source.mem),end=begin+im.source.L.size;
         // A full storage overwrite replaces the prior GPU contents. A partial
-        // overwrite marks the texture dirty for re-upload rather than crashing when readback is unimplemented.
-        if (im.gpu_written && (address > begin || address + bytes < end)) {
-            static unsigned n_partial_warn = 0;
-            if (n_partial_warn++ < 5) {
-                xbg_logf("[YELLOW] Partial CPU write to GPU-written texture: addr=%llx+%llx tex=%llx+%llx serial=%llu (marking dirty for re-upload)",
-                         (unsigned long long)address, (unsigned long long)bytes,
-                         (unsigned long long)begin, (unsigned long long)(end - begin),
-                         (unsigned long long)im.source.serial);
+        // overwrite to an aliased pool range does not destroy an active GPU render target.
+        if (im.gpu_written) {
+            if (address <= begin && address + bytes >= end) {
+                im.gpu_written=false;provenance_write(im,__LINE__);im.uploaded=false;im.checked_submission=UINT64_MAX;
+            } else {
+                static unsigned n_partial_warn = 0;
+                if (n_partial_warn++ < 5) {
+                    xbg_logf("[YELLOW] Preserving GPU-written image on partial memory pool write: addr=%llx+%llx tex=%llx+%llx serial=%llu",
+                             (unsigned long long)address, (unsigned long long)bytes,
+                             (unsigned long long)begin, (unsigned long long)(end - begin),
+                             (unsigned long long)im.source.serial);
+                }
             }
+            return;
         }
-        im.gpu_written=false;provenance_write(im,__LINE__);im.uploaded=false;im.checked_submission=UINT64_MAX;
+        im.uploaded=false;im.checked_submission=UINT64_MAX;provenance_write(im,__LINE__);
     });
 }
 
@@ -1770,7 +1782,8 @@ Image &get_image_slow(const tex_t *t,bool upload){CPU_SCOPE(Image);
     Image &im=*hit;
     // NVN CPU-coherent pools may be written without FlushMappedRange. Detect
     // such writes once per submit; command CPU writes also invalidate below.
-    if(upload && im.uploaded && !im.gpu_written && im.checked_submission!=stats.submissions){
+    // Depth/stencil targets are produced exclusively by GPU passes, skipping expensive CPU hashing.
+    if(upload && im.uploaded && !im.gpu_written && im.aspects==VK_IMAGE_ASPECT_COLOR_BIT && im.checked_submission!=stats.submissions){
         if(im.dirty_stamp && !ab_off("texdirty")){   // tracked: hash only after a guest write to its pages since the stamp
             uint64_t now=nvn_dirty_now();
             if(now!=im.dirty_seen && nvn_dirty_since(t->mem,t->L.size,im.dirty_stamp)){
@@ -3543,7 +3556,7 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
      need(vpn==1 || s==state.shader[3] || viewport_index_enabled,"ViewportIndex from a vertex or tessellation stage needs shaderOutputViewportIndex enabled at device creation (xbg_game_set_viewport_features)");}
     VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};vp.viewportCount=vp.scissorCount=vpn;
     VkPipelineViewportDepthClipControlCreateInfoEXT dcc{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_DEPTH_CLIP_CONTROL_CREATE_INFO_EXT};dcc.negativeOneToOne=VK_TRUE;
-    if(depth_clip_control_supported && !game_depth_zero.load())vp.pNext=&dcc;
+    if(depth_clip_control_supported && !depth_clip_marker_off && !game_depth_zero.load())vp.pNext=&dcc;
     // rs.frontFace: NVN's raster flip is the queue's captured origin, as nvn_mtl.m decides winding (the device origin flips the viewport instead)
     VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};rs.depthClampEnable=state.depth_clamp!=0;need(!rs.depthClampEnable || cfg.enabled_core.depthClamp,"Depth clamp disabled");rs.rasterizerDiscardEnable=state.rast_discard!=0;rs.polygonMode=state.poly.mode==2?VK_POLYGON_MODE_FILL:state.poly.mode==1?VK_POLYGON_MODE_LINE:VK_POLYGON_MODE_POINT;need(rs.polygonMode==VK_POLYGON_MODE_FILL || cfg.enabled_core.fillModeNonSolid,"Non-solid polygon mode disabled");rs.cullMode=state.poly.cull;rs.frontFace=((state.poly.front!=0)!=sub_origin.queue_ll)?VK_FRONT_FACE_COUNTER_CLOCKWISE:VK_FRONT_FACE_CLOCKWISE;rs.lineWidth=1;rs.depthBiasEnable=state.poly.offset_en!=0;rs.depthBiasConstantFactor=state.bias[1]*(state.rt.depth && state.rt.depth->d.format==0x32 && depth16_as_d24?256.0f:1.0f);
     rs.depthBiasSlopeFactor=state.bias[0];rs.depthBiasClamp=state.bias[2];need(!rs.depthBiasClamp || cfg.enabled_core.depthBiasClamp,"Depth bias clamp disabled");   // constant bias units: 2^-16 for D16, 2^-24 for the X8_D24 stand-in; slope and clamp do not depend on the format
@@ -4454,6 +4467,8 @@ extern "C" int xbg_game_initialize(const xbg_game_config *c,char *error,size_t b
       xbg_logf("NVN superseded storage writebacks skipped=%d pool_flags=%d (marker gfx-wb-skip)",int(wb_skip),int(nvn_pool_flags!=nullptr));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-pipe-memo").c_str(),"rb");pipe_memo=false;pipe_memo_valid=false;if(m){pipe_memo=fgetc(m)!='0';fclose(m);}else if(const char *e=getenv("DM_GFX_PIPE_MEMO"))pipe_memo=atoi(e)!=0;
       xbg_logf("NVN pipeline memo for repeated draw state=%d (marker gfx-pipe-memo)",int(pipe_memo));}
+     {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-depth-clip").c_str(),"rb");depth_clip_marker_off=false;if(m){depth_clip_marker_off=fgetc(m)=='0';fclose(m);}
+      xbg_logf("NVN depth clip marker off=%d (marker gfx-depth-clip)",int(depth_clip_marker_off));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-read-preflight").c_str(),"rb");read_preflight=true;if(m){read_preflight=fgetc(m)!='0';fclose(m);}else if(const char *e=getenv("DM_GFX_READ_PREFLIGHT"))read_preflight=atoi(e)!=0;
       xbg_logf("NVN CPU reads resolved before each operation=%d (marker gfx-read-preflight)",int(read_preflight));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-sync-cache-save").c_str(),"rb");sync_cache_save=false;if(m){sync_cache_save=fgetc(m)=='1';fclose(m);}}

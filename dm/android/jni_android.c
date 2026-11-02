@@ -305,6 +305,8 @@ static jboolean nativeStartHost(JNIEnv *env, jclass clazz, jstring gameDir, jstr
         {"DM_GFX_FORWARD_TEMPS", "1", "forward single-store temporaries into the access chains"},
         {"DM_GFX_QUAD_DERIVATIVES", "1", "rewrite quad shuffles to fine derivatives (off again on Adreno 740-799)"},
         {"DM_GFX_WARP32", "1", "run 32-lane warp shaders as 32 lanes on a wider subgroup (off again on Adreno 740-799)"},
+        {"DM_GFX_READ_PREFLIGHT", "0", "resolve CPU reads only when guest accesses overlapping storage"},
+        {"DM_GFX_NOLOAD", "1", "skip color attachment load when initial draw covers whole target"},
     };
     for (size_t i = 0; i < sizeof gfx_defaults / sizeof *gfx_defaults; i++) {
         setenv(gfx_defaults[i].name, gfx_defaults[i].value, 0);

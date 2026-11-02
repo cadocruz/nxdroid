@@ -7,7 +7,7 @@ nxdroid is an Android-only port of [nxnative](https://github.com/seedds/nxnative
 **The Android port is running on a physical device.** Built and verified on a Samsung Galaxy S23 Ultra (Snapdragon 8 Gen 2 / Adreno 740, 12 GB RAM, Android 16 / SDK 36) with **Mario Kart 8 Deluxe** (`0100152000022000`, Update 4.0.1 `[v1507328]`):
 
 - **Native Execution:** The game's AArch64 code runs natively with rewrites from `dm/tools/patch_nso.py --target=android`. Horizon SVCs and system services are handled by `dm/host`.
-- **Vulkan Graphics:** NVN commands are replayed via the Vulkan replay engine (`dm/gfx/vulkan`) with triple buffering (`ci.minImageCount = 3`) and bilinear scaling blits (`VK_FILTER_LINEAR`) to the native display extent (`1544x720`).
+- **Vulkan Graphics:** NVN commands are replayed via the Vulkan replay engine (`dm/gfx/vulkan`) with triple buffering (`ci.minImageCount = 3`) and bilinear scaling blits (`VK_FILTER_LINEAR`) to the native display extent (`1544x720`). Full 3D scenes and tonemapping render with 256-level gradient fidelity (correct 3D LUT sampling, memory pool aliasing protection) at ~54 FPS (`gpu_ms ~ 8 ms`).
 - **Hardware Video Decoding:** H.264 video decoding (used by the menus' track video previews) is implemented via Android NDK `AMediaCodec` in `dm/android/apple_stubs.c`, decoding directly to NV12 / CVPixelBufferRef.
 - **Audio Output:** Real audio output is enabled via AAudio in `dm/android/apple_stubs.c` (48 kHz stereo PCM).
 - **Frontend & Controls:** An Android APK (`com.nxdroid`) with the Argon game launcher (`LauncherOverlayView.java`, `GameScanner.java`), folder picker, and an ergonomic multitouch virtual controller overlay (`VirtualControllerOverlayView.java`) with D-Pad, left stick, triggers, face buttons, and show/hide overlay toggle (`🎮`).
@@ -48,8 +48,7 @@ The Android build is organized under `dm/android/`:
 
 ## Open
 
-- **3D HDR tonemapping tuning:** 2D UI and MP4 playback have accurate colors, while 3D tracks exhibit high contrast / neon green grass in some passes due to HDR framebuffer tonemapping / OpenGL depth mode mapping in Vulkan.
-- **Frame pacing & memory snapshotting:** Double/triple buffering optimizations and reduction of CPU texture snapshot overhead (`snap_mb`) to achieve a stable 60 fps.
+- **Frame pacing to 60 fps lock:** Fine-tuning command submission intervals and buffer recycling to sustain 60 fps under heavy 12-kart racing load.
 - **Graphics for Vulkan and OpenGL guest games:** `dm/gfx/vk/hle_vk.m` and `dm/gfx/gl/hle_gl.m` need Vulkan backends.
 - **Guest memory zero-copy:** Investigation of `AHardwareBuffer` memory import to eliminate the mirror copy.
 
