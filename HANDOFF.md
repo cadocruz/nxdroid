@@ -499,8 +499,8 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     Left for this item: `docs/agents/game-patches.md` (generated from the profiles' `patches.py`
     `GENERALIZE` strings, which name the iPhone), `CONTRIBUTING.md`, `README.md` ~225, comments in the
     Apple sources and `build_ipa_from_nsp.py` that cite removed sections, and the 149 `env_switches.tsv`
-    rows read only by Apple code. `test_env_switches` was already red before: the table lacks the
-    `DM_GFX_*` switches `jni_android.c` sets and some `DM_ANDROID_*` / `DM_BC_*` rows. **CI done early
+    rows read only by Apple code. `test_env_switches` is green again (the 25 rows it lacked, the `DM_GFX_*`
+    switches `jni_android.c` sets among them, have their meanings) and runs in CI. **CI done early
     too (2026-11-03):** `.github/workflows/tests.yml` runs on Linux only: `android-gates` (the §5 gates
     and the Android tool tests) and `android-build` (NDK compile of `dmhost` and `libdm.so`, advisory
     until it passes once; drop its `continue-on-error` then). The Mac / iOS / Metal jobs and
@@ -642,7 +642,12 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
        `madvise(MADV_FREE)` (`hle_svc.c` ~589), which applies to private anonymous memory only; on the
        memfd `MAP_SHARED` block it fails (result ignored) and the pages stay resident, so the process never
        gives unmapped guest memory back on Android. `fallocate(FALLOC_FL_PUNCH_HOLE)` on the memfd (or
-       `MADV_REMOVE`) is the bionic equivalent; not changed, unmeasured.
+       `MADV_REMOVE`) is the bionic equivalent. **Fixed in code (2026-11-03), not measured:** `port.h`
+       `dm_guest_discard` (Apple: `MADV_FREE` as before; bionic, `port_android.c`: a hole punched in the
+       memfd with `fallocate`, since the range is `PROT_NONE` by then and `MADV_REMOVE` refuses that),
+       called by `hle_svc.c`. `dm/android/tests/test_vm_alias.c` checks the mechanism on Linux (CI): the
+       old `MADV_FREE` is refused, the punched pages leave the memfd (`st_blocks`) and read zero through an
+       alias. To measure on the device: the app's resident memory after a game unmaps (a level change).
 
 ## 9. How to work in this tree
 

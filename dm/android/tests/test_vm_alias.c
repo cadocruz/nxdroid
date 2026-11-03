@@ -6,7 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <linux/falloc.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -88,6 +90,14 @@ void *dm_vm_alias(void *to, const void *from, size_t size) {
     return p;
 }
 
+int dm_guest_discard(void *addr, size_t len) {   // as dm/android/port_android.c
+    uintptr_t a = (uintptr_t)addr, b = (uintptr_t)g_as_base;
+    if (g_as_fd < 0 || !g_as_base || a < b || a + len > b + g_as_size || a + len < a) return madvise(addr, len, MADV_FREE);
+    return fallocate(g_as_fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, (off_t)(a - b), (off_t)len);
+}
+
+static long long fd_blocks(void) { struct stat st; assert(fstat(g_as_fd, &st) == 0); return (long long)st.st_blocks; }
+
 int main(void) {
     const size_t AS_SIZE = 0x4000000; // 64 MiB
     const size_t PAGE_SIZE = 4096;
@@ -155,6 +165,28 @@ int main(void) {
     *alias3_ptr = 0xfeedface;
     assert(*orig_ptr == 0xfeedface);
     assert(munmap(alias3, PAGE_SIZE) == 0);
+
+    // 5b. Discard (UnmapPhysicalMemory): MADV_FREE does not apply to this shared mapping; the punched hole frees the memfd's pages
+    // whatever the range's protection, and the original and every alias read zero afterwards
+    {
+        const size_t DLEN = 16 * PAGE_SIZE;
+        uint8_t *d = (uint8_t *)as + 0x100000;
+        assert(mprotect(d, DLEN, PROT_READ | PROT_WRITE) == 0);
+        long long before = fd_blocks();
+        memset(d, 0xa5, DLEN);
+        long long filled = fd_blocks();
+        assert(filled > before);
+        uint8_t *da = dm_vm_alias(NULL, d, DLEN);
+        assert(da != NULL && da[0] == 0xa5 && da[DLEN - 1] == 0xa5);
+        assert(madvise(d, DLEN, MADV_FREE) != 0);   // what the host called before: refused on a shared mapping
+        assert(mprotect(d, DLEN, PROT_NONE) == 0);   // as hle_svc.c leaves the range before discarding it
+        assert(dm_guest_discard(d, DLEN) == 0);
+        assert(fd_blocks() < filled);
+        assert(da[0] == 0 && da[DLEN - 1] == 0);
+        assert(mprotect(d, DLEN, PROT_READ) == 0);
+        assert(d[0] == 0 && d[DLEN / 2] == 0);
+        assert(munmap(da, DLEN) == 0);
+    }
 
     // 6. Bounds checks
     // Beyond end of AS

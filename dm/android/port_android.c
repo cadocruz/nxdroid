@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/falloc.h>                 // FALLOC_FL_PUNCH_HOLE, FALLOC_FL_KEEP_SIZE (dm_guest_discard)
 #include <malloc.h>
 #include <sched.h>
 #include <signal.h>
@@ -333,6 +334,14 @@ void *dm_vm_alias(void *to, const void *from, size_t size) {
     void *p = mmap(to, size, PROT_READ | PROT_WRITE, flags, g_as_fd, off);
     if (p == MAP_FAILED) return NULL;
     return p;
+}
+
+// The host's UnmapPhysicalMemory called MADV_FREE here, which fails with EINVAL on this shared mapping (result ignored): unmapped guest memory stayed resident for the
+// process's life. Punching the pages out of the memfd frees them whatever the range's protection is (the caller has just made it PROT_NONE, which MADV_REMOVE refuses).
+int dm_guest_discard(void *addr, size_t len) {
+    uintptr_t a = (uintptr_t)addr, b = (uintptr_t)g_as_base;
+    if (g_as_fd < 0 || !g_as_base || a < b || a + len > b + g_as_size || a + len < a) return madvise(addr, len, MADV_FREE);   // not in the guest block: private memory
+    return fallocate(g_as_fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, (off_t)(a - b), (off_t)len);
 }
 
 // ---- Scheduling and power facts ----

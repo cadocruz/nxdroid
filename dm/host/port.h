@@ -70,6 +70,9 @@ typedef void *dm_qos_boost_t;   // NULL = no boost in effect
 //   Linux/Android: memfd_create + MAP_SHARED so that dm_vm_alias can duplicate physical page mappings.
 // dm_vm_alias: a second mapping of the same pages at to (NULL = anywhere): the pointer, or NULL with errno. Apple: vm_remap with copy = FALSE.
 //   Linux/Android: mmap from the guest block's memfd with MAP_SHARED.
+// dm_guest_discard: give the pages of an unmapped guest range back to the system; their contents need not survive (a later map zeroes what the guest sees). Apple: madvise
+//   MADV_FREE. Linux/Android: MADV_FREE applies to private anonymous memory only and fails with EINVAL on the guest block's shared memfd mapping, so the range's pages are punched
+//   out of the memfd (fallocate FALLOC_FL_PUNCH_HOLE): they read as zero afterwards, in every alias. 0, or -1 with errno.
 // dm_thread_rt_set / dm_thread_rt_live: the time-constraint (real-time) scheduling policy of this thread (Apple's THREAD_TIME_CONSTRAINT_POLICY: period and computation in ns;
 //   bionic: not available to an app, SCHED_FIFO needs CAP_SYS_NICE, said once; live is then 0).
 // dm_thread_sched: this thread's current priority, base priority and policy number as the platform counts them (Apple's THREAD_EXTENDED_INFO; Linux: nice, nice, sched policy).
@@ -176,6 +179,7 @@ static inline void *dm_guest_as_reserve(size_t reserve) {
 static inline void dm_guest_as_release(void *as, size_t reserve) {
     if (as) munmap(as, reserve);
 }
+static inline int dm_guest_discard(void *addr, size_t len) { return madvise(addr, len, MADV_FREE); }
 static inline void *dm_vm_alias(void *to, const void *from, size_t size) {
     vm_address_t a = (vm_address_t)to; vm_prot_t cur = 0, max = 0;
     kern_return_t kr = vm_remap(mach_task_self(), &a, size, 0, to ? VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE : VM_FLAGS_ANYWHERE, mach_task_self(), (vm_address_t)from, FALSE, &cur, &max, VM_INHERIT_NONE);
@@ -272,6 +276,7 @@ int dm_uc_fault_write(ucontext_t *uc);
 int dm_vm_region(uintptr_t addr, uintptr_t *start, size_t *len, int *prot);
 void *dm_guest_as_reserve(size_t reserve);
 void dm_guest_as_release(void *as, size_t reserve);
+int dm_guest_discard(void *addr, size_t len);
 void *dm_vm_alias(void *to, const void *from, size_t size);
 int dm_thread_rt_set(uint64_t period_ns, uint64_t comp_ns);
 int dm_thread_rt_live(void);

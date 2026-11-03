@@ -65,7 +65,8 @@ jobs:
           failed=0
           for f in dm/tools/tests/test_docs.py dm/tools/tests/test_android_vendor.py dm/tools/tests/test_android_audit.py \
                    dm/tools/tests/test_thread_slots.py dm/tools/tests/test_android_undef_scan.py dm/tools/tests/test_android_jni.py \
-                   dm/tools/tests/test_android_vm_alias.py dm/tools/tests/test_launcher_settings.py dm/gfx/vk/probe/tests/test_probe_output.py; do
+                   dm/tools/tests/test_android_vm_alias.py dm/tools/tests/test_launcher_settings.py dm/tools/tests/test_env_switches.py \
+                   dm/gfx/vk/probe/tests/test_probe_output.py; do
             echo "::group::$f"
             python -m unittest -v "$f" || { echo "::error::$f failed"; failed=1; }
             echo "::endgroup::"

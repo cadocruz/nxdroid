@@ -586,7 +586,7 @@ uint64_t svc_dispatch(int num, uint64_t *regs, uint64_t orig_addr) {
             if (mprotect((void *)mlo, mhi - mlo, commit ? PROT_READ | PROT_WRITE : PROT_NONE))
                 die("SVC %#x mprotect %p+%#zx errno=%d", num, (void *)a, size, errno);
             if (commit) dm_guest_write_prepare((void *)mlo, mhi - mlo);
-            else (void)madvise((void *)mlo, mhi - mlo, MADV_FREE);
+            else (void)dm_guest_discard((void *)mlo, mhi - mlo);   // port.h: MADV_FREE on Apple, a hole punched in the guest block's memfd on Android
         }
         if (commit && changed) alias_initialize(off, size);
         if (g_flag.svc) LOG("%sPhysicalMemory %p+%#zx", commit ? "Map" : "Unmap", (void *)a, size);
