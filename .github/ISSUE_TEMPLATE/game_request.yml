@@ -4,8 +4,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        A game without a profile can be tried as it is: run `scripts/build_ipa_from_nsp.py` on its NSP folder. It writes a survey of the game
-        (`<title ID>_survey/survey.md`), a provisional profile and a best-effort build ([Port another game](https://github.com/seedds/nxnative/blob/main/docs/development.md#port-another-game)).
+        A game without a profile can be surveyed as it is: `scripts/build_ipa_from_nsp.py --survey-only` on its NSP folder writes a survey of the game
+        (`<title ID>_survey/survey.md`) ([Port another game](https://github.com/cadocruz/nxdroid/blob/main/docs/development.md#port-another-game)).
         The survey tells whoever picks the game up most of what they need. Never attach game files, keys or anything extracted from a game.
   - type: input
     id: game
@@ -25,14 +25,14 @@ body:
     id: survey
     attributes:
       label: Survey and what happened
-      description: Attach `survey.md` if you ran the NSP script, and say how far the game got (it boots, shows a title, crashes at ..., draws wrong). Attach the log of a run if there was one.
+      description: Attach `survey.md` if you ran the survey, and say how far the game got (it boots, shows a title, crashes at ..., draws wrong). Attach the log of a run if there was one.
     validations:
       required: false
   - type: input
     id: device
     attributes:
       label: Device and OS you would play on
-      placeholder: iPhone 17 Pro Max, iOS 26.1
+      placeholder: Galaxy S23 Ultra, Android 16
     validations:
       required: false
   - type: checkboxes

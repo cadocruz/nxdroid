@@ -7,15 +7,15 @@ nxdroid is an Android-only port of [nxnative](https://github.com/seedds/nxnative
 **The Android port is running on a physical device.** Built and verified on a Samsung Galaxy S23 Ultra (Snapdragon 8 Gen 2 / Adreno 740, 12 GB RAM, Android 16 / SDK 36) with **Mario Kart 8 Deluxe** (`0100152000022000`, Update 4.0.1 `[v1507328]`):
 
 - **Native Execution:** The game's AArch64 code runs natively with rewrites from `dm/tools/patch_nso.py --target=android`. Horizon SVCs and system services are handled by `dm/host`.
-- **Vulkan Graphics:** NVN commands are replayed via the Vulkan replay engine (`dm/gfx/vulkan`) with triple buffering (`ci.minImageCount = 3`) and bilinear scaling blits (`VK_FILTER_LINEAR`) to the native display extent (`1544x720`). Full 3D scenes and tonemapping render with 256-level gradient fidelity (correct 3D LUT sampling, memory pool aliasing protection) at ~54 FPS (`gpu_ms ~ 8 ms`).
+- **Vulkan Graphics:** NVN commands are replayed via the Vulkan replay engine (`dm/gfx/vulkan`) with triple buffering (`ci.minImageCount = 3`) and bilinear scaling blits (`VK_FILTER_LINEAR`) to the native display extent (`1544x720`). The 2D interface and video render correctly. The 3D scene is not right yet: screenshots of 2026-11-03 show it posterized, speckled and with black holes (wrong data in the 3D chain's intermediate targets, cause open). An earlier measurement gave ~54 FPS (`gpu_ms ~ 8 ms`). The A/B procedure for the engine's switches is in [HANDOFF.md](HANDOFF.md) §8 item 12.
 - **Hardware Video Decoding:** H.264 video decoding (used by the menus' track video previews) is implemented via Android NDK `AMediaCodec` in `dm/android/apple_stubs.c`, decoding directly to NV12 / CVPixelBufferRef.
 - **Audio Output:** Real audio output is enabled via AAudio in `dm/android/apple_stubs.c` (48 kHz stereo PCM).
-- **Frontend & Controls:** An Android APK (`com.nxdroid`) with the Argon game launcher (`LauncherOverlayView.java`, `GameScanner.java`), folder picker, and an ergonomic multitouch virtual controller overlay (`VirtualControllerOverlayView.java`) with D-Pad, left stick, triggers, face buttons, and show/hide overlay toggle (`🎮`).
+- **Frontend & Controls:** An Android APK (`com.nxdroid`) whose `MainActivity` picks the game folder and starts the game, with a multitouch virtual controller overlay (`VirtualControllerOverlayView.java`: D-Pad, left stick, triggers, face buttons and a show/hide toggle, `🎮`) and physical controllers ([Playing](docs/playing.md)). The Argon launcher views (`LauncherOverlayView.java`, `GameScanner.java`) are in the tree but not wired into `MainActivity` yet.
 - **Automation:** `scripts/prepare_game_android.py` automates RomFS extraction, NSO rewriting, shader compilation, Mii database generation, and deployment via ADB.
 
 Detailed diagnostics, findings, and live performance metrics are documented in [HANDOFF.md](HANDOFF.md) and [docs/reference/android.md](docs/reference/android.md).
 
-Android is the sole target. The legacy Apple code (Metal, iOS/Mac apps) remains in the repository as reference until final cleanup.
+Android is the sole target. The legacy Apple code (Metal, iOS/Mac apps) remains in the repository as reference until final cleanup. CI runs on Linux: the Android gates and an NDK build of `dmhost` and `libdm.so` on every push ([Continuous integration](docs/development.md#continuous-integration)).
 
 ## How the Android build is structured
 
@@ -38,16 +38,17 @@ The Android build is organized under `dm/android/`:
    adb install -r dm/android/app/build/outputs/apk/debug/app-debug.apk
    ```
 3. **Prepare and Push Game Data:**
-   Run `scripts/prepare_game_android.py` pointing to the game NSP/XCI folder:
+   Run `scripts/prepare_game_android.py` on the base game's `.nsp` / `.xci` (an update `.nsp` next to it is found by its name, or pass `-u <update>`), or on a folder already extracted (`exefs/`, `romfs/` or `romfs.img`, `control/`):
    ```sh
-   python3 scripts/prepare_game_android.py /path/to/nsp_folder --title-id 0100152000022000 --push
+   python3 scripts/prepare_game_android.py /path/to/game.nsp --title-id 0100152000022000 --push
    ```
-   This automatically extracts base and updates, rewrites NSOs for Android, compiles shaders, configures the Mii database, and pushes all files to `/storage/emulated/0/nxdroid/game/`.
+   This extracts the base game and its update, rewrites the NSOs for Android, compiles the shaders, imports the Mii database, and pushes the files to `/storage/emulated/0/nxdroid/game/` (`--device-dir` to change it). It needs `hactool` and your `prod.keys` for an archive (`-k`, otherwise looked for in the emulator folders).
 4. **Launch:**
    Open the **nxdroid** app on the device, select the game folder, and play using on-screen virtual controls or a connected USB/Bluetooth controller.
 
 ## Open
 
+- **3D picture:** the corrupted 3D scene above; the suspects and the order to test them are in [HANDOFF.md](HANDOFF.md) §8 item 12.
 - **Frame pacing to 60 fps lock:** Fine-tuning command submission intervals and buffer recycling to sustain 60 fps under heavy 12-kart racing load.
 - **Graphics for Vulkan and OpenGL guest games:** `dm/gfx/vk/hle_vk.m` and `dm/gfx/gl/hle_gl.m` need Vulkan backends.
 - **Guest memory zero-copy:** Investigation of `AHardwareBuffer` memory import to eliminate the mirror copy.
@@ -222,11 +223,11 @@ The size under each game is its IPA size on iOS; "60 fps with 1.2.0" marks a gam
 
 <sub>[Android port state](HANDOFF.md) · [Android reference](docs/reference/android.md) · [How it works](docs/development.md) · [Game notes](dm/games/README.md#games) · [Bring-up and debugging](docs/agents/README.md) · [Front ends](docs/frontends.md) · [Contributing](CONTRIBUTING.md)</sub>
 
-Part of that documentation (`docs/development.md`, `docs/playing.md`, `docs/frontends.md`) describes the Mac and iOS builds.
+These pages describe the Android build. The reference pages under `docs/reference` still explain many mechanisms through the Metal replay (`nvn_mtl.m`), which the Vulkan engine is checked against.
 
 ### Acknowledgements
 
-<sub>nxdroid is a port of **[nxnative](https://github.com/seedds/nxnative)**, which started from **[d2r-mobile](https://github.com/jhaizhou-ops/d2r-mobile)** (MIT), which developed this native-execution approach for Diablo II: Resurrected: its NSO rewriter, Horizon host, NVN-on-Metal layer and iOS app shell. The Vulkan replay engine and the bionic compatibility layer in this repository are vendored from d2r-mobile. [nx2apk](https://github.com/ghostyshell/nx2apk) is a reference for the same approach on Android. The project also builds on **Ryujinx** (MIT; its shader translator, in `dm/third_party/ryujinx` with [a few fixes](dm/third_party/ryujinx/README.md), and a reference for system services), **[Atmosphère](https://github.com/Atmosphere-NX/Atmosphere)** (Horizon's synchronization semantics), **yuzu** (Maxwell encodings, kernel cross-checks), **[LibHac](https://github.com/Thealexbarney/LibHac)** and **hactool** (reading NSPs), **[SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross)** and **[glslang](https://github.com/KhronosGroup/glslang)** (shaders), **deko3d** (zlib; texture layout sizes), **libvpx**, **stb_vorbis**, the **Vulkan headers** and **NVIDIA FLIP** ([licenses](dm/third_party/README.md)), and **Capstone**, **lz4**, **fontTools** and **XcodeGen** in the build.</sub>
+<sub>nxdroid is a port of **[nxnative](https://github.com/seedds/nxnative)**, which started from **[d2r-mobile](https://github.com/jhaizhou-ops/d2r-mobile)** (MIT), which developed this native-execution approach for Diablo II: Resurrected: its NSO rewriter, Horizon host, NVN-on-Metal layer and iOS app shell. The Vulkan replay engine and the bionic compatibility layer in this repository are vendored from d2r-mobile. [nx2apk](https://github.com/ghostyshell/nx2apk) is a reference for the same approach on Android. The project also builds on **Ryujinx** (MIT; its shader translator, in `dm/third_party/ryujinx` with [a few fixes](dm/third_party/ryujinx/README.md), and a reference for system services), **[Atmosphère](https://github.com/Atmosphere-NX/Atmosphere)** (Horizon's synchronization semantics), **yuzu** (Maxwell encodings, kernel cross-checks), **[LibHac](https://github.com/Thealexbarney/LibHac)** and **hactool** (reading NSPs), **[SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross)** and **[glslang](https://github.com/KhronosGroup/glslang)** (shaders), **deko3d** (zlib; texture layout sizes), **libvpx**, **stb_vorbis**, the **Vulkan headers** and **NVIDIA FLIP** ([licenses](dm/third_party/README.md)), and **Capstone**, **lz4** and **fontTools** in the tools (nxnative's iOS build also used **XcodeGen**).</sub>
 
 ### License
 

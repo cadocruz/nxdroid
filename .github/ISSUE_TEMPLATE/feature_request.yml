@@ -1,12 +1,10 @@
 name: Feature request
-description: Ask for something nxnative does not do yet
+description: Ask for something nxdroid does not do yet
 body:
   - type: markdown
     attributes:
       value: |
-        Looking for a graphical app to pack, list and start games? That is a separate project: [NX2Apple](https://github.com/LNPANDY/NX2Apple) is one.
-        A new front end belongs in a project of its own; what it needs from nxnative (an event, a field in the settings list) is welcome here.
-        A new platform or device class, a second implementation of an existing path, or a change of more than about 1,000 lines: agree on the scope here first ([CONTRIBUTING.md](https://github.com/seedds/nxnative/blob/main/CONTRIBUTING.md#large-changes-and-other-platforms)).
+        A new device class, a second implementation of an existing path, or a change of more than about 1,000 lines: agree on the scope here first ([CONTRIBUTING.md](https://github.com/cadocruz/nxdroid/blob/main/CONTRIBUTING.md#large-changes)).
   - type: textarea
     id: problem
     attributes:
@@ -18,13 +16,13 @@ body:
     id: proposal
     attributes:
       label: What you propose
-      description: How it could work, and the parts of nxnative it touches, if you know them.
+      description: How it could work, and the parts of nxdroid it touches, if you know them.
     validations:
       required: false
   - type: input
     id: platforms
     attributes:
-      label: Platforms
-      placeholder: "Mac, iPhone, iPad"
+      label: Devices
+      placeholder: "Galaxy S23 Ultra (Adreno 740)"
     validations:
       required: false

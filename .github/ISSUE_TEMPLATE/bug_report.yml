@@ -30,7 +30,7 @@ body:
   - type: input
     id: commit
     attributes:
-      label: nxnative commit
+      label: nxdroid commit
       description: "`git rev-parse --short HEAD` in the checkout you built from (or the date you downloaded it)."
       placeholder: 4639c511
     validations:
@@ -39,7 +39,7 @@ body:
     id: chain
     attributes:
       label: Shader chain version
-      description: "`grep DMSH_CHAIN dm/gfx/nvn/dmsh_chain.h` in the checkout used to build, or the `b-<version>` folder under the Mac app's `Contents/Resources/msl/` (`<title ID>_build/shader/cache/` for a Mac build, `shader/ios/` for iOS)."
+      description: "`grep DMSH_CHAIN dm/gfx/nvn/dmsh_chain.h` in the checkout the game was prepared with."
       placeholder: 5cddc47253ab
     validations:
       required: true
@@ -48,28 +48,26 @@ body:
     attributes:
       label: How it was built and run
       options:
-        - Mac, the host from a terminal (--platform mac)
-        - Mac app (--platform mac-app)
-        - iPhone or iPad, unsigned IPA from build_ipa_from_nsp.py
-        - iPhone or iPad, built and run with Xcode
-        - Built by hand (make, dmsh_build.py, build_ipa.sh)
-        - The NSP script failed before anything ran
+        - APK (com.nxdroid) built with Gradle, game prepared with prepare_game_android.py
+        - dmhost from adb shell
+        - Built by hand (CMake with the NDK, Gradle)
+        - prepare_game_android.py failed before anything ran
     validations:
       required: true
   - type: input
     id: device
     attributes:
       label: Device and OS
-      description: The Mac or iPhone model with its chip, and the macOS or iOS version (Apple menu > About This Mac, or Settings > General > About).
-      placeholder: MacBook Pro M2 Max, macOS 26.1
+      description: The phone model with its chip and GPU, and the Android version (Settings > About phone).
+      placeholder: Galaxy S23 Ultra, Snapdragon 8 Gen 2 / Adreno 740, Android 16
     validations:
       required: true
   - type: textarea
     id: env
     attributes:
-      label: Settings and environment overrides
-      description: "Settings you changed on the settings screen or in the Mac settings window, the contents of `env.txt` (`Documents/env.txt` on iOS; `~/Library/Application Support/nxnative/<title ID>/env.txt` or `--env-file` for a Mac app), and any `DM_*` variables set in the terminal or by a front end. Write \"none\" if there are none."
-      placeholder: "DM_FPS_TARGET=60\nDM_PRESENT_UPSCALE=metalfx"
+      label: Marker files and environment overrides
+      description: "The `gfx-*` marker files in the game folder and what each holds (`scripts/android_gfx_ab.py --list`), and any `DM_*` variables you set for `dmhost`. Write \"none\" if there are none."
+      placeholder: "gfx-noload = 0"
     validations:
       required: true
   - type: textarea
@@ -77,13 +75,11 @@ body:
     attributes:
       label: Logs
       description: |
-        Run `python3 scripts/bug_report.py <title ID>` to collect the logs, versions and settings into one file to attach (it contains no game files). Or attach the logs yourself:
         Attach the whole log from the start of the run (drag the file here), not excerpts:
-        - Mac app: `~/Library/Logs/nxnative/<title ID>.log` (the run before is `<title ID>.prev.log`)
-        - Terminal (`--platform mac`): the host's output, e.g. the command followed by `2>&1 | tee run.log`
-        - iPhone or iPad: `log.txt` in the Files app under the app's name (the run before is `log.prev.txt`)
-        - Graphics problems: also `<title ID>_build/logs/dmsh_build.log` from the build you ran
-        - Script or build failures: the script's full console output
+        - The app: `adb logcat -c` before starting the game, then `adb logcat -d -s dm > log.txt` after the problem
+        - `dmhost` from `adb shell`: its output, e.g. the command followed by `2>&1 | tee run.log`
+        - Graphics problems: a screenshot too (`adb exec-out screencap -p > shot.png`)
+        - Script or build failures: the script's or Gradle's full console output
     validations:
       required: true
   - type: checkboxes
