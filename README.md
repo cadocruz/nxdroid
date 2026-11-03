@@ -55,9 +55,12 @@ The Android build is organized under `dm/android/`:
 
 ## Games
 
-The profiles are the games nxnative supports; see the [per-game notes](dm/games/README.md#games) for each game's build, SDK, engine and graphics API. Those notes and the screenshots and sizes below come from the Mac and iPhone builds of nxnative. They say nothing about Android: apart from Mario Kart 8 Deluxe, whose Android status is the one in [Status](#status) above, none of these games has been run on Android.
+On Android, one game has been run: **Mario Kart 8 Deluxe** (`0100152000022000`, update 4.0.1) boots, plays its menus and videos and races on the S23 Ultra, with the 3D scene still corrupted ([Status](#status)). Every other profile in the [games table](dm/games/README.md#games) comes from nxnative and has not been run on Android yet: its note, screenshot and size describe nxnative's Mac and iPhone builds, not this port.
 
-The size under each game is its IPA size on iOS; "60 fps with 1.2.0" marks a game that nxnative runs at 60 fps (30 on the Switch) with that update.
+<details>
+<summary>The games nxnative runs on Mac and iPhone (not run on Android)</summary>
+
+The screenshots come from nxnative's builds; the size under each game is its IPA size on iOS, and "60 fps with 1.2.0" marks a game that nxnative runs at 60 fps (30 on the Switch) with that update.
 
 <!-- gallery: written by dm/tools/docs_gallery.py from docs/images/gallery.tsv; change the table, then run it -->
 <table>
@@ -218,6 +221,8 @@ The size under each game is its IPA size on iOS; "60 fps with 1.2.0" marks a gam
 </tr>
 </table>
 <!-- end of gallery -->
+
+</details>
 
 ### For developers
 
