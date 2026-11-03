@@ -73,9 +73,8 @@ def check_tool_requirements():
 
             lz4_mod = types.ModuleType("lz4")
             lz4_block = types.ModuleType("lz4.block")
-            lz4_block.decompress = lz4_decompress
-            lz4_block.LZ4BlockError = LZ4BlockError
-            lz4_mod.block = lz4_block
+            vars(lz4_block).update(decompress=lz4_decompress, LZ4BlockError=LZ4BlockError)   # through vars(): a ModuleType declares no such attributes
+            vars(lz4_mod)["block"] = lz4_block
             sys.modules["lz4"] = lz4_mod
             sys.modules["lz4.block"] = lz4_block
         except Exception:
@@ -614,7 +613,7 @@ def _decode_tex_handle(handle, cbuf_slot, is_image):
     tw = [o0] if ty == 3 else words
     t_slot = next((slot_from_word(x, 0x20, tb) for x in tw if slot_from_word(x, 0x20, tb) is not None and x * 4 < 0x168), None)
     if t_slot is None:
-        t_slot = next((128 + slot_from_word(x, 0x168, tb) for x in tw if slot_from_word(x, 0x168, tb) is not None and x * 4 < 0x568), None)
+        t_slot = next((128 + s for x in tw if (s := slot_from_word(x, 0x168, tb)) is not None and x * 4 < 0x568), None)
 
     s_slot = next((slot_from_word(x, 0x568, sb) for x in words if x * 4 >= 0x568 and slot_from_word(x, 0x568, sb) is not None), None) if ty != 3 else None
     if ty == 3:

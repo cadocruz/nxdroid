@@ -60,16 +60,25 @@ jobs:
             echo "::endgroup::"
           done
           exit $failed
+      - name: pytest (the probe contract's tests are plain functions, which unittest does not collect)
+        run: python -m pip install pytest
       - name: Tool tests
         run: |
+          annotate() {   # $1 title, $2 log: the log's last 40 lines as an error annotation (the job log needs a signed-in user; annotations do not)
+            local m; m=$(tail -n 40 "$2"); m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::error title=$1::$m"
+          }
           failed=0
           for f in dm/tools/tests/test_docs.py dm/tools/tests/test_android_vendor.py dm/tools/tests/test_android_audit.py \
                    dm/tools/tests/test_thread_slots.py dm/tools/tests/test_android_undef_scan.py dm/tools/tests/test_android_jni.py \
                    dm/tools/tests/test_android_vm_alias.py dm/tools/tests/test_launcher_settings.py dm/tools/tests/test_env_switches.py \
                    dm/gfx/vk/probe/tests/test_probe_output.py; do
             echo "::group::$f"
-            python -m unittest -v "$f" || { echo "::error::$f failed"; failed=1; }
+            rc=0
+            if [[ $f == */probe/* ]]; then python -m pytest -q "$f" > test.log 2>&1 || rc=$?
+            else python -m unittest -v "$f" > test.log 2>&1 || rc=$?; fi
+            cat test.log
             echo "::endgroup::"
+            if [ "$rc" != 0 ]; then annotate "$f" test.log; failed=1; fi
           done
           exit $failed
 
@@ -87,11 +96,31 @@ jobs:
           python-version: '3.14'
       - name: NDK of the Gradle build
         run: |
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
-          echo "NDK=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          annotate() {   # $1 title, $2 log: the log's last 40 lines as an error annotation (the job log needs a signed-in user; annotations do not)
+            local m; m=$(tail -n 40 "$2"); m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::error title=$1::$m"
+          }
+          sdk_root=${ANDROID_SDK_ROOT:-$ANDROID_HOME}
+          echo "NDKs on the image:"; ls "$sdk_root/ndk" || true
+          if [ ! -d "$sdk_root/ndk/$NDK_VERSION" ]; then
+            sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+            set +o pipefail   # yes ends on SIGPIPE when sdkmanager stops reading; that is not a failure
+            yes | "$sdkmanager" --licenses > licenses.log 2>&1 || true
+            set -o pipefail
+            "$sdkmanager" --install "ndk;$NDK_VERSION" > ndk.log 2>&1 || { cat ndk.log; annotate "sdkmanager ndk;$NDK_VERSION" ndk.log; exit 1; }
+          fi
+          echo "NDK=$sdk_root/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - name: Configure
         run: |
+          annotate() {   # $1 title, $2 log: the log's last 40 lines as an error annotation (the job log needs a signed-in user; annotations do not)
+            local m; m=$(tail -n 40 "$2"); m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::error title=$1::$m"
+          }
           cmake -S dm/android -B build/android/$GAME -DGAME=$GAME -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=29 \
-            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" > configure.log 2>&1 || { cat configure.log; annotate configure configure.log; exit 1; }
+          cat configure.log
       - name: Build dmhost and libdm.so
-        run: cmake --build build/android/$GAME --target dmhost dm -j4
+        run: |
+          annotate() {   # $1 title, $2 log: the log's last 40 lines as an error annotation (the job log needs a signed-in user; annotations do not)
+            local m; m=$(tail -n 40 "$2"); m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::error title=$1::$m"
+          }
+          cmake --build build/android/$GAME --target dmhost dm -j4 > build.log 2>&1 || { cat build.log; grep -E "error:|undefined" build.log | head -60 > errors.log; [ -s errors.log ] || cp build.log errors.log; annotate build errors.log; exit 1; }
+          cat build.log

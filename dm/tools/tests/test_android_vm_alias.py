@@ -20,6 +20,19 @@ REPO = Path(__file__).resolve().parents[3]
 TEST_C = REPO / 'dm/android/tests/test_vm_alias.c'
 
 
+IMAGE = 'dm-android-tools:1'   # the local toolchain image HANDOFF.md section 5 builds; not on a CI runner, which may still have podman
+
+
+def podman_with_image():
+    """podman, when the NDK image is there; skips the test otherwise (a runner with podman but without the image is not a failure)"""
+    podman = shutil.which('podman')
+    if not podman:
+        raise unittest.SkipTest('podman not available for NDK cross-compilation check')
+    if subprocess.run([podman, 'image', 'exists', IMAGE], capture_output=True).returncode != 0:
+        raise unittest.SkipTest(f'podman image {IMAGE} not present for NDK cross-compilation check')
+    return podman
+
+
 class AndroidVmAlias(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -39,16 +52,14 @@ class AndroidVmAlias(unittest.TestCase):
         self.assertIn('ALL TESTS PASSED', run_res.stdout)
 
     def test_vm_alias_android_ndk_compilation(self):
-        podman = shutil.which('podman')
-        if not podman:
-            self.skipTest('podman not available for NDK cross-compilation check')
+        podman = podman_with_image()
 
         ndk_clang = '/opt/android-sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang'
         cmd = [
             podman, 'run', '--rm', '--userns=keep-id',
             '-v', f'{REPO}:/src:rw',
             '-w', '/src',
-            'dm-android-tools:1',
+            IMAGE,
             ndk_clang, '-Wall', '-Wextra', '-c', 'dm/android/tests/test_vm_alias.c',
             '-o', '/tmp/test_vm_alias.o'
         ]
@@ -56,16 +67,14 @@ class AndroidVmAlias(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f'NDK compilation failed: {res.stderr}')
 
     def test_port_android_ndk_compilation(self):
-        podman = shutil.which('podman')
-        if not podman:
-            self.skipTest('podman not available for NDK cross-compilation check')
+        podman = podman_with_image()
 
         ndk_clang = '/opt/android-sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang'
         cmd = [
             podman, 'run', '--rm', '--userns=keep-id',
             '-v', f'{REPO}:/src:rw',
             '-w', '/src',
-            'dm-android-tools:1',
+            IMAGE,
             ndk_clang, '-c', 'dm/android/port_android.c',
             '-I', 'dm/android',
             '-I', 'dm/host',
