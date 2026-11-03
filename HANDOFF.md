@@ -419,6 +419,20 @@ Current counts:
    `GameScanner.java`, spec `dm/android/mockups/design_spec_argon.md`: hero card, title grid) is written
    but not wired into `MainActivity` (nothing references it); the help text in `MainActivity.java` (~426)
    is Portuguese, against `AGENTS.md`'s English rule.
+   **Argon assessment (2026-11-03, read only; the owner deferred the work until after the device
+   graphics tests):** the view draws the spec's top bar, hero card, 4-slot grid and footer, but its data
+   is fake (four placeholder games added in `init`, title from the folder name, title ID falling back to
+   `010015100B514000`, API / fps / prewarm counts from folder-name substrings, size "5.7 GB", fixed
+   "Vulkan 1.3" / "S23 Ultra" / "v0.1.0-alpha", every card "Playable"); `control.nacp` and `icon.jpg`,
+   which `prepare_game_android.py` copies, are read by nothing; its default folder is
+   `/storage/emulated/0/Games/Switch/`; it has touch only (no key handling), no fade, no paging past 4
+   games. Two limits of the architecture: the APK is built for one profile (`-DGAME`), so a library can
+   start only that game (a JNI getter for the built title ID is needed to mark the others); and stopping
+   a game ends the app's process (`nativeStopHost` → SIGTERM → `_exit(0)`, `hle_lifecycle.c`), so there
+   is no return to the launcher without moving the host to a separate process. Estimate to wire it in
+   with real data, gamepad navigation, the built-game check and English strings: 400-500 lines, 12-20 h,
+   most of it checkable only on the device. CI does not compile the Java (`android-build` builds the
+   native targets only): a Gradle `assembleDebug` job would be the first step.
 9. **[VERIFIED ON S23 ULTRA] Validation with the NDK and the device.** `dmhost` and `libdm.so` link
    with no undefined symbols; on the device: `vk_probe` (§3), `test_device_bionic` (`TLS_SLOT_APP` free,
    `RLIMIT_NICE = 40`), `test_vm_alias` (memfd aliasing, shared write coherence, independent
