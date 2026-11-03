@@ -27,7 +27,7 @@ SITES = {'site_plain', 'site_sp', 'site_cond', 'site_pcrel', 'site_br', 'site_br
          'site_window', 'site_retry_window'}
 FUNCS = SITES | {'here', 'emit', 'emit_key_addr', 'emit_slot_addr', 'emit_thread_base', 'pick', 'sp_delta', 'has18', 'site_gate'}
 CONSTS = {'KEY_INDEX', 'TLS_SLOT_APP'}
-body = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name in FUNCS)
+body: list[ast.stmt] = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name in FUNCS)
         or (isinstance(n, ast.Assign) and any(getattr(t, 'id', None) in CONSTS for t in n.targets))]
 assert {n.name for n in body if isinstance(n, ast.FunctionDef)} == FUNCS, 'patch_nso.py lost an emitter this test runs'
 
@@ -257,12 +257,12 @@ class ThreadSlots(unittest.TestCase):
         funcs = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
         slot_users = set()
         for name, fn in funcs.items():
-            calls = [c for c in ast.walk(fn) if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)]
-            calls.sort(key=lambda c: (c.lineno, c.col_offset))
+            calls = [(c, c.func.id) for c in ast.walk(fn) if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)]
+            calls.sort(key=lambda cf: (cf[0].lineno, cf[0].col_offset))
             base = None
-            for c in calls:
-                if c.func.id == 'emit_thread_base': base = ast.unparse(c.args[0])
-                if c.func.id == 'emit_slot_addr' and name not in ('emit_slot_addr',):
+            for c, callee in calls:
+                if callee == 'emit_thread_base': base = ast.unparse(c.args[0])
+                if callee == 'emit_slot_addr' and name not in ('emit_slot_addr',):
                     slot_users.add(name)
                     self.assertEqual(base, ast.unparse(c.args[0]), f'{name}: emit_slot_addr on {ast.unparse(c.args[0])} without emit_thread_base of it first')
             if name != 'emit_thread_base':

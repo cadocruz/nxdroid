@@ -500,7 +500,12 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     `GENERALIZE` strings, which name the iPhone), `CONTRIBUTING.md`, `README.md` ~225, comments in the
     Apple sources and `build_ipa_from_nsp.py` that cite removed sections, and the 149 `env_switches.tsv`
     rows read only by Apple code. `test_env_switches` was already red before: the table lacks the
-    `DM_GFX_*` switches `jni_android.c` sets and some `DM_ANDROID_*` / `DM_BC_*` rows.
+    `DM_GFX_*` switches `jni_android.c` sets and some `DM_ANDROID_*` / `DM_BC_*` rows. **CI done early
+    too (2026-11-03):** `.github/workflows/tests.yml` runs on Linux only: `android-gates` (the §5 gates
+    and the Android tool tests) and `android-build` (NDK compile of `dmhost` and `libdm.so`, advisory
+    until it passes once; drop its `continue-on-error` then). The Mac / iOS / Metal jobs and
+    `dm/tools/tests/test_ci_toolchain.py` (it tied the workflow to Xcode) are gone. `fuzz.yml` (nightly)
+    still fails for a reason not read yet: its logs need a signed-in `gh run view --log-failed`.
 11. **Independent audit follow-ups** (audit of `f7e190d` / `6dc397b`; every item below is closed; the
     "Addressed follow-ups" list at its end is the record, and the older sub-bullets keep the reasoning that
     was written before each fix landed):

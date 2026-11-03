@@ -50,36 +50,24 @@ Python standard library; LZ4 is loaded when decoding NSO files.
 
 ## Continuous integration
 
-`.github/workflows/tests.yml` runs host and CPU graphics tests and Python tool
-tests. It also runs the CPU texture layout/deswizzle test (`dm/gfx/tex/tests/t_tex`)
-and the host's `tsan` and `memory-tsan` targets for audio and memory races.
-Its jobs still run on GitHub's `xcode-27` image, inherited from nxnative; the
-workflow has no Android build or device job.
+`.github/workflows/tests.yml` runs on GitHub's Linux runners (`ubuntu-24.04`) on every
+push to `main` and every pull request. `android-gates` is the gate list of `HANDOFF.md`
+§5 and must stay green: the vendored engine's provenance (`android_vendor.py --check`),
+the opcode and ABI vocabularies (`opcode_map.py --check` with `CC=gcc`,
+`abi_gaps.py --check`), the portability audit (`android_audit.py --check`), the
+symptom index (`docs_symptoms.py --check`), the engine's source checks under
+`dm/gfx/vulkan/engine/tests` (text checks, no compile), and the tool tests for docs,
+provenance, audit, thread slots, `undef_scan`, JNI, `dm_vm_alias`, the launcher
+settings and the probe's output contract. `android-build` installs the NDK the Gradle
+build names and compiles `dmhost` and `libdm.so` for one profile (arm64-v8a, API 29);
+it is advisory (`continue-on-error`) until it has passed once on GitHub. Nothing runs
+on a device or a GPU.
 
-A separate `sanitizers` job builds the same tests again with sanitizers, each
-build in a folder of its own (`build/asan`, `build/tsan`, `asan/`): every host
-unit test and the CPU texture test under AddressSanitizer and
-UndefinedBehaviorSanitizer (`asan`), and the host tests that start threads under
-ThreadSanitizer (`tsan-threads`). Documented exceptions live in
-`dm/sanitizers/`: ASan and UBSan in `ignorelist.txt` (compile time), TSan in
-`tsan.supp` (run time). These cover custom HLE sections, synthetic NRO offsets,
-an intentionally unjoined test and uninstrumented CoreAudio synchronization.
-The job fails on other findings. The initial header-alignment, AudioUnit
-publication and thread-registration bugs were fixed and their suppressions
-removed ([audio](reference/audio.md#unaligned-command-headers-during-layout-probing),
-[AudioUnit publication](reference/audio.md#audiounit-construction-before-output-publication),
-[thread registration](reference/threads.md#publishing-a-new-threads-scheduler-fields)). To run it
-locally:
-
-```sh
-make -C dm/host/tests GAME=010015100B514000 -j8 asan tsan-threads
-make -C dm/gfx/tex/tests asan
-```
-
-A new finding is fixed, not listed, unless its cause lies outside the code under
-test (an uninstrumented system framework, a test fixture); then it gets an entry
-with its reason. A fix removes any existing entry in the same change: the job
-then checks the repaired code. A change to `ignorelist.txt` rebuilds the ASan tests.
+The Mac host, iOS app and Metal jobs nxnative ran on the `xcode-27` image are gone
+with the Android-only decision. Their tests stay in the tree with the Apple sources
+until those are removed (`HANDOFF.md` §8 item 10): `dm/host/tests`, `dm/gfx/tests`,
+`dm/gfx/tex/tests` and `dm/ios/tests` build with the Apple toolchain, and the
+sanitizer exceptions in `dm/sanitizers/` belong to those builds.
 
 `.github/workflows/lint-python.yml` lints `scripts/` and the Python tools under
 `dm/` with ruff (rules for bugs, never reformatting) and type-checks them with

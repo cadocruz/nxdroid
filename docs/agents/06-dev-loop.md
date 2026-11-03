@@ -37,7 +37,7 @@ There is no benchmark harness for Android: `scripts/bench.py` and `scripts/regre
 
 ## 5. Continuous integration
 
-`.github/workflows/tests.yml` runs on every pull request: the host's unit tests and ThreadSanitizer targets, the host and CPU texture tests again under ASan, UBSan and TSan (a ratchet over the findings listed in `dm/sanitizers/`), the CPU-only graphics tests, the Python tool tests (`dm/tools/tests`, `dm/gfx/tests`) and the Apple host builds ([Continuous integration](../development.md#continuous-integration)); none of it builds or runs the Android port. `.github/workflows/fuzz.yml` fuzzes the file parsers nightly from synthetic seeds; a change to a parser in `romfs.py`, `nacp.py`, `shader_split.py` or `uepak.py` can run its harness locally (`dm/tools/fuzz/fuzz_<parser>.py --time 300`).
+`.github/workflows/tests.yml` runs on every push to `main` and every pull request, on Linux: the `HANDOFF.md` §5 gates and the Android tool tests (`android-gates`, which must stay green), and an NDK compile of `dmhost` and `libdm.so` (`android-build`, advisory until its first green run); nothing runs on a device ([Continuous integration](../development.md#continuous-integration)). `.github/workflows/fuzz.yml` fuzzes the file parsers nightly from synthetic seeds; a change to a parser in `romfs.py`, `nacp.py`, `shader_split.py` or `uepak.py` can run its harness locally (`dm/tools/fuzz/fuzz_<parser>.py --time 300`).
 
 ## 6. Before you open a pull request
 

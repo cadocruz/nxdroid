@@ -23,7 +23,6 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path

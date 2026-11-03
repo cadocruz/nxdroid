@@ -25,13 +25,17 @@ PACKAGE = "com.nxdroid"
 ACTIVITY = "com.nxdroid/.MainActivity"
 
 
-def adb(args, adb_path, serial, binary=False):
+def adb_bytes(args, adb_path, serial) -> bytes:
     cmd = [adb_path] + (["-s", serial] if serial else []) + args
     res = subprocess.run(cmd, capture_output=True)
     if res.returncode != 0:
         sys.stderr.write("adb failed: %s\n%s\n" % (" ".join(cmd), res.stderr.decode(errors="replace")))
         sys.exit(1)
-    return res.stdout if binary else res.stdout.decode(errors="replace")
+    return res.stdout
+
+
+def adb(args, adb_path, serial) -> str:
+    return adb_bytes(args, adb_path, serial).decode(errors="replace")
 
 
 def main():
@@ -88,7 +92,7 @@ def main():
         print("waiting %d s ..." % a.wait)
         time.sleep(a.wait)
     if a.shot:
-        png = adb(["exec-out", "screencap", "-p"], a.adb, a.serial, binary=True)
+        png = adb_bytes(["exec-out", "screencap", "-p"], a.adb, a.serial)
         with open(a.shot, "wb") as f:
             f.write(png)
         print("screenshot saved to", a.shot)

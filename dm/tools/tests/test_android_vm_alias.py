@@ -27,7 +27,7 @@ class AndroidVmAlias(unittest.TestCase):
 
     def test_vm_alias_native_execution(self):
         compiler = shutil.which('clang') or shutil.which('gcc')
-        self.assertIsNotNone(compiler, 'clang or gcc required on host to run vm_alias native test')
+        if compiler is None: self.fail('clang or gcc required on host to run vm_alias native test')
 
         out_bin = Path(self.tmp.name) / 'test_vm_alias'
         res = subprocess.run([compiler, '-Wall', '-Wextra', str(TEST_C), '-o', str(out_bin)],

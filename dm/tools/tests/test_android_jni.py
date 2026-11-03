@@ -147,6 +147,7 @@ class AndroidJniContract(unittest.TestCase):
                 # Check Java shift: e.g. DM_BTN_A = 1L << 0
                 j_m = re.search(rf'{b}\s*=\s*1L\s*<<\s*(\d+)', java_text)
                 self.assertIsNotNone(j_m, f'Missing {b} in MainActivity.java')
+                assert c_m is not None and j_m is not None
                 self.assertEqual(c_m.group(1), j_m.group(1), f'Bit shift mismatch for {b}')
 
         # STICK_MAX
