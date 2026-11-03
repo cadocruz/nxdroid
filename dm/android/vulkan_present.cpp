@@ -159,8 +159,21 @@ int create_swap(){
         if(is_srgb(f.format))have_srgb=true;else have_linear=true;}
     auto pick=[&](bool srgb)->const VkSurfaceFormatKHR*{
         const VkSurfaceFormatKHR *any=nullptr;
+        // Marker gfx-swap-format or env DM_SWAP_FORMAT: 37=RGBA_UNORM, 43=RGBA_SRGB, 44=BGRA_UNORM, 50=BGRA_SRGB
+        int force_fmt=0;
+        if(const char *e=getenv("DM_SWAP_FORMAT"))force_fmt=atoi(e);
+        {std::string dir=shader_path;size_t cut=dir.find_last_of('/');if(FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-swap-format").c_str(),"rb")){if(fscanf(m,"%d",&force_fmt)!=1)force_fmt=0;fclose(m);}}
+        if(force_fmt>0){
+            for(auto &f:formats)if(int(f.format)==force_fmt){
+                VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);
+                if(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT)return &f;
+            }
+        }
+        // Scoring: on Android panels, prefer B8G8R8A8_SRGB (50) or B8G8R8A8_UNORM (44) if driver scanout expects BGRA
         for(auto &f:formats){if(is_srgb(f.format)!=srgb)continue;VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
-            if(f.format==VK_FORMAT_R8G8B8A8_UNORM||f.format==VK_FORMAT_B8G8R8A8_UNORM||f.format==VK_FORMAT_R8G8B8A8_SRGB||f.format==VK_FORMAT_B8G8R8A8_SRGB)return &f;
+            if(f.format==VK_FORMAT_B8G8R8A8_SRGB||f.format==VK_FORMAT_B8G8R8A8_UNORM)return &f;
+            if(f.format==VK_FORMAT_R8G8B8A8_SRGB||f.format==VK_FORMAT_R8G8B8A8_UNORM)if(!any)any=&f;}
+        for(auto &f:formats){if(is_srgb(f.format)!=srgb)continue;VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
             if(!any)any=&f;}
         return any;};
     const VkSurfaceFormatKHR *chosen=pick(want_srgb);if(!chosen)chosen=pick(!want_srgb);if(chosen)sf=*chosen;
@@ -230,7 +243,12 @@ int present(void*,void*,VkImage source,VkFormat source_format,uint32_t width,uin
     int x=0,y=0,w=int(width),h=int(height);if(crop&&crop[2]>0&&crop[3]>0){x=std::clamp(crop[0],0,w);y=std::clamp(crop[1],0,h);w=std::min(crop[2],int(width)-x);h=std::min(crop[3],int(height)-y);}if(w<=0||h<=0)return VK_ERROR_INITIALIZATION_FAILED;
     // The swapchain's encoding follows the presented image, so the blit converts neither way (see want_srgb). A change asks
     // for one rebuild, and only when the device can offer the other encoding; otherwise the swapchain stays as it is.
-    {const bool src_srgb=is_srgb(source_format);if(src_srgb!=want_srgb){want_srgb=src_srgb;if(surface && (src_srgb?have_srgb:have_linear))swap_dirty=true;}}
+    // If gfx-swap-srgb marker or DM_PRESENT_SRGB env is set, force sRGB destination encoding.
+    {bool force_srgb=false;
+     if(const char *e=getenv("DM_PRESENT_SRGB"))force_srgb=atoi(e)!=0;
+     {std::string dir=shader_path;size_t cut=dir.find_last_of('/');if(FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-swap-srgb").c_str(),"rb")){int c=fgetc(m);if(c!=EOF)force_srgb=c!='0';fclose(m);}}
+     const bool src_srgb=force_srgb || is_srgb(source_format);
+     if(src_srgb!=want_srgb){want_srgb=src_srgb;if(surface && (src_srgb?have_srgb:have_linear))swap_dirty=true;}}
     for(;;){
     if(present_native && surface && active && (native_w!=w || native_h!=h)){   // the next swapchain takes this size (currentExtent follows the buffer geometry)
         int g=ANativeWindow_setBuffersGeometry(active,w,h,0);native_w=w;native_h=h;swap_dirty=true;
