@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GAME: 0100152000022000   # Mario Kart 8 Deluxe: the profile run on the S23 Ultra (any profile builds; the checks are about code, not the game)
+  GAME: '0100152000022000'   # quoted: unquoted, YAML reads these digits as an octal number. Mario Kart 8 Deluxe: the profile run on the S23 Ultra (any profile builds; the checks are about code, not the game)
   NDK_VERSION: 29.0.14206865   # dm/android/app/build.gradle ndkVersion, HANDOFF.md §5
 
 defaults:
@@ -115,7 +115,7 @@ jobs:
             local m; m=$(tail -n 40 "$2"); m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::error title=$1::$m"
           }
           cmake -S dm/android -B build/android/$GAME -DGAME=$GAME -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=29 \
-            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" > configure.log 2>&1 || { cat configure.log; annotate configure configure.log; exit 1; }
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" > configure.log 2>&1 || { cat configure.log; grep -A12 "CMake Error" configure.log | head -60 > errors.log; [ -s errors.log ] || cp configure.log errors.log; annotate configure errors.log; exit 1; }
           cat configure.log
       - name: Build dmhost and libdm.so
         run: |
