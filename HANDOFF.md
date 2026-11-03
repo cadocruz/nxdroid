@@ -502,8 +502,9 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     rows read only by Apple code. `test_env_switches` is green again (the 25 rows it lacked, the `DM_GFX_*`
     switches `jni_android.c` sets among them, have their meanings) and runs in CI. **CI done early
     too (2026-11-03):** `.github/workflows/tests.yml` runs on Linux only: `android-gates` (the §5 gates
-    and the Android tool tests) and `android-build` (NDK compile of `dmhost` and `libdm.so`, advisory
-    until it passes once; drop its `continue-on-error` then). The Mac / iOS / Metal jobs and
+    and the Android tool tests) and `android-build` (NDK compile of `dmhost` and `libdm.so`; green since
+    `80f73ca`, the first CI compile of this session's `vulkan_present.cpp` / `port_android.c` changes, and
+    no longer advisory). The Mac / iOS / Metal jobs and
     `dm/tools/tests/test_ci_toolchain.py` (it tied the workflow to Xcode) are gone. `fuzz.yml` (nightly)
     still fails for a reason not read yet: its logs need a signed-in `gh run view --log-failed`.
 11. **Independent audit follow-ups** (audit of `f7e190d` / `6dc397b`; every item below is closed; the
@@ -586,7 +587,7 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     3b. `vulkan_present.cpp` now takes only a surface format in `VK_COLOR_SPACE_SRGB_NONLINEAR_KHR` when the
        device lists one (before: the first-listed format, whatever its colour space; Samsung also lists 8-bit
        formats under `DISPLAY_P3_NONLINEAR_EXT`), and logs every `Swapchain surface format=<f> colorSpace=<c>`
-       once per rebuild. Not compiled, not measured; a hardening, not a proven cause of the dark picture. Read
+       once per rebuild. Compiled in CI (`android-build`), not measured; a hardening, not a proven cause of the dark picture. Read
        those lines first: if the chosen format was not the first listed, this was live.
     4. A/B any single switch without a rebuild: the engine reads a marker file from the parent of the
        shader directory (`<game folder>/shaders` → `<game folder>`, and the game folder's parent when

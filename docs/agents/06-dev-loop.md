@@ -37,7 +37,7 @@ There is no benchmark harness for Android: `scripts/bench.py` and `scripts/regre
 
 ## 5. Continuous integration
 
-`.github/workflows/tests.yml` runs on every push to `main` and every pull request, on Linux: the `HANDOFF.md` §5 gates and the Android tool tests (`android-gates`, which must stay green), and an NDK compile of `dmhost` and `libdm.so` (`android-build`, advisory until its first green run); nothing runs on a device ([Continuous integration](../development.md#continuous-integration)). `.github/workflows/fuzz.yml` fuzzes the file parsers nightly from synthetic seeds; a change to a parser in `romfs.py`, `nacp.py`, `shader_split.py` or `uepak.py` can run its harness locally (`dm/tools/fuzz/fuzz_<parser>.py --time 300`).
+`.github/workflows/tests.yml` runs on every push to `main` and every pull request, on Linux: the `HANDOFF.md` §5 gates and the Android tool tests (`android-gates`, which must stay green), and an NDK compile of `dmhost` and `libdm.so` (`android-build`; both must stay green); nothing runs on a device ([Continuous integration](../development.md#continuous-integration)). `.github/workflows/fuzz.yml` fuzzes the file parsers nightly from synthetic seeds; a change to a parser in `romfs.py`, `nacp.py`, `shader_split.py` or `uepak.py` can run its harness locally (`dm/tools/fuzz/fuzz_<parser>.py --time 300`).
 
 ## 6. Before you open a pull request
 

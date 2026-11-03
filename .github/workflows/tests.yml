@@ -1,8 +1,7 @@
 # Checks for the Android port that need no game files, keys, device or GPU, on GitHub's Linux runners.
 # nxdroid is Android only (HANDOFF.md §2 *Platforms*): the Mac host, iOS app and Metal jobs this workflow used to run on the xcode-27 image are gone with it; the Apple
 # sources stay in the tree until HANDOFF.md §8 item 10 removes them, and the tests that build them (dm/host/tests, dm/gfx/tests, dm/ios) are not run here.
-# android-gates is the HANDOFF.md §5 gate list and must stay green. android-build compiles the host with the NDK; it is advisory (continue-on-error) until it has
-# passed once on GitHub, then the flag goes.
+# android-gates is the HANDOFF.md §5 gate list; android-build compiles the host with the NDK (green since 80f73ca). Both must stay green.
 name: tests
 
 on:
@@ -86,7 +85,6 @@ jobs:
     name: Android host compiled with the NDK (dmhost and libdm.so, arm64-v8a, API 29)
     runs-on: ubuntu-24.04
     timeout-minutes: 40
-    continue-on-error: true   # advisory until its first green run on GitHub (see the header)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
