@@ -154,8 +154,14 @@ int create_swap(){
     // blit between two formats of the same encoding leaves the bytes alone. Fall back to the other encoding when the device
     // offers only that one, then to any blittable format of the wanted encoding, so a device without an sRGB surface still
     // presents (decoded once, as before). have_srgb / have_linear keep present() from asking for a swapchain it cannot get.
+    // Only a surface format in the sRGB non-linear colour space is taken when the device lists one: Samsung's driver also lists
+    // 8-bit formats under DISPLAY_P3_NONLINEAR_EXT and the like, and the compositor would then read the game's sRGB bytes as that
+    // space (wrong saturation and brightness). The first-listed format was taken before, whatever its colour space.
+    bool have_cs=false;for(auto &f:formats)if(f.colorSpace==VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)have_cs=true;
+    auto cs_ok=[&](const VkSurfaceFormatKHR &f){return !have_cs||f.colorSpace==VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;};
+    for(auto &f:formats)vlog("Swapchain surface format=%u colorSpace=%u%s",unsigned(f.format),unsigned(f.colorSpace),cs_ok(f)?"":" (skipped: not sRGB non-linear)");
     have_srgb=have_linear=false;
-    for(auto &f:formats){VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
+    for(auto &f:formats){if(!cs_ok(f))continue;VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
         if(is_srgb(f.format))have_srgb=true;else have_linear=true;}
     auto pick=[&](bool srgb)->const VkSurfaceFormatKHR*{
         const VkSurfaceFormatKHR *any=nullptr;
@@ -170,10 +176,10 @@ int create_swap(){
             }
         }
         // Scoring: on Android panels, prefer B8G8R8A8_SRGB (50) or B8G8R8A8_UNORM (44) if driver scanout expects BGRA
-        for(auto &f:formats){if(is_srgb(f.format)!=srgb)continue;VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
+        for(auto &f:formats){if(!cs_ok(f)||is_srgb(f.format)!=srgb)continue;VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
             if(f.format==VK_FORMAT_B8G8R8A8_SRGB||f.format==VK_FORMAT_B8G8R8A8_UNORM)return &f;
             if(f.format==VK_FORMAT_R8G8B8A8_SRGB||f.format==VK_FORMAT_R8G8B8A8_UNORM)if(!any)any=&f;}
-        for(auto &f:formats){if(is_srgb(f.format)!=srgb)continue;VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
+        for(auto &f:formats){if(!cs_ok(f)||is_srgb(f.format)!=srgb)continue;VkFormatProperties q;vkGetPhysicalDeviceFormatProperties(physical,f.format,&q);if(!(q.optimalTilingFeatures&VK_FORMAT_FEATURE_BLIT_DST_BIT))continue;
             if(!any)any=&f;}
         return any;};
     const VkSurfaceFormatKHR *chosen=pick(want_srgb);if(!chosen)chosen=pick(!want_srgb);if(chosen)sf=*chosen;

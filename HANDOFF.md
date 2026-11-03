@@ -6,12 +6,15 @@ design lives in `dm/gfx/vk/address_space.md` and `docs/reference/android.md`, an
 in `dm/gfx/vk/engine_smoke/opcode_map.txt` and `payload_mismatch.txt`. This file says **where the
 work stands, what is broken, what to do next, and how to run it**.
 
-The repository's remote is `origin https://github.com/cadocruz/nxdroid.git`. `main` holds three commits,
-all pushed (`origin/main` is at the last): `8e050e9` (initial), `f7e190d` (the host bring-up, §8 items 4,
-4a, 4b, the `P6` viewport work and engine rounds F to I, §7, and the rewritten `README.md`) and `6dc397b`
-(this file). The two later commits were made outside the coordinating session, with the repository-local
-identity `Ricardo A. F. da Cruz <7233682+cadocruz@users.noreply.github.com>` (`.git/config`; the global one
-is untouched) and Portuguese messages. `AGENTS.md` asks for the `seedds` identity and English text; that
+The repository's remote is `origin https://github.com/cadocruz/nxdroid.git`. `main` holds ten commits, all
+pushed (`origin/main` is at the last, `34fb039`). The first three: `8e050e9` (initial), `f7e190d` (the host
+bring-up, §8 items 4, 4a, 4b, the `P6` viewport work and engine rounds F to I, §7, and the rewritten
+`README.md`) and `6dc397b` (this file). Then the audit follow-ups (`c700ca3`), the app shell and first
+device bring-up (`8e01dd0`), hardware video, the virtual controller and the launcher (`3e947dc`), and the
+Sprint 6 graphics fixes and diagnostics (`1ff60c1`, `d33b9df`, `22cc33d`, `34fb039`). The commits were made
+outside the coordinating session, with the repository-local identity
+`Ricardo A. F. da Cruz <7233682+cadocruz@users.noreply.github.com>` (`.git/config`; the global one is
+untouched) and mostly Portuguese messages. `AGENTS.md` asks for the `seedds` identity and English text; that
 rule goes with the Apple removal (§8 item 10).
 
 ## Status at this cut (Sprint 6 – Physical Device Bring-Up & Live Diagnostics)
@@ -27,7 +30,7 @@ The first fully running title is **Mario Kart 8 Deluxe** (`0100152000022000`, Up
 - **Frontend & Virtual Controller:** Argon launcher overlay (`LauncherOverlayView.java`, `GameScanner.java`) with storage picker and game catalog; on-screen multitouch virtual gamepad (`VirtualControllerOverlayView.java`) with left stick, D-Pad, triggers, face buttons, and show/hide toggle (`🎮`).
 - **Automated Game Deployment:** `scripts/prepare_game_android.py` automates base+update RomFS extraction, NSO rewriting, shader compilation, Mii database setup from emulator userdata, and ADB pushing.
 
-### Visual & Performance Diagnostics (`diagnostic_print_grafico.md`)
+### Visual & Performance Diagnostics
 
 Detailed diagnostics and live GPU/CPU telemetry were gathered during 3D race execution on device:
 
@@ -150,7 +153,7 @@ python3 dm/gfx/vulkan/engine/tests/event_order_test.py
 ```
 
 On the Windows machine this round was done on: use LibreOffice's python with `-X utf8`, `CC=gcc` for
-`opcode_map.py`, `pytest` is absent (run the modules with `unittest`), and read §10 for the CRLF false reds.
+`opcode_map.py`, `pytest` was absent there at first (run the modules with `unittest`; a later pass reports the pytest suite passing, so check what is installed), and read §10 for the CRLF false reds.
 
 The system `python3` has no pytest; use `python3 -m pytest`. The full
 `dm/tools/tests` suite is **not** green on this machine and was not before this work: five modules
@@ -180,6 +183,10 @@ ADB=/tmp/opencode/platform-tools/adb          # 37.0.1; the device is RQCX808VH9
 $ADB push dm/gfx/vk/probe/vk_probe_android /data/local/tmp/vk_probe
 $ADB shell chmod 755 /data/local/tmp/vk_probe && $ADB shell /data/local/tmp/vk_probe > /tmp/opencode/s23-ultra.txt
 python3 dm/gfx/vk/probe/tests/test_probe_output.py /tmp/opencode/s23-ultra.txt   # must print "valid"
+
+# A/B one engine switch in the installed app, no rebuild (§8 item 12, steps 4 to 6)
+python3 scripts/android_gfx_ab.py gfx-noload --off --shot noload_off.png --log noload_off.txt
+python3 scripts/android_gfx_ab.py gfx-noload --clear
 ```
 
 ## 6. What is done
@@ -412,9 +419,9 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
    like `make -C dm/host` (stops and lists the profiles without it; `DM_GAMES_DIR` honoured),
    generates `game_profile.h` with `dm/games/game.py header`, reads the source list from
    `dm/host/Makefile` through `dm/android/tools/host_sources.py` (ours), builds libvpx, and compiles
-   `front_android.c` (our `front.h`, no touch bridge), `vulkan_present.cpp`, `port_android.c`, the
+   `front_android.c` (our `front.h`; touch goes through `jni_android.c`), `vulkan_present.cpp`, `port_android.c`, the
    compat shims and `nvn_vk.c`; the D2R headers, overlay contract and touch sources are gone,
-   SPIRV-Tools is optional and `libdm.so` waits for `jni_android.c`. The configure requires arm64
+   SPIRV-Tools is optional and `libdm.so` is built with `jni_android.c` (item 8). The configure requires arm64
    and `ANDROID_PLATFORM >= 29` (28 before the guest thread slots, item 4a), sets one build type and gives C and C++ the Makefile's `-O1 -g`,
    keeps `DM_GAMES_DIR` in the cache (the first configure's environment, or `-DDM_GAMES_DIR=`) and
    gives that one value, or none, to every `game.py` call at configure and build, and runs
@@ -458,7 +465,7 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
      * Main Activity: `dm/android/app/src/main/java/com/nxdroid/MainActivity.java` (display refresh rate query and dispatch, physical controller key and axis mapping to `nativeSendPad`, host startup from intent extras with default directories, lifecycle handling).
      * End-to-end packaging verified: `aapt2 link`, `javac -source 17 -target 17`, `d8`, APK packaging with `classes.dex` and `lib/arm64-v8a/libdm.so`, and `zipalign -p 4` alignment verified cleanly.
      * Automated test suite: `dm/tools/tests/test_android_jni.py` passes all lexical, string release pairing, and signature tests.
-   - Target 3 **[PLANNED - SELECTED BY OWNER] Console Home Interface & Custom SAF Game Directory (Argon Specification)**:
+   - Target 3 **[DONE - launcher and virtual gamepad run on the S23 Ultra; polish open] Console Home Interface & Custom SAF Game Directory (Argon Specification)**:
      * Implement `LauncherOverlayView` on top of `GameSurfaceView` in a root `FrameLayout` (Z-index 0: `GameSurfaceView`, Z-index 1: `LauncherOverlayView`).
      * Replace hardcoded `/sdcard/Android/data/...` path with user-customizable directory selection via Android Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`, `takePersistableUriPermission`, `SharedPreferences`).
      * Dual-Pane layout for 19.5:9 landscape (Hero Card with launch CTA, shader prewarm and metadata on left; 2x2 discovered titles grid on right).
@@ -486,9 +493,9 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     and check `dm/tools/tests/test_docs.py` (links, anchors, notes and table rows) afterwards. The
     `android_audit` baseline is the checklist: it should shrink to 0 as this lands. The git history
     (`8e050e9`) keeps everything removed.
-11. **Independent audit follow-ups** (audit of `f7e190d` / `6dc397b`; a dev pass was running at the 17:15
-    cut, so check `git diff` for what landed before redoing any of it). Each item is to be verified
-    against the code first, then fixed:
+11. **Independent audit follow-ups** (audit of `f7e190d` / `6dc397b`; every item below is closed; the
+    "Addressed follow-ups" list at its end is the record, and the older sub-bullets keep the reasoning that
+    was written before each fix landed):
     - `docs/reference/android.md` stale lines: "not wired into any build" (line ~3), "Three rows carry a
       pending adaptation" (~47; the manifest has 11 adapted rows), "Fix: none here" for the 27 `mtl_*`
       entry points (~92), and the line that calls the ~60 Apple APIs expected compile errors (~120;
@@ -500,24 +507,24 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
       test's vendor row (LF sha256, by hand). **[DONE]** both assertions added (plus: the draw reads
       no origin atomic, the companion ViewportIndex gate); 7 scratch mutations (flip removed /
       commented / `if(false)`, gate removed / commented / `vpn<=16`, draw reading the atomic) all fail
-      it, the current file passes; row updated. §7's mutation count (33) not yet updated: 40 now.
+      it, the current file passes; row updated. §7 says 40.
     - `xbg_game.cpp` ~4116: `VkPhysicalDeviceVulkan12Features` is chained by the loader's
       `vkEnumerateInstanceVersion`, not the created instance's `apiVersion`: a 1.1 instance on a 1.2
-      loader (the desktop smoke harness) gets a 1.2 struct. Use the instance's version. **[DONE, not
-      compiled]** `xbg_game_config.instance_api_version` (new last field; `vulkan_present.cpp` and
-      `smoke.c` fill it), used here and in the mirror-clamp setter's 1.2 query. Open: line ~4170
-      (`format_feature_flags2` from the device's 1.3 alone) is the same class, left unchanged. The
-      g++ `-fsyntax-only` re-run did not happen (the scratch Vulkan shim lacks `vk_video/`).
+      loader (the desktop smoke harness) gets a 1.2 struct. Use the instance's version. **[DONE (compiled later, follow-up 1
+      )]** `xbg_game_config.instance_api_version` (new last field; `vulkan_present.cpp` and
+      `smoke.c` fill it), used here and in the mirror-clamp setter's 1.2 query. Line ~4170 (follow-up 5)
+      (`format_feature_flags2`) had the same flaw and was fixed too. The
+      compile check was done afterwards (follow-up 1).
     - Window origin (`origin_ll` / `queue_origin_ll`) is read at draw time on the worker thread;
       `nvn_mtl.m` captures the queue origin at queue creation. Trace whether a host-side change can
-      reach draws of an already recorded submission; if so capture it per submission. **[DONE, not
-      compiled]** Traced: no worker thread translates (`gfx_async` is hard-wired false, `xbg_submit`
+      reach draws of an already recorded submission; if so capture it per submission. **[DONE (compiled later, follow-up 1
+      )]** Traced: no worker thread translates (`gfx_async` is hard-wired false, `xbg_submit`
       translates on the submitting thread under `g_sub_mu`), so a finished submission is out of reach;
       but `nvn_vk.c`'s device-origin setter re-sent a possibly stale queue origin (lost update against
       a concurrent submit), real. Fixed: separate engine setters (`xbg_game_set_window_origin` /
       `xbg_game_set_queue_origin`), origins captured per submission in `xbg_submit` (`sub_origin`,
-      also into the `gfx_async` job), `PipeMemoKey.origin` from it. `android.md` round-F entry still
-      names the old two-argument setter: to update.
+      also into the `gfx_async` job), `PipeMemoKey.origin` from it. The `android.md` round-F entry
+      now names both setters (follow-up 4).
     - Wording: the rewriter's Apple output is not byte-identical in `build_src.sha256` (it holds the
       rewriter's own hash, so `build_ipa_from_nsp.py` re-runs it once); the patched image, gates and
       fixups are unchanged. State that exactly in item 4a and `android.md`.
@@ -537,7 +544,7 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
       3. **[DONE]** §7 updated to reflect 40 mutations caught by the memo test (including the lower-left flip and multiViewport gates).
       4. **[DONE]** `docs/reference/android.md` round-F entry updated to describe the separate setters `xbg_game_set_window_origin`
          and `xbg_game_set_queue_origin` and per-submission capture into `sub_origin`.
-      5. **[DONE]** `dm/gfx/vulkan/engine/xbg_game.cpp:4175` `format_feature_flags2` checks
+      5. **[DONE]** `dm/gfx/vulkan/engine/xbg_game.cpp` `format_feature_flags2` (search for it; ~4483 at this cut) checks
          `cfg.instance_api_version >= VK_API_VERSION_1_3 && properties.apiVersion >= VK_API_VERSION_1_3`.
       6. **[DONE]** Documentation cleanup completed: `docs/reference/android.md` stale lines updated (wired in CMake, 11 adapted
          rows, 27 entry points implemented, Apple APIs shimmed, rewriter sha256 wording) and `HANDOFF.md` §8 items 4, 4a, 9 (`dm_vm_alias`
@@ -549,8 +556,8 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
          bounds checks, and release/re-reserve on host and via NDK cross-compilation.
 12. **The graphics work on the device (open, needs a build and a log).** Both changes are in the
     working tree and compile with the NDK (`-fsyntax-only`, `aarch64-linux-android29`): the graphics
-    defaults in `dm/android/jni_android.c` (§Status item 3b) and the present encoding in
-    `dm/android/vulkan_present.cpp` (§Status item 2). Neither has been measured. To measure:
+    defaults in `dm/android/jni_android.c` (Status, *Framerate Telemetry*, item b) and the present encoding in
+    `dm/android/vulkan_present.cpp` (Status, *3D Scene Color*, items a–e, and *Vertical Banding*). Neither has been measured. To measure:
     1. Build and install the APK (README, *How to build*), run a race, then collect
        `adb logcat -d -s dm > log.txt`.
     2. Read, in the log, the `nativeStartHost: DM_GFX_…` lines (the value in effect for each switch),
@@ -563,6 +570,11 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
        present fix applies; if it is 0 the 3D colour fault is inside the 3D chain, and the engine's
        `NVN viewfmt image=… view=… nvn=0x38->0x25` and `NVN mutable upgrade …` lines are the next
        evidence (each prints once per distinct pair).
+    3b. `vulkan_present.cpp` now takes only a surface format in `VK_COLOR_SPACE_SRGB_NONLINEAR_KHR` when the
+       device lists one (before: the first-listed format, whatever its colour space; Samsung also lists 8-bit
+       formats under `DISPLAY_P3_NONLINEAR_EXT`), and logs every `Swapchain surface format=<f> colorSpace=<c>`
+       once per rebuild. Not compiled, not measured; a hardening, not a proven cause of the dark picture. Read
+       those lines first: if the chosen format was not the first listed, this was live.
     4. A/B any single switch without a rebuild: the engine reads a marker file from the parent of the
        shader directory (`<game folder>/shaders` → `<game folder>`, and the game folder's parent when
        the game has no `shaders` subdirectory; `MainActivity` passes `<game folder>/shaders` as the
@@ -570,7 +582,53 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
        `gfx-perf-sample`, `gfx-defer-events`, `gfx-wb-skip`, `gfx-shader-reuse`,
        `gfx-upload-prologue`, `gfx-xview-guard`, `gfx-ldc-fold`, `gfx-forward-temps`,
        `gfx-quad-derivatives` or `gfx-warp32` with `0` in it to turn that switch off. A marker wins
-       over the environment, so this needs no rebuild at all.
+       over the environment, so this needs no rebuild at all. `gfx-noload` (proven full-overwrite first
+       draws skip the attachment load) takes the same `0`.
+    5. `scripts/android_gfx_ab.py` does step 4 over `adb`: it writes the marker (`--off` / `--on`), reads
+       it back, force-stops and starts `com.nxdroid`, and after `--wait` seconds (45 by default; start the
+       race by hand meanwhile) saves `--shot <png>` and `--log <txt>` (`logcat -d -s dm`); `--clear`,
+       `--clear-all` and `--list` manage the markers. It assumes the game folder is
+       `/sdcard/Android/data/com.nxdroid/files/game` (`--game-dir` otherwise; a game without `shaders/`
+       reads its markers from the folder's parent, step 4). Syntax-checked only: no `adb` or device on the
+       machine it was written on.
+    6. **The 3D picture on the S23 Ultra (2026-11-03, before 3b), and what to A/B first.** Two screenshots
+       of Mario Kart Stadium (the owner's, not in the tree): the 2D HUD and text are right; the 3D scene is
+       posterized, with a flat blue sky, hard white edges on buildings, large black holes, colour fringes
+       on letters and dense yellow / black / white speckle on the road. That is wrong data in the 3D chain's
+       intermediate targets, not a gamma or swapchain fault (those darken or wash out a smooth picture), so
+       3b is unlikely to fix it. Read so far, no fault found: `xbg_spirv_temps.cpp` (`gfx-forward-temps`) and
+       `xbg_spirv_ldc.cpp` (`gfx-ldc-fold`) keep the module's values; `gfx-quad-derivatives` and
+       `gfx-warp32` already default off on Adreno 740-799 (`xbg_adreno_policy.h`, DEVICE_LOST there) and the
+       profile ships no `gfx-*` marker; `gfx-bright` acts only when the host defines `dm_bright_k` above
+       1.005. `gfx-noload`'s proof (`first_draw_covers`, `nvn_cover.h`) was read too: it requires `w = 1`
+       and `z` in [0, 1] on every vertex, so depth clipping cannot remove covered pixels, plus a full
+       viewport and scissor, no blend, full colour mask, no discard, single sample. No hole found; it stays
+       first in the order only because a missed proof leaves undefined tile contents on Adreno, which looks
+       like this speckle. Order, one marker at a time with `0`: `gfx-noload`; `gfx-tex-dirty` (a missed
+       guest write leaves a stale texture; its write tracking on Android rests on the memfd
+       `dm_vm_alias`, item 11); `gfx-wb-skip`, `gfx-upload-prologue`; `gfx-vcache`, `gfx-pipe-memo`,
+       `gfx-native-bc`; `gfx-forward-temps`, `gfx-ldc-fold` last. Record which one changes the picture here.
+    7. **`gfx-tex-dirty` read (2026-11-03), no fault found.** `get_image` (`xbg_game.cpp` ~1786) hashes a
+       texture each submission until 4 unchanged checks, then (switch on, pool tracked) write-protects its
+       pages and stamps before the 4th hash, and from then on hashes only when `nvn_dirty_since` says a page
+       was written after the stamp (protect and stamp again before reading). `nvn_dirty.c` keeps the
+       BUSY / PROT / NONE order, releases every range sharing a faulting page, and treats an untracked
+       range as dirty. Host writes that cannot fault (syscalls) go through `dm_guest_write_prepare`
+       (`MapMemory`, `UnmapMemory`, `MapPhysicalMemory`). The Android pieces under it hold too: the whole
+       guest block is one `MAP_SHARED` memfd mapping that the host only `mprotect`s (no anonymous mapping is
+       put over it), so `dm_vm_alias`'s file offset `from - base` is the right page; virtual pools are not
+       registered with the tracker, so their textures are hashed every time (safe). Two open points, neither
+       Android-only: (a) a write through a virtual-pool alias (`vpool_map`, `dm_vm_alias` over a physical
+       pool's pages) does not fault on the physical pool's protected pages, so a texture of that physical
+       pool would stay stale; it needs a game that writes texture data through a virtual pool (the log's
+       `[nvn] virtual pool … mapped up to` lines say whether MK8DX has any); (b) a fault whose write bit
+       is read wrong (`dm_uc_fault_write`, the ESR record on bionic) makes `on_fault` refuse it, which is a
+       crash, not a stale texture. So `gfx-tex-dirty` stays second in the order on the evidence of the
+       picture alone. Side finding, memory not picture: `UnmapPhysicalMemory` frees pages with
+       `madvise(MADV_FREE)` (`hle_svc.c` ~589), which applies to private anonymous memory only; on the
+       memfd `MAP_SHARED` block it fails (result ignored) and the pages stay resident, so the process never
+       gives unmapped guest memory back on Android. `fallocate(FALLOC_FL_PUNCH_HOLE)` on the memfd (or
+       `MADV_REMOVE`) is the bionic equivalent; not changed, unmeasured.
 
 ## 9. How to work in this tree
 
@@ -586,7 +644,7 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
   authorization, revoke USB debugging authorizations and re-accept on the device.
 - `xbg_game_initialize` needs neither guest memory nor a shader bundle, so the smoke harness can
   initialize and shut down the engine on any desktop Vulkan driver. The fatal path for a missing
-  shader is `xbg_game.cpp:1980-1983`.
+  shader is an `xbg_fatalf` in `xbg_game.cpp` (search for it; its line has moved since the first rounds).
 
 ## 10. Traps, so they are found once
 
@@ -613,7 +671,7 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
   which are hashed as they are: folding them breaks a correct row. Never run `--write` on such a
   checkout (it would record CRLF hashes for every row); edit the one row's sha256 by hand.
 - **`exec_pages = ok` was measured in the `shell` SELinux domain.** The app runs in
-  `untrusted_app`; treat it as indicative until a packaged app maps an executable page.
+  `untrusted_app`; the packaged app has since run on the device (§8 item 9), so executable mappings work there; keep the measurement as a caveat only for a different Android build.
 - **The desktop smoke build proves compilation and initialization, not a frame.** `presents=0` is
   correct there: there is no guest and no shader bundle.
 
