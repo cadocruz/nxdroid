@@ -14,8 +14,8 @@ device bring-up (`8e01dd0`), hardware video, the virtual controller and the laun
 Sprint 6 graphics fixes and diagnostics (`1ff60c1`, `d33b9df`, `22cc33d`, `34fb039`). The commits were made
 outside the coordinating session, with the repository-local identity
 `Ricardo A. F. da Cruz <7233682+cadocruz@users.noreply.github.com>` (`.git/config`; the global one is
-untouched) and mostly Portuguese messages. `AGENTS.md` asks for the `seedds` identity and English text; that
-rule goes with the Apple removal (§8 item 10).
+untouched) and mostly Portuguese messages. `AGENTS.md` (rewritten for Android, approved by the owner on
+2026-11-03) asks for that identity and English text.
 
 ## Status at this cut (Sprint 6 – Physical Device Bring-Up & Live Diagnostics)
 
@@ -486,9 +486,8 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     Android), `docs/development.md`, `docs/frontends.md`, `docs/playing.md` (keep the
     `README.md#how-to-play` anchor or fix the link), `dm/games/README.md` and the per-game notes'
     Mac / iPhone wording, the gallery (`docs/images/gallery.tsv`, `dm/tools/docs_gallery.py`: drop the IPA
-    sizes or re-measure on Android), the README's XcodeGen acknowledgement, and `AGENTS.md` (rewrite its
-    rules for Android-only, drop the `seedds` commit rule and the `regress.py` rule; the owner approves
-    the text before it is saved). Before deleting `nvn_mtl.m`, retire or re-base the gates that read it
+    sizes or re-measure on Android), and the README's XcodeGen acknowledgement (`AGENTS.md` is done: rewritten
+    for Android-only and approved by the owner on 2026-11-03). Before deleting `nvn_mtl.m`, retire or re-base the gates that read it
     (`opcode_map.py`, `abi_gaps.py`, the `nvn_mtl.m` line citations in `android.md` and in the tests),
     and check `dm/tools/tests/test_docs.py` (links, anchors, notes and table rows) afterwards. The
     `android_audit` baseline is the checklist: it should shrink to 0 as this lands. The git history
