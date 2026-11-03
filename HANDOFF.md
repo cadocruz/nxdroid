@@ -478,7 +478,7 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
      * `TLS_SLOT_APP` verification: tested live with `test_device_bionic`; confirmed `tpidr_el0 + 0x10` is `0x0` (completely free and zeroed) on main thread and spawned pthreads; `RLIMIT_NICE = 40`.
      * `memfd_create` and `dm_vm_alias` verification: tested live with `test_vm_alias`; 100% PASS on physical kernel (aliasing, shared page write coherence, independent `mprotect` VMA permissions).
      * `dmhost` run live on device: executed in `/data/local/tmp/`; initialized NVN symbol tables and null device cleanly.
-     * `com.nxdroid` app installed and run live: loaded `libdm.so`, registered JNI, started `MainActivity` and `GameSurfaceView`, verified logcat redirection, and created game directory `/sdcard/Android/data/com.nxdroid/files/game/`.
+     * `com.nxdroid` app installed and run live: loaded `libdm.so`, registered JNI, started `MainActivity` and `GameSurfaceView`, verified logcat redirection, and created game directory `/sdcard/Android/data/com.nxdroid/files/game/` (that first build's path; the app now defaults to `/storage/emulated/0/nxdroid/game`, `MainActivity`).
 10. **LAST: remove the Apple code** (owner's order: only after everything above). Scope: `*.m`, `*.S`
     that only Mach-O uses, `front_*.m`, `dm/gfx/nvn/nvn_mtl.m` (but see below), the iOS tree and IPA
     packing (`scripts/build_ipa_from_nsp.py`, `dm/ios`), `scripts/regress.py` and its baselines, the
@@ -492,7 +492,15 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
     (`opcode_map.py`, `abi_gaps.py`, the `nvn_mtl.m` line citations in `android.md` and in the tests),
     and check `dm/tools/tests/test_docs.py` (links, anchors, notes and table rows) afterwards. The
     `android_audit` baseline is the checklist: it should shrink to 0 as this lands. The git history
-    (`8e050e9`) keeps everything removed.
+    (`8e050e9`) keeps everything removed. **Docs part done early (2026-11-03, owner's request):** Mac /
+    iPhone / IPA instructions are out of `docs/` (development, packing, playing, frontends, settings, the
+    agent guides), rewritten for Android where the tree supports it; `docs/reference` keeps its mechanism
+    explanations and `nvn_mtl.m` citations, with only instruction and "ships for Mac" phrases changed.
+    Left for this item: `docs/agents/game-patches.md` (generated from the profiles' `patches.py`
+    `GENERALIZE` strings, which name the iPhone), `CONTRIBUTING.md`, `README.md` ~225, comments in the
+    Apple sources and `build_ipa_from_nsp.py` that cite removed sections, and the 149 `env_switches.tsv`
+    rows read only by Apple code. `test_env_switches` was already red before: the table lacks the
+    `DM_GFX_*` switches `jni_android.c` sets and some `DM_ANDROID_*` / `DM_BC_*` rows.
 11. **Independent audit follow-ups** (audit of `f7e190d` / `6dc397b`; every item below is closed; the
     "Addressed follow-ups" list at its end is the record, and the older sub-bullets keep the reasoning that
     was written before each fix landed):
@@ -588,7 +596,8 @@ The `dm/tools/android_vendor.tsv` rows for `xbg_game.cpp` and `nvn_vk.c` are upd
        it back, force-stops and starts `com.nxdroid`, and after `--wait` seconds (45 by default; start the
        race by hand meanwhile) saves `--shot <png>` and `--log <txt>` (`logcat -d -s dm`); `--clear`,
        `--clear-all` and `--list` manage the markers. It assumes the game folder is
-       `/sdcard/Android/data/com.nxdroid/files/game` (`--game-dir` otherwise; a game without `shaders/`
+       `/storage/emulated/0/nxdroid/game`, `MainActivity`'s default and `prepare_game_android.py`'s
+       `--device-dir` (`--game-dir` otherwise, for a folder picked in the launcher; a game without `shaders/`
        reads its markers from the folder's parent, step 4). Syntax-checked only: no `adb` or device on the
        machine it was written on.
     6. **The 3D picture on the S23 Ultra (2026-11-03, before 3b), and what to A/B first.** Two screenshots

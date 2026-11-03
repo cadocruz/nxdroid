@@ -40,7 +40,7 @@ The Android build is organized under `dm/android/`:
 3. **Prepare and Push Game Data:**
    Run `scripts/prepare_game_android.py` pointing to the game NSP/XCI folder:
    ```sh
-   python3 scripts/prepare_game_android.py /path/to/nsp_folder --game 0100152000022000 --push
+   python3 scripts/prepare_game_android.py /path/to/nsp_folder --title-id 0100152000022000 --push
    ```
    This automatically extracts base and updates, rewrites NSOs for Android, compiles shaders, configures the Mii database, and pushes all files to `/storage/emulated/0/nxdroid/game/`.
 4. **Launch:**

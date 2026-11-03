@@ -46,7 +46,6 @@ The game builds Mii heads from the console's MiiModel system data, starting at b
 ## Files and shaders
 
 - 29,785 shaders across 4.0.0 and 4.0.1 (12,579 vertex, 17,177 pixel, 28 compute, 1 geometry): BNSH in the courses' and objects' `.bfsha` / `.bfres` archives inside the `.szs` SARCs (courses, objects, karts, drivers), the effects' `.ptcl`, the layouts, agl's two BAHS sharcb and `main`; 19,012 variation pairs.
-- The NSP script's Mac-only build (`--platform mac`) saves about 30,000 iOS shader compiles and the 12 GB IPA for this game ([development.md, A Mac-only build for development](../../../docs/development.md#a-mac-only-build-for-development)). The player README gives the IPA as about 11.9 GB.
 
 ## Rewriter
 

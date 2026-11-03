@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/seedds/nxnative/blob/main/docs/launcher.schema.json",
   "title": "launcher.json",
-  "description": "A built app's settings list (dm/launcher.json in an IPA's app, Contents/Resources/dm/launcher.json in a Mac app), written by dm/games/settings.py from dm/games/settings.tsv. docs/frontends.md describes the fields. Schema 1 grows only by optional fields: a reader ignores fields it does not know, and a field keeps its meaning.",
+  "description": "A game's settings list (launcher.json), written by dm/games/settings.py from dm/games/settings.tsv. docs/frontends.md describes the fields. Schema 1 grows only by optional fields: a reader ignores fields it does not know, and a field keeps its meaning.",
   "type": "object",
   "required": ["game", "settings"],
   "properties": {

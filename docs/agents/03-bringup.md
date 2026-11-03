@@ -3,12 +3,13 @@
 ## The loop
 
 ```bash
-python3 dm/tools/patch_nso.py $W/data/v0/ExeFS/main $W/build/patched_v0 main   # and sdk
-make -C dm/host GAME=<title ID> dmhost
-$W/run/boot.sh <log name> [seconds] [VAR=value ...]
+python3 scripts/prepare_game_android.py <.nsp or extracted game> --title-id <title ID> --push   # rewrite, shaders, push
+# build and install the APK for GAME=<title ID>: README.md, How to play
+adb logcat -c                                   # then start the game in com.nxdroid
+adb logcat -d -s dm > $W/run/<name>.log
 ```
 
-`boot.sh` runs `dmhost <patched dir>` with `DM_ROMFS`, `DM_SAVE`, `DM_TEMP`, `DM_MSL_DIR` set, under a perl `alarm` (a run that hits the time limit ends with `CRASH sig=14` — that is the alarm, not a crash). Logs go to `run/<name>.log`. Logs may contain non-UTF-8 bytes: use `grep -a` / `LC_ALL=C` when filtering.
+`prepare_game_android.py` rewrites every module with `patch_nso.py --target=android` on every run (the loader refuses the default Apple output), builds the shaders and, with `--push`, copies the game folder to the device (`--device-dir`). The app's host writes stdout and stderr to logcat under the tag `dm` (`dm/android/jni_android.c`); `nativeStartHost` sets `DM_ROMFS`, `DM_SAVE`, `DM_TEMP`, the shader map and the graphics defaults, and logs each value it set. Logs may contain non-UTF-8 bytes: use `grep -a` / `LC_ALL=C` when filtering.
 
 ## Reading the log
 
@@ -19,11 +20,12 @@ $W/run/boot.sh <log name> [seconds] [VAR=value ...]
 | `UNIMPL <name>` | A forced NVN / SDK stub was called |
 | `[nvn] frame N: … \| name=count …` | Per-frame NVN call counts (calls made on the frame thread; command buffers recorded elsewhere replay later) |
 | `[longframe]` | A long frame, with submit / GPU / pipeline / upload breakdown |
-| `memory up to frame N: resident … GPU allocated …` | Memory report (RSS, Metal allocated size). Printed when memory moves; steady growth here is a leak. A watchdog exits at 24 GB. Also: memory pools and how many are resident (pools join the residency set on first GPU use), finalized pool buffers still alive, the storage-sharing texture table, and on iOS `headroom to the system memory limit` (`os_proc_available_memory`, how far the app is from being killed for memory) |
+| `memory up to frame N: resident … GPU allocated …` | Memory report of the Metal replay; the Vulkan replay prints none ([05](05-debugging.md#memory-growth)) |
+| `NVN PERF … fps= … gpu_ms= …` | The Vulkan engine's frame rate and CPU / GPU time: see [05](05-debugging.md#on-device-diagnostics) |
 | `CRASH sig=… pc=… lr=…` + registers + `bt:` + `stack scan` + thread dump | Crash report: see [05](05-debugging.md) |
 | `thread 0x10xx 'name' … waits:<state> addr=…` | Thread dump: what each guest thread waits on (`address` = address arbiter, `mutex` = mutex with holder, `condvar`, `sync object`, `running/not waiting` = running); a thread waiting in an SVC also gets a `guest stack:` line, the words on its guest stack that point into a module (its callers when the code keeps no frame pointers) and x19–x28 |
 
-Useful switches: `DM_FS=1` (file opens, and not-found probes), `DM_SVC=1` (memory SVCs and other syscalls), `DM_THR=1` (thread SVCs), `DM_WATCH=<s>` (dump all threads after s seconds), `DM_WATCH_STALL=<s>` (dump when the frame loop stops progressing).
+Useful switches: `DM_FS=1` (file opens, and not-found probes), `DM_SVC=1` (memory SVCs and other syscalls), `DM_THR=1` (thread SVCs), `DM_WATCH=<s>` (dump all threads after s seconds), `DM_WATCH_STALL=<s>` (dump when the frame loop stops progressing). The host reads them from its environment; the app sets only what `nativeStartHost` sets, so one of these needs a change there and a rebuild. The graphics switches have marker files instead ([05](05-debugging.md#on-device-diagnostics)).
 
 ## Failure catalogue
 

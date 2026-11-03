@@ -173,7 +173,7 @@ For a replaced DSP renderer the size query keeps the service's work-buffer contr
 - **Cause:** the audio session's category was `AVAudioSessionCategorySoloAmbient`, which iOS silences with the switch.
 - **Fix:** `front_ios_audio_session` in `front_ios.m` sets `AVAudioSessionCategoryPlayback`: the switch no longer mutes the game, and it still interrupts other apps' audio, as `SoloAmbient` did. The host still suspends its output when the app goes to the background (no background audio mode is declared).
 - **Found on:** [The Legend of Zelda: Breath of the Wild](../../dm/games/01007EF00011E000/README.md) (iPhone: reported by the player); also [issue #155](https://github.com/seedds/nxnative/issues/155), whose commenter has to toggle the switch to hear any game.
-- **Check:** open question, not run on a device: with the switch on silent, the game's sound should play; the log's `audio session:` line shows the session came up.
+- **Check:** left open, never run on a device before the Apple host was retired: with the switch on silent, the game's sound should play; the log's `audio session:` line shows the session came up.
 
 ### Interruptions that stop RemoteIO callbacks
 
@@ -195,7 +195,7 @@ For a replaced DSP renderer the size query keeps the service's work-buffer contr
 
 ### Audio across a background round trip on the Mac
 
-`DM_AUDIO=1 DM_AUDIO_MUTE=1` takes the real Core Audio path with the output silenced, and `DM_OE_SCRIPT="bg=1@60,bg=0@66"` runs the same sequence as the iOS lifecycle callbacks (focus, audio take-over, guest clock freeze, graphics suspend). Send `dmhost` `SIGSTOP` / `SIGCONT` between the two to imitate iOS suspending the process. The silent sink that stands in while in the background does not make up the time the process was suspended (it used to pull seconds' worth at once and log hundreds of underruns).
+On the Apple host's Mac build, `DM_AUDIO=1 DM_AUDIO_MUTE=1` took the real Core Audio path with the output silenced, and `DM_OE_SCRIPT="bg=1@60,bg=0@66"` ran the same sequence as the iOS lifecycle callbacks (focus, audio take-over, guest clock freeze, graphics suspend); `SIGSTOP` / `SIGCONT` sent to `dmhost` between the two imitated iOS suspending the process. The silent sink that stands in while in the background does not make up the time the process was suspended (it used to pull seconds' worth at once and log hundreds of underruns).
 
 ### Several outputs at once (`audio #N`)
 

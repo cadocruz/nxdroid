@@ -6,7 +6,7 @@ DM_ALLOW_OTHER_METAL	switch	`1` lets `own_compilers.py` build the shader librari
 DM_AOC_DIR	path	Folder of add-on content: one numbered subfolder per DLC index holding that DLC's RomFS, reported by `aoc` and mounted read-only; the app, the Mac launcher and the NSP script set it when the build has DLC
 DM_AOC_OWNED	switch	`0` reports no add-on content even when `DM_AOC_DIR` has some, for runs without the DLC
 DM_APP_VERSION	switch	Overrides the IPA's version in `build_ipa.sh`; by default it is the packed game's display version from its control data (the update's when one is packed)
-DM_AUDIO	switch	`1` plays audio through Core Audio, `0` uses the silent sink; real output is the default on iOS, the silent sink on the Mac (the Mac launcher sets `1`)
+DM_AUDIO	switch	`1` plays audio through the AudioUnit output (Core Audio; AAudio on Android, `dm/android/apple_stubs.c`), `0` uses the silent sink; real output is the default on iOS, the silent sink elsewhere unless set (the Android app and the Mac launcher set `1`)
 DM_AUDIO_DUMP	diagnostic	`=<file>` writes every PCM block the game appends as is (16-bit, 48 kHz, channel count as in the OpenAudioOut log), to judge whether a sound played
 DM_AUDIO_MUTE	switch	`=1` runs the real Core Audio output path (callback pacing, background take-over) with the output silenced, for lifecycle tests on the Mac without noise
 DM_AUDREN_TRACE	diagnostic	When set, the CPU audio renderer logs every update with the number of frames rendered since the previous one
@@ -27,7 +27,7 @@ DM_ENV_FILE_KEYS	switch	Set by the iOS app and the Mac launcher at launch to the
 DM_ENV_LAUNCH_KEYS	switch	Set at launch by the Mac launcher (the launcher settings already in the environment) and the iOS app (every DM_* variable already in it) to the space-separated names; the settings screen keeps those values and shows them greyed out
 DM_FD_LOG	diagnostic	`=<seconds>` logs, every that many seconds, the number and kinds of file descriptors the process has open
 DM_FIXED_TIME	switch	`=<seconds>`: the user clock always returns that time and the host time zone is pinned to UTC, for deterministic comparison
-DM_FONT_DIR	path	Folder of the shared-font stand-ins (`standard.ttf`, `nintendo_ext.ttf` with the button icons); the app, the Mac launcher and the NSP script set it
+DM_FONT_DIR	path	Folder of the shared-font stand-ins (`standard.ttf`, `nintendo_ext.ttf` with the button icons); the Android app (to its shader folder), the iOS app, the Mac launcher and the NSP script set it
 DM_FORCE_STRICT	diagnostic	`=1` makes the loader fail on forced-hook entries no module references, instead of only noting them (for checking a mistyped list)
 DM_FPS	switch	`30` or `60` pins the frame rate the display link and frame pacing aim for; otherwise it follows the game's present interval (60, or 30 when the game asks for 30)
 DM_FPS_HOLD	player	`on` / `off` overrides the profile's `fps_hold`: whether late frames may raise the hold above the frame cap's vsyncs (on by default)
@@ -135,7 +135,7 @@ DM_NVN_REGLUM	diagnostic	`=x0,y0,x1,y1:<file>` (normalized coordinates): on ever
 DM_NVN_RT_RANGE	switch	`=1` (experimental, off by default; with `DM_NVN_TBDR=1`) keeps the pass open when the game sets the same colour and depth target again with a view that differs only in its level count
 DM_NVN_RT_RANGE_CHECK	diagnostic	With `DM_NVN_RT_RANGE=1` and `DM_NVN_PASSDUMP`, renders a candidate pass both ways in the same frame and logs and writes the comparison (`CHECK_RESULTS.tsv`, `[RED]` on a difference)
 DM_NVN_SHDUMP	diagnostic	`=<dir>` saves programs missing from the shader map as `<key>.ctl` (control section) and `<key>.code`, to find the files that hold them
-DM_NVN_SHMAP	path	The shader map (`shader_map.tsv`); `c1_full.tsv` and `pso_manifest.tsv` are taken from the same folder. Default: the game profile's folder on the Mac; the iOS app sets it
+DM_NVN_SHMAP	path	The shader map (`shader_map.tsv`); `c1_full.tsv` and `pso_manifest.tsv` are taken from the same folder. Default: the game profile's folder on the Mac; the iOS app sets it, and the Android app sets it to the `shader_map.tsv` it finds in the shader folder, else in the game folder
 DM_NVN_SHOT	diagnostic	`=<frame>[,<frame>…]:<path>` saves the swapchain texture as an image at those frames (`%d` in the path = frame number)
 DM_NVN_SHOT_OUT	diagnostic	`=<W>x<H>` makes `DM_NVN_SHOT` capture the picture as the present pass upscales it to that size, the crop included, instead of the raw swapchain texture
 DM_NVN_SKIP_FS	diagnostic	`=<fragment key>[,…]` (up to 16) drops all draws of those fragment shaders, to measure their GPU cost or bisect a wrong draw; the picture is wrong
@@ -181,7 +181,7 @@ DM_OODLE_HOST	path	The Mac host binary that `shader_split.py` runs in its Oodle 
 DM_OODLE_JOB	path	`=<job file>`: the host runs the game's own Oodle decoder on every record of the job file right before `nnMain`, writes `<job file>.out` and exits (Unreal shader archives)
 DM_OODLE_MODULES	path	The rewritten modules the Mac host's Oodle tool mode loads when `shader_split.py` decodes Trinity packs; set by the NSP script
 DM_OODLE_SERVE	switch	`=1`: the host answers decode requests on stdin / stdout with the game's own Oodle (or LZ5) decoder from the guest main thread before the SDK starts, until stdin ends
-DM_OPMODE	player	The operation mode the game sees: `0` handheld, `1` console (default: the profile's `op_mode`, console unless set); read once at startup
+DM_OPMODE	player	The operation mode the game sees: `0` handheld, `1` console (default: the profile's `op_mode`, console unless set); read once at startup; the Android app always sets `1`
 DM_PAD_MERGE	switch	`=1` merges every controller into player 1, as before, instead of giving each controller a player of its own (Mac and iOS)
 DM_PATCH_FRONT	switch	`=<bytes>`: the size of the patch area right before the module base for a long text (`BIG_TEXT`); set only by the rewriter's own rerun with the size it needs
 DM_PHONE_MOTION	switch	On iOS, whether the phone's own device motion drives player 1's six-axis sensor: `auto` (default) while no controller supplies fresh motion, `1` phone only, `0` never; each source keeps its own orientation
@@ -240,7 +240,7 @@ DM_RESOURCE_SHADERS	path	iOS shader library folder, written to `Gen/resources.en
 DM_RESOURCE_TITLE	switch	Game profile title ID, written to `Gen/resources.env` by `gen_resources.py`; with `DM_COPY_ROMFS=NO` the copy phase puts it in the `title=` field of the app's `romfs.id`
 DM_RESOURCE_VERSION	switch	Display version, written to `Gen/resources.env` by `gen_resources.py`; with `DM_COPY_ROMFS=NO` the copy phase puts it in the `version=` field of the app's `romfs.id`
 DM_RES_CHECK	diagnostic	`=1` prints the first 40 textures or buffers a shader reaches through its argument block that are not in the residency set (textures attributed to their parent allocation)
-DM_ROMFS	path	The game's RomFS folder, mounted read-only as `rom` (default `$DM_ROOT/romfs`); the Mac launcher, the iOS app and the NSP script set it
+DM_ROMFS	path	The game's RomFS folder, mounted read-only as `rom` (default `$DM_ROOT/romfs`); the Android app (to the game folder's `romfs.img`, else its `romfs/`), the Mac launcher, the iOS app and the NSP script set it
 DM_ROMFS_OVERLAY	path	`=<dir>[:<dir>…]`: RomFS reads look in these folders first, in order, and fall back to `DM_ROMFS` (for a modified copy of some files)
 DM_ROOT	path	Workspace root (default `~/dm-work`): the host's and tools' default paths (RomFS, temporary storage, shader libraries under `build/cache/metal_shader_cache`, probe dumps) are under it
 DM_RT	diagnostic	`0` leaves the thread that acquires the window on its QoS only, with no Mach time-constraint policy declaring the frame deadline (on by default; for power A/B)
@@ -249,13 +249,13 @@ DM_RUMBLE	player	`0` turns game rumble off (on by default); launcher setting
 DM_RUMBLE_GAIN	player	`=0..3` scales the rumble strength (default 1, `0` is silent); launcher setting
 DM_RUMBLE_LOG	diagnostic	`=1` logs the game's vibration handle requests and, once a second, the values it sent, how many had no routed output and the peak amplitude
 DM_RUMBLE_MIN	player	`=0..0.9`: controller rumble levels below it stay silent and the rest is stretched over the full range (default 0; the phone is unaffected); for games whose quiet HD rumble texture keeps rotating motors running (Mario Kart 8 Deluxe: 0.45); launcher setting
-DM_SAVE	path	This run's save folder (must be set); the device save is `<DM_SAVE>_device`, and `pso_user.tsv` goes in its parent folder; the Mac launcher, the iOS app and the NSP script set it
+DM_SAVE	path	This run's save folder (must be set); the device save is `<DM_SAVE>_device`, and `pso_user.tsv` goes in its parent folder; the Android app (to `save/` in its internal storage), the Mac launcher, the iOS app and the NSP script set it
 DM_SAVED_CHOICES	switch	`0` ignores the player's saved choices (launcher.<VAR> in the app's preferences) and leaves them saved; the Mac launcher and the iOS settings screen
 DM_SCHEME_NAME	switch	Set by `build_ipa.sh` itself for xcodegen's `project.yml`: the Xcode scheme name, `DmIOS`, or `<display name> (<title ID>)` for a project prepared with `--prepare-xcode`
 DM_SCREEN_MATCH	switch	`0` keeps the screen's refresh rate in fullscreen; by default a Mac screen whose rate is not a multiple of the game's frame rate switches to one that is (144 → 120 Hz)
 DM_SF_TRACE	diagnostic	`=1` logs every request on the game's own HIPC client sessions that the host answers (`hle_sf.c`)
 DM_SHAKE_G	switch	`=<G>`: on iOS, the acceleration beyond gravity above which a flick of the phone shakes the controller's six-axis sensor (default 1.5)
-DM_SHARED_FONT	path	Font file served for every shared-font type except the Nintendo extension (default `$DM_FONT_DIR/standard.ttf`, then macOS's Arial Unicode)
+DM_SHARED_FONT	path	Font file served for every shared-font type except the Nintendo extension (default `$DM_FONT_DIR/standard.ttf`, then macOS's Arial Unicode); the Android app sets `/system/fonts/Roboto-Regular.ttf` when it can read it
 DM_SHARED_FONT_EXT	path	Font file served for shared-font type 5, the Nintendo extension with the button icons (default `$DM_FONT_DIR/nintendo_ext.ttf`, made by `make_ext_font.py`)
 DM_SHOW_FPS	player	`1` shows the frame-rate counter on the iPhone (frames put on screen per second, top left); at IPA build it sets `DMShowFPS` in `Info.plist`, which `Documents/env.txt` overrides
 DM_SLOWFRAME	diagnostic	`=1` writes the per-frame timing breakdown to the log only for dropped frames (kept in a ring of the last 16 frames, judged 8 frames late)
@@ -265,7 +265,7 @@ DM_SPIN_POLL	switch	`=<µs>`: how long a spin-gate wait polls before it sleeps w
 DM_SVC	diagnostic	`=1` logs memory SVCs (`SetHeapSize`, `MapMemory`, `Map`/`UnmapPhysicalMemory`) with their addresses and sizes
 DM_SYMCHECK	diagnostic	`=1` checks every hashed module symbol lookup against a linear search and logs a red line for each mismatch
 DM_TEAM_ID	switch	Apple team ID for the per-game Xcode project, used when `--team-id` / `TEAM_ID` is not given; `build_ipa.sh` uses the placeholder `0000000000` (unsigned) when unset
-DM_TEMP	path	Temporary storage folder (default `$DM_ROOT/run/platform/temp`); stand-in system data goes in `<DM_TEMP>_sysdata`; the Mac launcher, the iOS app and the NSP script set it
+DM_TEMP	path	Temporary storage folder (default `$DM_ROOT/run/platform/temp`); stand-in system data goes in `<DM_TEMP>_sysdata`; the Android app (to `temp/` in its save folder), the Mac launcher, the iOS app and the NSP script set it
 DM_TEST_ARCHIVE_CONSTANTS	test	Use optional function constants in the synthetic pipeline archive restart fixture
 DM_TEST_ARCHIVE_MIXED	test	Mix a newly compiled shader function with compacted bases in the archive restart fixture
 DM_TEST_BUILD	test	Build folder of `dm/host/tests` whose `t_svc_memory` `test_memory_profile.py` runs (default `build`; `make asan` sets `build/asan`)

@@ -25,7 +25,7 @@ The game may also write into an NVN object directly, without an NVN call, throug
 - **Cause:** Mario writes the byte 1 at `NVNcommandBuffer` +0x10 (`main+0x4da5c`, `main+0xb8dec`). In the host record it was the low byte of `end`. Each write shrank the game's 512-byte material setup blocks, so their recordings overflowed into host segments; `GetCommandMemoryUsed` (then `cur − begin`) returned 0, the game marked the setups empty and skipped calling them, and the draws ran with the previous draw's vertex buffers ([What `GetCommandMemoryUsed` counts](#what-getcommandmemoryused-counts)).
 - **Fix:** `cmd_t` reserves the byte (`nvn_flag10` in `nvn_obj.h`).
 - **Found on:** [Super Mario Bros. Wonder](../../dm/games/010015100B514000/README.md).
-- **Check:** to find such writes, put the field you suspect behind a guard value and log when it changes outside the host's own code, or force overflows on the Mac by shrinking the command memory the game gets.
+- **Check:** to find such writes, put the field you suspect behind a guard value and log when it changes outside the host's own code, or force overflows by shrinking the command memory the game gets.
 
 ### Sizes the hardware never reports as 0 (ZCull save area)
 
