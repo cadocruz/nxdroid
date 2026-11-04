@@ -383,9 +383,15 @@ VkPhysicalDeviceSubgroupProperties subgroup{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SU
 // default false), and only that gates a shader or a draw. multiViewport itself is a core feature, in cfg.enabled_core.
 bool viewport_index_supported=false,multiview_supported=false,viewport_index_enabled=false,multiview_enabled=false;
 bool depth_clip_control_supported=false;std::atomic<bool> game_depth_zero{false};
-// Diagnostic (marker gfx-depth-clip = '0'): never chain negativeOneToOne, to A/B the depth convention against the
-// packed vertex shaders (scripts/prepare_game_android.py _rewrite_depth already converts GL clip z to [0, w]).
+// Marker gfx-depth-clip = '0': never chain negativeOneToOne. Only for bundles packed with prepare_game_android.py --depth-rewrite, which
+// converts GL clip z to [0, w] in the vertex shaders itself (a device without the extension); both would convert twice.
 bool depth_clip_marker_off=false;
+// Marker gfx-alias-invalidate = '1' (off by default): the two pool-aliasing experiments of 89dc2dc (HANDOFF.md, the 2026-11-03 record).
+// Creating a texture over storage another live image uses, or a color CopyBufferToTexture overlapping a GPU-written image, then
+// marks the other image for a re-upload from guest memory. Neither fixed the picture, and the runs with them on also showed displaced
+// geometry: a transient render target sharing its pool range within a frame would be refilled with bytes the GPU never wrote. The
+// log lines that found the aliasing stay on either way.
+bool alias_invalidate=false;
 extern "C" int xbg_game_set_depth_clip_control(VkBool32 enabled){
     depth_clip_control_supported=enabled!=VK_FALSE;
     xbg_logf("NVN depth clip control (VK_EXT_depth_clip_control)=%d",int(depth_clip_control_supported));
@@ -1593,7 +1599,7 @@ void invalidate_cpu_range(uint64_t address,uint64_t bytes,const char *reason="un
                 // Diagnostic experiment: CopyBufferToTexture is the guest's explicit write to
                 // this aliased pool range. Preserve the old behavior everywhere else, but let
                 // this path invalidate stale GPU aliases so the next upload can rebuild them.
-                if (!strcmp(reason,"copy-upload-color")) {
+                if (alias_invalidate && !strcmp(reason,"copy-upload-color")) {
                     static unsigned n_alias_invalidate=0;
                     if (n_alias_invalidate++<5)
                         xbg_logf("[YELLOW] Experimental invalidation of GPU-written alias during color upload: serial=%llu fmt=%#x extent=%ux%u",
@@ -1775,7 +1781,7 @@ Image &get_image_slow(const tex_t *t,bool upload){CPU_SCOPE(Image);
                     // different image. Do not keep the old GPU contents authoritative; retain
                     // the object for in-flight Vulkan references, but force a future access to
                     // rebuild it from the current guest bytes.
-                    old.gpu_written=false;old.uploaded=false;old.checked_submission=UINT64_MAX;
+                    if(alias_invalidate){old.gpu_written=false;old.uploaded=false;old.checked_submission=UINT64_MAX;}
                     if(n_pool_reuse_log++<20)
                     xbg_logf("NVN image pool reuse new=%llu fmt=%#x %ux%u bytes=%llu old=%llu fmt=%#x %ux%u bytes=%llu oldGpu=%u oldUploaded=%u",
                              (unsigned long long)t->serial,t->d.format,t->d.width,t->d.height,(unsigned long long)t->L.size,
@@ -4508,6 +4514,8 @@ extern "C" int xbg_game_initialize(const xbg_game_config *c,char *error,size_t b
       xbg_logf("NVN pipeline memo for repeated draw state=%d (marker gfx-pipe-memo)",int(pipe_memo));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-depth-clip").c_str(),"rb");depth_clip_marker_off=false;if(m){depth_clip_marker_off=fgetc(m)=='0';fclose(m);}
       xbg_logf("NVN depth clip marker off=%d (marker gfx-depth-clip)",int(depth_clip_marker_off));}
+     {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-alias-invalidate").c_str(),"rb");alias_invalidate=false;if(m){alias_invalidate=fgetc(m)=='1';fclose(m);}
+      xbg_logf("NVN pool-alias invalidation experiment=%d (marker gfx-alias-invalidate)",int(alias_invalidate));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-read-preflight").c_str(),"rb");read_preflight=true;if(m){read_preflight=fgetc(m)!='0';fclose(m);}else if(const char *e=getenv("DM_GFX_READ_PREFLIGHT"))read_preflight=atoi(e)!=0;
       xbg_logf("NVN CPU reads resolved before each operation=%d (marker gfx-read-preflight)",int(read_preflight));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-sync-cache-save").c_str(),"rb");sync_cache_save=false;if(m){sync_cache_save=fgetc(m)=='1';fclose(m);}}

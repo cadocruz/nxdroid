@@ -33,6 +33,12 @@ GFX_TOOLS_DIR = REPO_ROOT / "dm" / "gfx" / "tools"
 GAMES_DIR = REPO_ROOT / "dm" / "games"
 
 STAGE_INDEX = {"vs": 0, "hs": 1, "ds": 2, "gs": 3, "ps": 4, "cs": 5}
+# --depth-rewrite: convert GL's clip-space z (near = -w) to [0, w] in every vertex shader at packing. Off by default: the engine
+# converts a game that keeps NVN's GL depth mode at draw time with VK_EXT_depth_clip_control (negativeOneToOne), following the mode
+# the game sets at run time, and doing both converted twice (depth = z_ndc / 4 + 0.75: HANDOFF.md, the 2026-11-04 next test). Only
+# for a device without that extension, and only for a game that keeps the GL mode; the marker gfx-depth-clip = 0 then keeps the
+# engine from converting too. Written into a stamp beside the bundles, so a change of the setting rebuilds them.
+DEPTH_REWRITE = False
 SSBO_BASE = {"vs": 0x110, "cs": 0x310, "gs": 0x510, "ps": 0x610}
 
 
@@ -473,6 +479,8 @@ def _scan_blob_worker(item):
 
 
 def _rewrite_depth(words):
+    """GL clip z to [0, w] on the vertex shader's Position (--depth-rewrite only; see DEPTH_REWRITE). It rewrites stage 0 alone,
+    so it would also be wrong for a game whose last stage before rasterization is a tessellation or geometry shader."""
     bound = words[3]
     per_vertex_struct = None
     per_vertex_var = None
@@ -784,7 +792,8 @@ def build_xgs_bundle(skey, stage_str, spv_bytes, res_json, c1_bytes):
                     if loc < 16 and loc not in inputs:
                         inputs.append(loc)
         inputs.sort()
-        words = _rewrite_depth(words)
+        if DEPTH_REWRITE:
+            words = _rewrite_depth(words)
 
     if stage_offset > 0:
         i = 5
@@ -925,6 +934,12 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
     log("=== Extracting and Compiling Shaders ===")
     out_dir.mkdir(parents=True, exist_ok=True)
     out_xgs_dir = out_dir
+    # Bundles built with another packing setting (or before the stamp existed, when every vertex shader had the depth rewrite) are rebuilt.
+    stamp_path = out_dir / "xgs_build.txt"
+    stamp = f"depth_rewrite={int(DEPTH_REWRITE)}\n"
+    if not stamp_path.exists() or stamp_path.read_text(encoding="utf-8") != stamp:
+        if not rebuild_shaders: log(f"  Shader bundles were built with other settings than '{stamp.strip()}': rebuilding them")
+        rebuild_shaders = True
 
     # Check for existing .xgs bundles in work_dir or profile
     prebuilt_candidates = [
@@ -1165,6 +1180,7 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
             pass
 
     log(f"  ✓ {built} .xgs shader bundles ready in {out_xgs_dir}")
+    stamp_path.write_text(stamp, encoding="utf-8")
 
 
 def import_system_data_and_saves(title_id, out_dir, nand_dirs, hactool_bin, keys_path):
@@ -1365,6 +1381,9 @@ def main():
     parser.add_argument("--nand", help="Custom path to emulator NAND directory")
     parser.add_argument("--title-id", help="Explicit base title ID (e.g. 0100152000022000)")
     parser.add_argument("--rebuild-shaders", action="store_true", help="Force rebuilding .xgs shaders even if already present")
+    parser.add_argument("--depth-rewrite", action="store_true",
+                        help="Convert GL clip-space depth in every vertex shader at packing; only for a device without "
+                             "VK_EXT_depth_clip_control (the engine converts otherwise; both would convert twice)")
     parser.add_argument("--build-apk", action="store_true", help="Build the nxdroid Android APK for this game profile")
     parser.add_argument("--install-apk", action="store_true", help="Install the built APK via ADB to connected device")
     parser.add_argument("--push", action="store_true", help="Push prepared folder directly to connected Android phone via ADB")
@@ -1374,6 +1393,8 @@ def main():
     parser.add_argument("--adb", help="Custom path to adb binary")
 
     args = parser.parse_args()
+    global DEPTH_REWRITE
+    DEPTH_REWRITE = args.depth_rewrite
     inp = Path(args.input).resolve()
     if not inp.exists():
         log(f"ERROR: Input path does not exist: {inp}")

@@ -73,6 +73,27 @@ from it) and keep the engine's `negativeOneToOne`, which follows `nvnDeviceSetDe
 the game again with `--rebuild-shaders`. A device without `VK_EXT_depth_clip_control` would need the
 conversion done by the engine at shader load, keyed by the mode, not at packing.
 
+**Prepared in code (2026-11-04), not measured; CI compiles it.**
+- `scripts/prepare_game_android.py` no longer applies `_rewrite_depth` by default; `--depth-rewrite`
+  turns it back on, only for a device without `VK_EXT_depth_clip_control` (and then with the marker
+  `gfx-depth-clip` = `0`). A stamp `xgs_build.txt` beside the bundles records the setting, and bundles
+  built with another one (or before the stamp, all of them with the rewrite) are rebuilt on the next
+  run without `--rebuild-shaders`. The rewrite also only ever touched stage 0, which would be wrong for
+  a game whose last stage before rasterization is a tessellation or geometry shader.
+- The two pool-aliasing experiments of `89dc2dc` are off by default, behind the marker
+  `gfx-alias-invalidate` = `1` (`xbg_game.cpp`); their log lines stay on. Reason: the textures seen
+  over the same storage are live (NVN's `nvnTextureFinalize` reaches the engine as
+  `xbg_legacy_tex_release`, which erases and retires the image, so an image still indexed has not been
+  finalized): most likely transient render targets sharing a pool range within a frame. Marking them
+  for a re-upload from guest memory can fill one with bytes the GPU never wrote, and the runs with the
+  experiments on (16 and 19) are the only ones that also showed displaced geometry.
+
+The device sequence: (1) with the bundles now on the phone (built with the rewrite), one race with
+`android_gfx_ab.py gfx-depth-clip --off`; (2) if the picture is right, clear the marker, prepare the
+game again with the new script (the stamp rebuilds the bundles without the rewrite), push, and race
+again with no marker: it must look the same as (1). If (1) changes nothing, the double conversion was
+not the cause; record it here and keep the new default anyway (one conversion is right in every mode).
+
 What is established:
 
 - The ten planned single-switch A/B runs did not improve the picture; see §8 item 12.
