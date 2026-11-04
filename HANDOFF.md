@@ -170,8 +170,9 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
    - `[RED] NVN one texture at two colour slots`, `[RED] NVN stencil-mode texture read as depth` and
      `[RED] NVN sampler compare mode does not match the shader` (diagnostics added on 2026-11-04, the
      first five of each): each present makes it suspect 1, 2 or 3 of "If the depth test does not fix it"
-     below. Copy them into the test record. `NVN repeated colour slots attached once=0` must be there too
-     (the marker of step 7b, off).
+     below. Copy them into the test record. `NVN repeated colour slots attached once=0` and
+     `NVN sampler depth compare follows the shader=0` must be there too (the markers of steps 7b and 7c,
+     off).
 7b. **Run 21b, only if run 20's log has `[RED] NVN one texture at two colour slots`:** the fix is in the
    APK behind a marker. With no other marker set:
    ```sh
@@ -182,6 +183,11 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
    with write mask …` line means a dropped slot really had writes. If 21b fixes the picture, try it once
    more together with the depth marker (`gfx-depth-clip --off` and `gfx-rt-dedupe --on`, both set) to
    see whether both faults were present.
+7c. **Run 21c, only if run 20's log has `[RED] NVN sampler compare mode does not match the shader`:** the
+   same way with `gfx-sampler-match --on` (files `21c_sampler_match.*`), then `--clear --no-restart`. Its
+   log must say `NVN sampler depth compare follows the shader=1`; a
+   `[RED] NVN sampler compare enabled … LEQUAL assumed` line means a compare the game's sampler did not
+   enable got an assumed function (note it: if shadows look inverted, LEQUAL was the wrong guess).
    - `[YELLOW] Preserving GPU-written image`, every `[RED]`, `NVN PERF` (fps, `gpu_ms`,
      `submit_cpu_ms`), `Swapchain`.
 8. **Run 22, the packing without the rewrite** (do it when run 21 looks right, and also when the game
@@ -253,6 +259,9 @@ found Metal-only fixes the Vulkan engine does not have, ranked:
    compare function. Could give hard black / white edges. Logged since 2026-11-04:
    `[RED] NVN sampler compare mode does not match the shader` (that bit 14 marks a depth-compare sampler
    is read from the null-texture code, which picks a depth format for it; not confirmed elsewhere).
+   **Written on 2026-11-04, behind the marker `gfx-sampler-match` = `1`** (off by default): where the two
+   disagree, the sampler's compare follows the shader; a compare the NVN sampler did not enable takes its
+   compare function if usable, else `LEQUAL` (an assumption, said in red). Step 7c tests it.
 4. Lower likelihood here: alpha forced to 1 only for formats `0x37` and `0x6d` (not `0x6e`-`0x70`, `0x99`,
    `0x9b`), and the game's swizzle not composed with the format's as Metal does (~4127); 16-bit packed
    formats that disagree with Metal (`0x3a` / `0x96` RGB5 mapped to R5G6B5, `0x3b` / `0x3c` red and blue
@@ -729,7 +738,8 @@ Current counts:
        `gfx-present-overlap`, `gfx-present-timing` among them). Two take `1` to turn a diagnostic on:
        `gfx-read-preflight` (the engine's default, which the app turns off) and `gfx-alias-invalidate`
        (the 2026-11-03 pool-alias experiments, off by default since 2026-11-04), and `gfx-rt-dedupe`
-       (repeated colour slots attached once, 2026-11-04) takes `1` too.
+       (repeated colour slots attached once, 2026-11-04) and `gfx-sampler-match` (sampler compare follows
+       the shader, 2026-11-04) take `1` too.
     5. `scripts/android_gfx_ab.py` does step 4 over `adb`: it writes the marker (`--off` / `--on`),
        reads it back, force-stops and starts `com.nxdroid` (`--no-restart` to skip), and after `--wait`
        seconds (45 by default; start the race by hand meanwhile) saves `--shot <png>` and `--log <txt>`

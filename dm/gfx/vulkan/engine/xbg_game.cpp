@@ -398,6 +398,11 @@ bool alias_invalidate=false;
 // written) overwrites the drawn one. A dropped slot with a non-zero write mask is said in red: those writes are really lost. The render pass
 // (and so its pipelines) differs from the undeduplicated one, so the two never mix.
 bool rt_dedupe=false;uint64_t rt_dedupes=0;
+// Marker gfx-sampler-match = '1' (off by default until a device run shows a mismatch): the sampler's depth compare follows what the shader
+// declares (binding flag bit 14) instead of the NVN sampler's compare mode, where the two disagree. Vulkan leaves either mismatch undefined;
+// Maxwell compares in the texture instruction itself. A compare the NVN sampler did not enable takes its compare function when that is valid,
+// else LEQUAL (an assumption, said once in red). Off: the NVN sampler is used as is, the mismatch only logged.
+bool sampler_match=false;uint64_t sampler_matched=0;
 static inline unsigned rt_level(const view_t *v){return v && v->set_levels?unsigned(v->base_level):0u;}
 static inline unsigned rt_layer(const view_t *v){return v && v->set_layers?unsigned(v->min_layer):0u;}
 extern "C" int xbg_game_set_depth_clip_control(VkBool32 enabled){
@@ -3282,6 +3287,11 @@ void descriptors_build(Descriptors &out,Commands &commands,bool compute){CPU_SCO
                             // NVN sampler's compare mode disagree. Vulkan leaves a compare sampler on a plain fetch, and a shadow fetch with compare off,
                             // undefined; Metal ignored the compare function for a plain fetch, so the mismatch was harmless there. Logged, not changed.
                             if(((b.flags>>14)&1)!=unsigned(parameters.cmp_mode!=0)){static unsigned n=0;if(n++<5)xbg_logf("[RED] NVN sampler compare mode does not match the shader: shadow=%u cmp_mode=%u cmp_func=%u shader=%s stage=%u slot=%u serial=%llu fmt=%#x",unsigned((b.flags>>14)&1),unsigned(parameters.cmp_mode),unsigned(parameters.cmp_func),shader.key.c_str(),ns,slot,(unsigned long long)texture.serial,texture.d.format);}
+                            if(sampler_match && ((b.flags>>14)&1)!=unsigned(parameters.cmp_mode!=0)){
+                                parameters.cmp_mode=uint8_t((b.flags>>14)&1);++sampler_matched;
+                                if(parameters.cmp_mode && (parameters.cmp_func<NVN_COMPARE_FUNC_NEVER || parameters.cmp_func>NVN_COMPARE_FUNC_ALWAYS || parameters.cmp_func==NVN_COMPARE_FUNC_NEVER)){
+                                    static unsigned n=0;if(n++<3)xbg_logf("[RED] NVN sampler compare enabled for a depth-compare shader without a usable compare function (cmp_func=%u): LEQUAL assumed (gfx-sampler-match)",unsigned(parameters.cmp_func));
+                                    parameters.cmp_func=NVN_COMPARE_FUNC_LEQUAL;}}
                             ii.sampler=sampler(parameters,im,im.view_format(registered.has_view?&registered.view:nullptr),((b.flags>>16)&3)!=0);if(capture.active)capture_log("SAMPLER st=%u binding=%u sid=%d samplerSlot=%u min=%u mag=%u wrap=%u/%u/%u lod=%g/%g bias=%g",st,b.binding,sid,b.sampler_slot,parameters.minf,parameters.magf,parameters.ws,parameters.wt,parameters.wr,parameters.lod_min,parameters.lod_max,parameters.lod_bias);}
                     if(b.type==VK_DESCRIPTOR_TYPE_STORAGE_IMAGE){VkFormat viewed=im.view_format(registered.has_view?&registered.view:nullptr);if(!(im.usage&VK_IMAGE_USAGE_STORAGE_BIT))xbg_fatalf("NVN storage image without IMAGE flag serial=%llu format=%#x flags=%#x",(unsigned long long)texture.serial,texture.d.format,texture.d.flags);const VkFormatProperties &fp=format_properties(viewed);need(fp.optimalTilingFeatures&VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,"Format not usable as storage image");
                         if((b.flags&3) && format_feature_flags2){VkFormatProperties3 extra{VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3};VkFormatProperties2 all{VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};all.pNext=&extra;vkGetPhysicalDeviceFormatProperties2(cfg.physical,viewed,&all);if(b.flags&1)need(extra.optimalTilingFeatures&VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT,"Image format lacks formatless-write support");if(b.flags&2)need(extra.optimalTilingFeatures&VK_FORMAT_FEATURE_2_STORAGE_READ_WITHOUT_FORMAT_BIT,"Image format lacks formatless-read support");}
@@ -4544,6 +4554,8 @@ extern "C" int xbg_game_initialize(const xbg_game_config *c,char *error,size_t b
       xbg_logf("NVN pool-alias invalidation experiment=%d (marker gfx-alias-invalidate)",int(alias_invalidate));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-rt-dedupe").c_str(),"rb");rt_dedupe=false;if(m){rt_dedupe=fgetc(m)=='1';fclose(m);}
       xbg_logf("NVN repeated colour slots attached once=%d (marker gfx-rt-dedupe)",int(rt_dedupe));}
+     {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-sampler-match").c_str(),"rb");sampler_match=false;if(m){sampler_match=fgetc(m)=='1';fclose(m);}
+      xbg_logf("NVN sampler depth compare follows the shader=%d (marker gfx-sampler-match)",int(sampler_match));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-read-preflight").c_str(),"rb");read_preflight=true;if(m){read_preflight=fgetc(m)!='0';fclose(m);}else if(const char *e=getenv("DM_GFX_READ_PREFLIGHT"))read_preflight=atoi(e)!=0;
       xbg_logf("NVN CPU reads resolved before each operation=%d (marker gfx-read-preflight)",int(read_preflight));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-sync-cache-save").c_str(),"rb");sync_cache_save=false;if(m){sync_cache_save=fgetc(m)=='1';fclose(m);}}
