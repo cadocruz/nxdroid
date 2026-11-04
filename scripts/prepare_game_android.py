@@ -458,16 +458,19 @@ def extract_archive(base_file, update_file, work_dir, hactool_bin, keys_path):
 # --- Shader Extraction and Compilation Engine ---
 
 def _scan_blob_worker(item):
+    """(shaders found, error): a file the scanner rejects (shader_split's red() is a SystemExit) or fails on is reported,
+    not dropped, so the summary can say how many asset files were not scanned."""
     img_path, start, length, rel = item
     out_file = []
+    error = None
     try:
         import shader_split
         with open(img_path, "rb") as f:
             f.seek(start)
             blob = f.read(length)
         shader_split.scan_blob(blob, rel, out_file)
-    except Exception:
-        pass
+    except (Exception, SystemExit) as e:
+        error = f"{rel}: {e}"
     results = []
     for entry in out_file:
         name, st, ctl, code = entry
@@ -475,7 +478,7 @@ def _scan_blob_worker(item):
         skey = shader_split.skey(ctl, code)
         ctl_key = hashlib.sha256(ctl[:0x880]).hexdigest()[:16]
         results.append((skey, st, ctl, code, ctl_key))
-    return results
+    return results, error
 
 
 def _rewrite_depth(words):
@@ -968,7 +971,7 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
         import romfs
         import shader_split
     except Exception as e:
-        log(f"Notice: shader_split / romfs tools could not be loaded ({e}); skipping offline shader compilation.")
+        log(f"[RED] shader_split / romfs tools could not be loaded ({e}): no shader is packed, the game will miss every one")
         return
 
     facts = {}
@@ -1027,7 +1030,8 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
     if romfs_img and romfs_img.exists():
         try:
             img = romfs.Image(str(romfs_img))
-        except Exception:
+        except Exception as e:
+            log(f"[RED] {romfs_img} could not be opened ({e}): its shaders are not scanned")
             img = None
 
     if img:
@@ -1063,9 +1067,14 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
             ctx = mp.get_context("fork")
             workers = min(os.cpu_count() or 8, 16)
             with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-                for res_list in pool.map(_scan_blob_worker, scan_items, chunksize=8):
+                scan_errors = []
+                for res_list, error in pool.map(_scan_blob_worker, scan_items, chunksize=8):
+                    if error: scan_errors.append(error)
                     for skey, st, ctl, code, ctl_key in res_list:
                         found_shaders[skey] = (st, ctl, code, ctl_key)
+                if scan_errors:
+                    log(f"WARNING: {len(scan_errors)} of {len(scan_items)} RomFS asset files could not be scanned for shaders; "
+                        f"the first: {'; '.join(scan_errors[:3])}")
 
     log(f"Total unique shaders identified: {len(found_shaders)}")
     if not found_shaders:
@@ -1146,16 +1155,24 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
             ]
 
         if cmd:
-            subprocess.run(cmd, stdout=subprocess.DEVNULL)
+            res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
+            if res.returncode != 0:
+                tail = " | ".join((res.stderr or "").strip().splitlines()[-5:])
+                log(f"[RED] the shader translator exited with {res.returncode}: {tail or 'no message'}")
         else:
-            log("WARNING: Neither dotnet nor podman/docker found; skipping SPIR-V compilation.")
+            log("[RED] Neither dotnet nor podman/docker found: no shader is translated, the game will miss every new one")
 
     log("Packing .xgs bundles...")
     built = 0
+    untranslated, failed = [], []
     for skey, (st, ctl, code, ctl_key) in found_shaders.items():
         res_file = spv_out_dir / f"{skey}.res.json"
         spv_file = spv_out_dir / f"{skey}.spv"
         if not res_file.exists() or not spv_file.exists():
+            if (out_xgs_dir / f"{skey}.xgs").exists() and (out_xgs_dir / f"{ctl_key}.xgs").exists() and not rebuild_shaders:
+                built += 1   # an earlier run's bundle, kept
+            else:
+                untranslated.append(f"{skey}\t{st}")
             continue
 
         skey_path = out_xgs_dir / f"{skey}.xgs"
@@ -1176,10 +1193,21 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
             with open(ctl_path, "wb") as bf:
                 bf.write(bundle)
             built += 1
-        except Exception:
-            pass
+        except Exception as e:
+            failed.append(f"{skey}\t{st}\t{type(e).__name__}: {e}")
 
     log(f"  ✓ {built} .xgs shader bundles ready in {out_xgs_dir}")
+    # The engine reaches a shader by its key: one missing here is missing on the device (a draw without it, or a fatal), so every
+    # loss is counted and listed instead of dropped.
+    missing_list = xlate_work / "missing_shaders.tsv"
+    if untranslated or failed:
+        missing_list.write_text("# key\tstage\t(packing error)\n" + "\n".join(untranslated + failed) + "\n", encoding="utf-8")
+        log(f"[RED] {len(untranslated) + len(failed)} of {len(found_shaders)} shaders have no bundle: {len(untranslated)} not translated "
+            f"(no SPIR-V from dmsh_xlate), {len(failed)} failed to pack; the list is {missing_list}")
+        for line in failed[:3]:
+            log(f"  packing error: {line}")
+    elif missing_list.exists():
+        missing_list.unlink()
     stamp_path.write_text(stamp, encoding="utf-8")
 
 

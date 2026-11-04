@@ -101,6 +101,12 @@ What is established:
 - The `[RED] hybrid draws are not collected` line is not a rendering failure: it is the Vulkan stub of
   a Metal-only statistic in `dm/gfx/vulkan/nvn_vk.c` (always zero).
 - Not yet tested: the double depth conversion above.
+- Open in `scripts/prepare_game_android.py`: the RomFS shader scan only reads files under fixed folders
+  and extensions written for Mario Kart 8 Deluxe (`/Course/`, `/RaceCommon/`, `/Kart/`, `/Driver/`,
+  `.bfres`, `.bfsha` and others, in `extract_and_build_shaders`) plus the files the profile's shader map
+  names. A shader elsewhere is never found, for MK8DX too, and the list is a game-specific rule in a
+  general script (`AGENTS.md`); it should come from the profile, or the scan should cover every asset
+  file the shader splitter recognizes. Not changed.
 
 ### Next device session (2026-11-04): step by step
 
@@ -173,7 +179,13 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
    Same input, keys and tools as the last preparation (it needs `hactool`, `prod.keys`, `capstone` in
    its Python and `dotnet` or podman for `dmsh_xlate`). Its log must say `Shader bundles were built with
    other settings than 'depth_rewrite=0': rebuilding them`, and `"$ADB" shell cat
-   /storage/emulated/0/nxdroid/game/xgs_build.txt` must print `depth_rewrite=0`. Then, with no marker
+   /storage/emulated/0/nxdroid/game/xgs_build.txt` must print `depth_rewrite=0`. Read the end of its
+   shader section too: since 2026-11-04 it counts what it loses instead of dropping it silently
+   (`[RED] N of M shaders have no bundle: … not translated …, … failed to pack; the list is
+   <work>/xlate_work/missing_shaders.tsv`, `[RED] the shader translator exited with …`, and a `WARNING`
+   for RomFS asset files it could not scan). Copy those lines into the test record; any shader without a
+   bundle is a candidate cause of a wrong draw (before, the translator's exit status was ignored and a
+   failed translation or packing left no trace). Then, with no marker
    (`--list` empty), race again as in step 5 and save `22_norewrite.png` / `.txt`. Run 22 must look
    like run 21.
 9. **Optional, only if runs 20 to 22 all stay wrong:** run 23 with `gfx-alias-invalidate --on` (the
