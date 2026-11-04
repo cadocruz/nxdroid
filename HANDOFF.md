@@ -42,6 +42,47 @@ measured). The one title run so far is **Mario Kart 8 Deluxe** (`010015200002200
 - `dm/games/0100152000022000/README.md` does not record the Android run yet (`AGENTS.md`: a game counts
   as running on Android only when its note says so).
 
+### Resume from the 2026-11-03 graphics investigation
+
+The current working tree is intentionally dirty and has **not** been committed. It contains the
+diagnostic edits in `dm/gfx/vulkan/engine/xbg_game.cpp` and the test record below. The latest APK was
+compiled from this tree and installed on the authorized S23 Ultra; the game data stayed on the device.
+The latest capture is `/tmp/nxdroid-test/19_pool_reuse_fix.png` and its validated log is
+`/tmp/nxdroid-test/19_pool_reuse_fix.txt`.
+
+What is established:
+
+- The ten planned single-switch A/B runs did not improve the picture; see §8 item 12.
+- The recurring partial-write warning is caused by `OP_COPY_B2T` (`CopyBufferToTexture`), in the
+  `copy-upload-color` path. Small dynamic textures (`512x608`, `256x304`) reuse pool ranges formerly
+  used by GPU-written render targets (`1920x1080`, `960x540`, `1280x720`).
+- `image_index` retains old `Image` objects across legitimate NVN pool reuse. The diagnostic experiment
+  now invalidates old images when a new texture with a different description is created over the range;
+  it reduced stale state but did **not** fix the screenshot. Treat the current invalidation and
+  `copy-upload-color` alias branches as experimental, not final fixes.
+- The recurring `[RED] hybrid draws are not collected` line is not a rendering failure: it is the
+  Vulkan stub for a Metal-only statistic in `dm/gfx/vulkan/nvn_vk.c`, which intentionally returns zero.
+
+Recommended next session:
+
+1. Inspect the current diff and keep the diagnostic evidence; do not commit yet:
+   `git diff -- dm/gfx/vulkan/engine/xbg_game.cpp HANDOFF.md`.
+2. Decide the lifetime model for `images`/`image_index`: a new NVN texture reusing guest pool storage
+   must not leave an old Vulkan image authoritative, but old Vulkan objects also cannot be destroyed
+   while referenced by an in-flight command buffer. A safe fix likely needs retirement after the slot
+   fence, plus removal from the address index, rather than only clearing `gpu_written`.
+3. Trace `slot_use`, `retire`, `forget_framebuffers` and image destruction before implementing that
+   lifecycle change. Add a focused test or log proving that the old alias leaves `image_index` only
+   after its GPU references retire.
+4. Rebuild/install with the existing command (game profile is mandatory):
+   `podman run --rm --userns=keep-id -v "$PWD:/workspace" -w /workspace localhost/dm-android-tools:1 gradle -p dm/android :app:assembleDebug -PdmGame=0100152000022000`
+   then install the APK. The device may require uninstalling `com.nxdroid` first because debug
+   signatures have conflicted; this preserves `/storage/emulated/0/nxdroid/game`, but verify before
+   doing it.
+5. After each user run, always capture and inspect the log before asking for another test:
+   `python3 scripts/android_gfx_ab.py gfx-read-preflight --clear --no-restart --wait 1 --shot /tmp/nxdroid-test/<name>.png --log /tmp/nxdroid-test/<name>.txt --game-dir /storage/emulated/0/nxdroid --adb /opt/platform-tools/adb`.
+   The script's logcat is cumulative; use timestamps/PID to distinguish the fresh run from stale lines.
+
 ### Device fixes and measurements (Sprint 6)
 
 1. **Vertical banding ("venetian blinds"), resolved.** 16 vertical columns of alternating brightness.
@@ -571,6 +612,222 @@ Current counts:
        `scripts/android_gfx_ab.py gfx-read-preflight --on`. Updated A/B order: `gfx-noload` off,
        `gfx-read-preflight` on, `gfx-tex-dirty` off, then the rest; and grep the log for the `[YELLOW]` line
        above.
+
+    **Interactive test record (2026-11-03):**
+
+    - **Build provenance:** the APK previously running on the device was built from an older
+      revision, not from the current checkout. Therefore its baseline log is retained only as an
+      historical device observation and must not be used to validate `HEAD`. Rebuild and install the
+      APK from the current checkout before continuing the A/B session; record the installed commit
+      here for every run.
+      **Current installation:** APK built and clean-installed on the S23 Ultra from `HEAD=572da85`
+      on 2026-11-03; the previous package was removed because its signing key differed.
+
+    - **Baseline (2026-11-03, partial):** no `gfx-*` marker was active. The race log was captured as
+      `/tmp/nxdroid-test/00_base.txt`; the screenshot and memory sample were taken after
+      `nativeStopHost` and are invalid for visual/memory comparison. The log shows the expected
+      Android defaults (`TEX_DIRTY=1`, `VCACHE=1`, `PIPE_MEMO=1`, `NATIVE_BC=1`, `WB_SKIP=1`,
+      `UPLOAD_PROLOGUE=1`, `LDC_FOLD=1`, `FORWARD_TEMPS=1`, `READ_PREFLIGHT=0`, `NOLOAD=1`, etc.).
+      The swapchain first reported `format=37 srgb=0 source_srgb=0`, then rebuilt with
+      `format=43 srgb=1 source_srgb=1`. The log contained the known hybrid-draw `[RED]` line and five
+      `[YELLOW] Preserving GPU-written image on partial memory pool write` lines. Performance during
+      the captured run ranged from 16.24 to 20.56 FPS, with `gpu_ms` 20.65–25.80 and
+      `submit_cpu_ms` 19.02–28.45. No crash or Vulkan device loss was recorded before exit.
+      Visual result: not recorded by the agent; the captured PNG is post-exit and unusable.
+    - **Baseline follow-up (2026-11-03, `HEAD=572da85`):** valid run with no `gfx-*` marker. The
+      screenshot `/tmp/nxdroid-test/00_base_572da85.png` captured the race while the app was alive.
+      The 3D scene is still severely corrupted: posterized colours, dense yellow/black/white road
+      speckle and black areas/holes; HUD, controls and 2D elements are readable. `source_srgb=1` was
+      selected after the initial swapchain rebuild (`format=43`), so this is not explained by the
+      non-sRGB initial surface format. The known hybrid-draw `[RED]` line appeared, plus five
+      `[YELLOW] Preserving GPU-written image on partial memory pool write` lines. In the race portion,
+      performance was roughly 15.90–29.55 FPS, `submit_cpu_ms` 11.95–29.70 and `gpu_ms` 17.22–27.56;
+      warm-up/menu samples reached 60 FPS. Memory at capture was about 3.06 GiB PSS, including
+      1.91 GiB Graphics. No crash or device loss was recorded.
+    - **Clean baseline (2026-11-03, `HEAD=572da85`):** after removing all stale markers from both
+      directories, `/tmp/nxdroid-test/00_base_clean.png` and `.txt` were captured with no marker
+      files present. The engine reported its normal defaults: `defer events=2`, `vcache=1`,
+      `tex-dirty=1`, `native BC=1`, `wb-skip=1`, `pipe-memo=1`, `read-preflight=0` and `noload=1`;
+      `source_srgb=1` after swapchain rebuild. The screenshot still shows the corrupted 3D scene
+      behind the pause/control overlay, so the fault is reproduced from a genuinely clean state.
+      The known hybrid-draw `[RED]` and GPU-written-image `[YELLOW]` lines remain. This is now the
+      authoritative baseline for the following single-marker tests.
+    - **`gfx-noload=0`, clean run (2026-11-03, `HEAD=572da85`):** only
+      `/storage/emulated/0/nxdroid/gfx-noload` was present; the log confirms `noload=0`, while all
+      other tested switches retained their defaults. `/tmp/nxdroid-test/01_noload_off_clean.png`
+      shows the same posterized/speckled 3D scene with black regions as the clean baseline. Result:
+      **no visual change; `gfx-noload` is not the cause**. Race samples were approximately 16.83–26.63
+      FPS with `gpu_ms` 13.67–24.55 and `submit_cpu_ms` 17.05–26.40.
+    - **`gfx-read-preflight=1`, clean run (2026-11-03, `HEAD=572da85`):** only
+      `/storage/emulated/0/nxdroid/gfx-read-preflight` was present; the log confirms
+      `CPU reads resolved before each operation=1`. Visual result: **no perceptible improvement**;
+      the 3D corruption remains. It caused a substantial performance regression in the captured race:
+      `submit_cpu_ms` was roughly 49.81–73.61 ms, FPS 12.48–17.77, with high `sync_wb`/`sync_q`
+      counts. Result: **not the visual cause; keep the default `read-preflight=0`**.
+    - **`gfx-tex-dirty=0`, clean run (2026-11-03, `HEAD=572da85`):** only
+      `/storage/emulated/0/nxdroid/gfx-tex-dirty` was present; the log confirms
+      `texture checks through the dirty tracker=0`, with `read-preflight=0` restored. Visual result:
+      **no perceptible improvement**; the 3D scene remains corrupted. The known hybrid-draw `[RED]`
+      line and five GPU-written-image `[YELLOW]` lines remained. Race performance was broadly in the
+      same range, roughly 16–26 FPS in the later captured frames. Result: **not the cause; keep the
+      default texture dirty tracking enabled**.
+    - **`gfx-wb-skip=0`, clean run (2026-11-03, `HEAD=572da85`):** only
+      `/storage/emulated/0/nxdroid/gfx-wb-skip` was present; the log confirms
+      `superseded storage writebacks skipped=0`, with `tex-dirty=1` and `read-preflight=0`. Visual
+      result: **no perceptible improvement**; the corrupted 3D picture remains. The known hybrid-draw
+      `[RED]` and five GPU-written-image `[YELLOW]` lines remained. Race performance was broadly
+      unchanged, approximately 15–26 FPS in the later samples. Result: **not the cause; retain
+      writeback skipping**.
+    - **`gfx-upload-prologue=0`, clean run (2026-11-03, `HEAD=572da85`):** valid log and screenshot
+      at `/tmp/nxdroid-test/05_upload_prologue_off_clean_retry.*`; only the upload-prologue marker
+      was active, confirmed by `whole uploads ...=0`, while `wb-skip=1`, `tex-dirty=1` and
+      `read-preflight=0` remained at defaults. Visual result: **no perceptible improvement**. The
+      user perceived slightly better performance; the log shows roughly 19.46–22.06 FPS in the
+      later race samples with `submit_cpu_ms` 17.75–21.38 and `gpu_ms` 20.29–22.17, which is not a
+      clear improvement over the clean baseline's variable 16–26 FPS range. Result: **no evidence
+      this is the 3D cause; performance effect inconclusive**.
+    - **`gfx-vcache=0`, clean run (2026-11-03, `HEAD=572da85`):** only
+      `/storage/emulated/0/nxdroid/gfx-vcache` was present; the log confirms
+      `vertex/index cross-frame cache=0` and all other tested switches remained at defaults. The
+      screenshot shows the same severe corruption (black regions, wrong colours and dense road
+      speckle), with no visual improvement. Race samples were roughly 17.12–25.67 FPS,
+      `submit_cpu_ms` 17.12–25.07 and `gpu_ms` 15.60–22.95. Result: **not the cause**.
+    - **`gfx-pipe-memo=0`, clean run (2026-11-03, `HEAD=572da85`):** valid retry at
+      `/tmp/nxdroid-test/07_pipe_memo_off_clean_retry.*`; only this marker was active and the log
+      confirms `pipeline memo ...=0`. Visual result: **no perceptible improvement**. Race samples
+      were roughly 20.40–21.86 FPS, with `submit_cpu_ms` 18.05–19.71 and `gpu_ms` 20.67–23.02.
+      Result: **not the cause**.
+    - **`gfx-native-bc=0`, clean run (2026-11-03, `HEAD=572da85`):** only
+      `/storage/emulated/0/nxdroid/gfx-native-bc` was present; the log confirms `native BC textures=0`
+      and the other tested switches remained at defaults. Visual result: **no perceptible improvement**;
+      the same corrupted 3D scene remained. Race samples were roughly 22.4–25.6 FPS with
+      `submit_cpu_ms` 16.15–18.06 and `gpu_ms` 16.73–20.80. Result: **not the cause**.
+    - **`gfx-forward-temps=0`, clean run (2026-11-03, `HEAD=572da85`):** the first capture was
+      invalid (black overlay only) and was discarded. The valid retry at
+      `/tmp/nxdroid-test/09_forward_temps_off_clean_retry.*` confirms
+      `forwarded temporaries=0` with all other tested switches at defaults. Visual result: **no
+      improvement**; the same posterized, speckled and black-hole 3D scene remains. Race samples
+      were approximately 15.87–16.95 FPS with `submit_cpu_ms` 25.49–28.83 and `gpu_ms` 24.43–25.10.
+      Result: **not the cause**.
+    - **`gfx-ldc-fold=0`, clean run (2026-11-03, `HEAD=572da85`):** only
+      `/storage/emulated/0/nxdroid/gfx-ldc-fold` was present; the log confirms
+      `component fold=0` and `forwarded temporaries=1`. The screenshot still shows the same severe
+      3D corruption, with no visual improvement. Race samples were approximately 19.51–24.70 FPS,
+      `submit_cpu_ms` 17.22–23.14 and `gpu_ms` 16.58–20.52. Result: **not the cause**.
+    - **A/B conclusion (2026-11-03, `HEAD=572da85`):** the planned single-switch order is complete:
+      `gfx-noload`, `gfx-read-preflight`, `gfx-tex-dirty`, `gfx-wb-skip`, `gfx-upload-prologue`,
+      `gfx-vcache`, `gfx-pipe-memo`, `gfx-native-bc`, `gfx-forward-temps` and `gfx-ldc-fold` all
+      reproduced the same bad 3D picture. The recurring evidence is the hybrid-draw `[RED]` line and
+      the five `[YELLOW] Preserving GPU-written image on partial memory pool write` lines. The next
+      investigation should focus on that partial CPU-write/image-preservation path or the known
+      hybrid-draw limitation, rather than another performance switch.
+    - **Partial-write overlap diagnostic (2026-11-03, instrumented APK):** the valid run is
+      `/tmp/nxdroid-test/12_partial_diag_overlap.png` with log
+      `/tmp/nxdroid-test/12_partial_diag_overlap.txt`; the log was checked before recording it.
+      The new fields show the main warning as a write at `+0x50000` overlapping the first
+      `0x50000` bytes of a `0x870000` image allocation, not an interior subresource offset:
+      serial `22183`, NVN format `0x3d` (`A2B10G10R10_UNORM_PACK32`), target `1`, flags `0x8`,
+      extent `1920x1080x1`, one level and one layer, `uploaded=0`, attachment provenance
+      (`site=3340`). The same write also overlaps serial `5904`, a `128x128x1`, 8-level,
+      6-layer format `0x29` image with `uploaded=1`. This confirms multiple aliased images
+      share the pool range; the preservation branch is handling an aliasing event, not merely
+      a simple partial update to one texture. No behavior change was made by the diagnostic.
+      All `gfx-*` markers were clear after capture. Next step: trace the pool alias allocation
+      and the command that writes `+0x50000` before changing the preservation semantics.
+    - **Alias writer identified (2026-11-03):** the valid follow-up capture is
+      `/tmp/nxdroid-test/13_alias_trace.png` with log `/tmp/nxdroid-test/13_alias_trace.txt`.
+      After filtering the stale lines from the persistent logcat, the new warning reports
+      `op=31`, which is `OP_COPY_B2T` (`CopyBufferToTexture`), writing `+0x50000`. It overlaps
+      the first `0x50000` bytes of the `1920x1080` format `0x3d` render target and of a second
+      aliased `256x256` format `0x29` image. Both have pool offset `0`; the render target has
+      `uploaded=0`, while the smaller image has `uploaded=1`. This moves the investigation from
+      generic CPU writes to the ordering and invalidation around buffer-to-texture copies.
+    - **Invalidation source narrowed (2026-11-03):** the valid capture is
+      `/tmp/nxdroid-test/14_invalidation_source.png` with log
+      `/tmp/nxdroid-test/14_invalidation_source.txt`. The new `reason` field was `unknown`
+      for the fresh warning, so none of the pending/slot/descriptor writeback paths ran.
+      With `op=31` and the color format `0x3d`, this is the normal color upload branch of
+      `CopyBufferToTexture`; it invalidates the primary image range while the overlap walker
+      also sees the aliased GPU-written render target. The next APK labels that call
+      `copy-upload-color` to confirm it directly.
+    - **Copy-upload source confirmed (2026-11-03):** the valid capture is
+      `/tmp/nxdroid-test/15_copy_upload_color.png` with log
+      `/tmp/nxdroid-test/15_copy_upload_color.txt`. The fresh lines report
+      `reason=copy-upload-color`, `op=31`, and the same `+0x50000` write. Besides the
+      `1920x1080` format `0x3d` target, this run found a second aliased `960x540` format
+      `0x25` target, both `uploaded=0`. The pool range is therefore reused by render targets
+      of different resolutions during `CopyBufferToTexture`; the next experiment should
+      isolate whether preserving those GPU-written aliases is the source of the bad picture.
+    - **Alias invalidation experiment (2026-11-03):** the valid capture is
+      `/tmp/nxdroid-test/16_alias_invalidate_experiment.png` with log
+      `/tmp/nxdroid-test/16_alias_invalidate_experiment.txt`. The log confirms five
+      `Experimental invalidation of GPU-written alias during color upload` events and no new
+      preservation warning for that upload. The screenshot is still visibly corrupted (black
+      regions, severe speckling and displaced/incorrect geometry), so invalidating the aliases
+      alone is **not a fix**. Keep this change as diagnostic-only; the persistent hybrid-draw
+      `[RED]` remains present and the next investigation should connect the invalidated
+      render-target contents to the hybrid draw/read path.
+    - **Pool reuse pattern identified (2026-11-03):** the valid capture is
+      `/tmp/nxdroid-test/17_upload_trace.png` with log
+      `/tmp/nxdroid-test/17_upload_trace.txt`. The fresh upload records show the active
+      `CopyBufferToTexture` destinations are small dynamic textures (serial `150550`, format
+      `0x1`, `512x608`, `0x50000` bytes; and serial `150557`, format `0xd`, `256x304`,
+      `0x30000` bytes). Their pool base is simultaneously indexed by stale GPU-written images
+      of `1920x1080`, `960x540` and `1280x720`. This is legitimate pool storage reuse, but the
+      image index keeps old texture objects alive and the partial-write branch preserves them.
+      The root-cause candidate is stale alias registration/lifetime, not a hybrid draw. The
+      eventual fix should retire or remove old image aliases when the pool range is reused by
+      a new texture, rather than preserving them during the upload.
+    - **Reuse trace confirmed (2026-11-03):** the valid capture is
+      `/tmp/nxdroid-test/18_pool_reuse.png` with log `/tmp/nxdroid-test/18_pool_reuse.txt`.
+      The creation trace shows the pool being reused repeatedly by smaller mip-sized textures:
+      `128x128 -> 32x32 -> 16x16 -> 8x8 -> 4x4 -> 2x2`, while the old images remain
+      `oldGpu=1 oldUploaded=1`. This confirms that the address-ordered `image_index` is retaining
+      stale GPU image objects across legitimate pool reuse. The next code change should fix
+      image-index lifetime/retirement at new texture registration; the upload-time experiment
+      is insufficient and remains diagnostic only.
+    - **Pool-reuse invalidation experiment (2026-11-03):** the valid capture is
+      `/tmp/nxdroid-test/19_pool_reuse_fix.png` with log
+      `/tmp/nxdroid-test/19_pool_reuse_fix.txt`. The new-registration path invalidated old
+      images before pool reuse, and the app continued running, but the screenshot still has
+      severe black regions, speckling and displaced geometry. Stale alias state is real but is
+      not the sole rendering fault; keep this change experimental, not as the final fix.
+    - **Hybrid diagnostic ruled out (2026-11-03):** source inspection of `dm/gfx/vulkan/nvn_vk.c`
+      confirms the recurring `[RED] Vulkan replay: hybrid draws are not collected...` line is
+      emitted by `mtl_hybrid_stats()`, whose Vulkan implementation always returns zero because
+      hybrid pipelines are a Metal-only diagnostic. It does not report an executed draw reading
+      zero and cannot explain the picture. Remove it from the rendering-cause shortlist. The
+      next investigation should follow the actual texture upload/alias contents used by the
+      affected draws.
+    - The first attempted `gfx-noload` A/B was invalid: `scripts/android_gfx_ab.py` wrote
+      `/sdcard/nxdroid/game/gfx-noload`, but this build passes `/storage/emulated/0/nxdroid/game` as
+      the shader directory and the engine's current marker lookup takes its parent,
+      `/storage/emulated/0/nxdroid/`. The log confirmed `NVN proven full-overwrite first draws skip the
+      color load=1`; discard `/tmp/nxdroid-test/01_noload_off.png` and its log as an unapplied test.
+      The script/docs path assumption needs correction before further A/B runs.
+    - Next run: `gfx-noload` off, one marker only, written in `/storage/emulated/0/nxdroid/`. The
+      result will be compared against this screenshot and baseline log.
+    - The corrected-path attempt was also invalid for visual comparison: the automated restart left
+      the Argon launcher on screen, so `/tmp/nxdroid-test/01_noload_off_correct.png` captured the
+      launcher rather than the game. The marker path was correct, but the launcher\'s `START GAME`
+      button must be pressed after each automated restart before entering the race.
+    - **`gfx-noload=0` valid run (2026-11-03, `HEAD=572da85`):** marker was applied in the correct
+      parent directory and the log confirms `NVN proven full-overwrite first draws skip the color
+      load=0`. The screenshot `/tmp/nxdroid-test/01_noload_off_valid.png` shows the same corrupted
+      3D rendering as baseline, with no qualitative improvement. The known hybrid-draw `[RED]` line
+      and five GPU-written-image `[YELLOW]` lines remained. Race samples ranged roughly 16.18–25.58
+      FPS in the captured portion, with later frames at 18.60–21.20 FPS, `gpu_ms` 17.00–26.43 and
+      `submit_cpu_ms` 16.00–31.02. Result: **no change; noload is not the cause**.
+    - **Test contamination found (2026-11-03):** the parent directory used by the current engine had
+      stale markers from earlier runs (`gfx-depth-clip`, `gfx-legacy-waitall`, `gfx-mutable-images`,
+      `gfx-nan-minmax`, `gfx-native-bc`, `gfx-no-warm`, `gfx-pipe-skip`, `gfx-read-preflight`,
+      `gfx-swap-format` and `gfx-swap-srgb`). The baseline and `gfx-noload=0` run above therefore are
+      not clean single-variable experiments, although their logs still prove the requested marker
+      value. All markers in both `/storage/emulated/0/nxdroid/` and its `game/` directory were removed
+      afterward. Future `--clear-all` calls must use `--no-restart`, then the test marker must be the
+      only file present; the clean baseline must be repeated.
+    - A/B runs: pending. Results will be added here one at a time, including the marker, build, visual
+      result, relevant log lines and whether the run crashed, hung or stuttered.
 
 ## 9. How to work in this tree
 

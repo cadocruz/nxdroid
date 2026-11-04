@@ -1581,7 +1581,7 @@ uint64_t hash_memory(const void *memory,size_t n){CPU_SCOPE(Hash);const uint8_t 
     uint64_t h[4]={1469598103934665603ull,0x9e3779b97f4a7c15ull,0xc2b2ae3d27d4eb4full,0x165667b19e3779f9ull};size_t i=0;
     for(;i+32<=n;i+=32){for(unsigned k=0;k<4;k++){uint64_t w;memcpy(&w,p+i+8*k,8);h[k]=(h[k]^w)*0x100000001b3ull;h[k]^=h[k]>>29;}}
     uint64_t hash=h[0]^(h[1]*3)^(h[2]*5)^(h[3]*7)^n;for(;i<n;i++){hash^=p[i];hash*=1099511628211ull;}return hash;}
-void invalidate_cpu_range(uint64_t address,uint64_t bytes){CPU_SCOPE(CpuWrite);
+void invalidate_cpu_range(uint64_t address,uint64_t bytes,const char *reason="unknown"){CPU_SCOPE(CpuWrite);
     need(address+bytes>=address,"CPU write range overflow");cpu_access(address,bytes,4);snapshot_invalidate(address,bytes);
     for_images_overlapping(address,bytes,[&](Image &im){if(draw_detail)draw_timing.image();uint64_t begin=uintptr_t(im.source.mem),end=begin+im.source.L.size;
         // A full storage overwrite replaces the prior GPU contents. A partial
@@ -1590,12 +1590,31 @@ void invalidate_cpu_range(uint64_t address,uint64_t bytes){CPU_SCOPE(CpuWrite);
             if (address <= begin && address + bytes >= end) {
                 im.gpu_written=false;provenance_write(im,__LINE__);im.uploaded=false;im.checked_submission=UINT64_MAX;
             } else {
+                // Diagnostic experiment: CopyBufferToTexture is the guest's explicit write to
+                // this aliased pool range. Preserve the old behavior everywhere else, but let
+                // this path invalidate stale GPU aliases so the next upload can rebuild them.
+                if (!strcmp(reason,"copy-upload-color")) {
+                    static unsigned n_alias_invalidate=0;
+                    if (n_alias_invalidate++<5)
+                        xbg_logf("[YELLOW] Experimental invalidation of GPU-written alias during color upload: serial=%llu fmt=%#x extent=%ux%u",
+                                 (unsigned long long)im.source.serial,im.source.d.format,im.width,im.height);
+                    im.gpu_written=false;im.uploaded=false;im.checked_submission=UINT64_MAX;
+                    return;
+                }
                 static unsigned n_partial_warn = 0;
                 if (n_partial_warn++ < 5) {
-                    xbg_logf("[YELLOW] Preserving GPU-written image on partial memory pool write: addr=%llx+%llx tex=%llx+%llx serial=%llu",
+                    uint64_t overlap_begin=std::max(address,begin),overlap_end=std::min(address+bytes,end);
+                    xbg_logf("[YELLOW] Preserving GPU-written image on partial memory pool write: reason=%s op=%u addr=%llx+%llx tex=%llx+%llx poolOff=%lld overlap=%llx+%llx serial=%llu fmt=%#x target=%u stride=%u flags=%#x extent=%ux%ux%u levels=%u layers=%u uploaded=%u writer=%llu site=%u lastWrite=%llu",
+                             reason,cur_op,
                              (unsigned long long)address, (unsigned long long)bytes,
                              (unsigned long long)begin, (unsigned long long)(end - begin),
-                             (unsigned long long)im.source.serial);
+                             (long long)im.source.off,
+                             (unsigned long long)(overlap_begin-begin), (unsigned long long)(overlap_end-overlap_begin),
+                             (unsigned long long)im.source.serial, im.source.d.format,
+                             im.source.d.target, im.source.d.stride, im.source.d.flags,
+                             im.width, im.height, im.depth, im.levels, im.layers,
+                             im.uploaded, (unsigned long long)im.provenance_writer,
+                             im.provenance_write_site, (unsigned long long)im.last_write);
                 }
             }
             return;
@@ -1619,7 +1638,7 @@ void resolve_slot_writebacks(const void *slot){
     std::vector<PendingWriteback> keep;
     for(size_t i=0;i<pending_writebacks.size();i++){auto &w=pending_writebacks[i];if(w.slot!=slot){keep.push_back(w);continue;}
         if(writeback_superseded(i)){++wb_skipped;wb_skipped_bytes+=w.bytes;continue;}
-        writeback_bytes+=w.bytes;w.buffer.invalidate();invalidate_cpu_range(w.addr,w.bytes);memcpy(reinterpret_cast<void*>(w.addr),w.buffer.mapped,w.bytes);}
+        writeback_bytes+=w.bytes;w.buffer.invalidate();invalidate_cpu_range(w.addr,w.bytes,"slot-writeback");memcpy(reinterpret_cast<void*>(w.addr),w.buffer.mapped,w.bytes);}
     pending_writebacks.swap(keep);resolving_pending=false;
 }
 void write_report(const PendingReport &r){
@@ -1647,7 +1666,7 @@ void resolve_pending(){
     resolving_pending=true;
     gpu_sync(pending_writebacks.empty()?perf.sync_query:perf.sync_writeback);
     auto writebacks=std::move(pending_writebacks);pending_writebacks.clear();
-    for(auto &w:writebacks){w.buffer.invalidate();invalidate_cpu_range(w.addr,w.bytes);memcpy(reinterpret_cast<void*>(w.addr),w.buffer.mapped,w.bytes);}
+    for(auto &w:writebacks){w.buffer.invalidate();invalidate_cpu_range(w.addr,w.bytes,"pending-writeback");memcpy(reinterpret_cast<void*>(w.addr),w.buffer.mapped,w.bytes);}
     for(auto &r:pending_reports)write_report(r);
     pending_reports.clear();
     for(auto it=epochs.begin();it!=epochs.end();)if(it->first!=counter_epoch)it=epochs.erase(it);else ++it;
@@ -1748,6 +1767,22 @@ Image &get_image_slow(const tex_t *t,bool upload){CPU_SCOPE(Image);
         if(alias)for(auto &candidate:images)if(candidate.second.get()==alias){it=images.emplace(t->serial,candidate.second).first;image_index_dirty=true;++memo_check_gen;++memo_bump[3];provenance_image("ALIAS",t,*it->second);break;}
     }
     if(it==images.end()){
+        if(t->mem){
+            static unsigned n_pool_reuse_log=0;
+            for_images_overlapping(uint64_t(uintptr_t(t->mem)),t->L.size,[&](Image &old){
+                if(old.source.mem==t->mem && memcmp(&old.source.d,&t->d,sizeof(t->d))){
+                    // A new texture object reuses guest pool storage formerly owned by a
+                    // different image. Do not keep the old GPU contents authoritative; retain
+                    // the object for in-flight Vulkan references, but force a future access to
+                    // rebuild it from the current guest bytes.
+                    old.gpu_written=false;old.uploaded=false;old.checked_submission=UINT64_MAX;
+                    if(n_pool_reuse_log++<20)
+                    xbg_logf("NVN image pool reuse new=%llu fmt=%#x %ux%u bytes=%llu old=%llu fmt=%#x %ux%u bytes=%llu oldGpu=%u oldUploaded=%u",
+                             (unsigned long long)t->serial,t->d.format,t->d.width,t->d.height,(unsigned long long)t->L.size,
+                             (unsigned long long)old.source.serial,old.source.d.format,old.width,old.height,(unsigned long long)old.source.L.size,old.gpu_written,old.uploaded);
+                }
+            });
+        }
         need(t->d.samples<=1 || t->d.samples==2 || t->d.samples==4 || t->d.samples==8,"Unsupported texture sample count");
         need(t->d.target==0 || t->d.target==1 || t->d.target==2 || t->d.target==3 || t->d.target==4 || t->d.target==5 || t->d.target==6 || t->d.target==7 || t->d.target==8 || t->d.target==9,"Unsupported texture target (1D/3D/buffer handled separately)");
         auto p=std::make_shared<Image>();p->source=*t;p->provenance_epoch=provenance.epoch((t->mem && t->off>=0 && uint64_t(t->off)<=uint64_t(t->mem)?uint64_t(t->mem)-uint64_t(t->off):0));p->width=t->d.width;p->height=(t->d.target==0 || t->d.target==3)?1:t->d.height;p->depth=t->d.target==2?t->d.depth:1;p->levels=t->d.levels;p->layers=t->L.layers;p->aspects=aspect(t->d.format);p->samples=VkSampleCountFlagBits(std::max(1,t->d.samples));
@@ -2697,7 +2732,7 @@ struct Descriptors {
     Buffer *keep(const Buffer &b){need(buffers.size()<buffers.capacity(),"Descriptor buffer reservation exceeded");buffers.push_back(b);return &buffers.back();}
     bool needs_writeback()const{return !written.empty();}
     void defer_writeback(){const void *slot=&slots[slot_index];for(auto &v:written){if(draw_detail)draw_timing.storage(v.first.second);snapshot_invalidate(v.first.first,v.first.second);pending_writebacks.push_back({v.first.first,v.first.second,*v.second,slot});}}
-    void writeback(){for(auto &v:written){if(draw_detail)draw_timing.storage(v.first.second);v.second->invalidate();invalidate_cpu_range(v.first.first,v.first.second);memcpy(reinterpret_cast<void*>(v.first.first),v.second->mapped,v.first.second);}}
+    void writeback(){for(auto &v:written){if(draw_detail)draw_timing.storage(v.first.second);v.second->invalidate();invalidate_cpu_range(v.first.first,v.first.second,"descriptor-writeback");memcpy(reinterpret_cast<void*>(v.first.first),v.second->mapped,v.first.second);}}
     void capture_read_images(){for(auto &i:capture_inputs)capture_image(*i.image,i.has_view?&i.view:nullptr,i.label.c_str());}
 };
 // Per-draw descriptor records were one make_shared + vector reservations each (≈1800/frame, slow musl malloc). They live
@@ -3959,7 +3994,11 @@ void copy_texture_buffer(const p_copy_b2t &request,bool to_buffer){preflight_cpu
     size_t row,image,n;
     need(nvn_copy_pitch(p.r.width,p.r.height,p.r.depth,1,1,im.bpp,state.copy_stride,state.copy_image_stride,&row,&image,&n) && n<=256ull*1024*1024,"Invalid or oversized color copy stride/extent");
     need(p.src<=UINT64_MAX-n,"Color copy address overflow");
-    if(!to_buffer && !im.gpu_written && !(p.tex->d.flags&0x50)){invalidate_cpu_range(uint64_t(uintptr_t(p.tex->mem)),p.tex->L.size);
+    {static unsigned n_color_upload_log=0;if(!to_buffer && n_color_upload_log++<20)
+        xbg_logf("NVN color CopyBufferToTexture dst=%llu fmt=%#x texmem=%p texbytes=%llu src=%llx bytes=%zu region=%d,%d,%d:%dx%dx%d row=%zu image=%zu gpu=%u",
+                 (unsigned long long)p.tex->serial,p.tex->d.format,p.tex->mem,(unsigned long long)p.tex->L.size,
+                 (unsigned long long)p.src,n,p.r.xoffset,p.r.yoffset,p.r.zoffset,p.r.width,p.r.height,p.r.depth,row,image,im.gpu_written);}
+    if(!to_buffer && !im.gpu_written && !(p.tex->d.flags&0x50)){invalidate_cpu_range(uint64_t(uintptr_t(p.tex->mem)),p.tex->L.size,"copy-upload-color");
         if(guest_texture_write(p.tex,level,layer,p.r,reinterpret_cast<const uint8_t*>(p.src),row,image)){im.uploaded=false;im.checked_submission=UINT64_MAX;return;}}
     size_t slice_alignment=4;while(slice_alignment%im.bpp)slice_alignment+=4;
     size_t staging_row=size_t(p.r.width)*im.bpp;
