@@ -88,44 +88,107 @@ conversion done by the engine at shader load, keyed by the mode, not at packing.
   for a re-upload from guest memory can fill one with bytes the GPU never wrote, and the runs with the
   experiments on (16 and 19) are the only ones that also showed displaced geometry.
 
-The device sequence: (1) with the bundles now on the phone (built with the rewrite), one race with
-`android_gfx_ab.py gfx-depth-clip --off`; (2) if the picture is right, clear the marker, prepare the
-game again with the new script (the stamp rebuilds the bundles without the rewrite), push, and race
-again with no marker: it must look the same as (1). If (1) changes nothing, the double conversion was
-not the cause; record it here and keep the new default anyway (one conversion is right in every mode).
-
 What is established:
 
-- The ten planned single-switch A/B runs did not improve the picture; see §8 item 12.
-- The recurring partial-write warning is caused by `OP_COPY_B2T` (`CopyBufferToTexture`), in the
-  `copy-upload-color` path. Small dynamic textures (`512x608`, `256x304`) reuse pool ranges formerly
-  used by GPU-written render targets (`1920x1080`, `960x540`, `1280x720`).
-- `image_index` retains old `Image` objects across legitimate NVN pool reuse. The diagnostic experiment
-  now invalidates old images when a new texture with a different description is created over the range;
-  it reduced stale state but did **not** fix the screenshot. Treat the current invalidation and
-  `copy-upload-color` alias branches as experimental, not final fixes.
-- The recurring `[RED] hybrid draws are not collected` line is not a rendering failure: it is the
-  Vulkan stub for a Metal-only statistic in `dm/gfx/vulkan/nvn_vk.c`, which intentionally returns zero.
+- The ten planned single-switch A/B runs (2026-11-03) did not improve the picture; the record is in
+  §8 item 12, step 9.
+- The recurring partial-write warning comes from `OP_COPY_B2T` (`CopyBufferToTexture`), in the
+  `copy-upload-color` path: small dynamic textures (`512x608`, `256x304`) are written into pool ranges
+  that GPU-written render targets (`1920x1080`, `960x540`, `1280x720`) also cover. Those images are live
+  (finalizing a texture removes its image from the engine), so this is most likely storage the game
+  shares between transient targets within a frame, not a stale object left behind (inferred from the
+  code, not traced on the device).
+- The `[RED] hybrid draws are not collected` line is not a rendering failure: it is the Vulkan stub of
+  a Metal-only statistic in `dm/gfx/vulkan/nvn_vk.c` (always zero).
+- Not yet tested: the double depth conversion above.
 
-Recommended next session:
+### Next device session (2026-11-04): step by step
 
-1. Inspect the current diff and keep the diagnostic evidence; do not commit yet:
-   `git diff -- dm/gfx/vulkan/engine/xbg_game.cpp HANDOFF.md`.
-2. Decide the lifetime model for `images`/`image_index`: a new NVN texture reusing guest pool storage
-   must not leave an old Vulkan image authoritative, but old Vulkan objects also cannot be destroyed
-   while referenced by an in-flight command buffer. A safe fix likely needs retirement after the slot
-   fence, plus removal from the address index, rather than only clearing `gpu_written`.
-3. Trace `slot_use`, `retire`, `forget_framebuffers` and image destruction before implementing that
-   lifecycle change. Add a focused test or log proving that the old alias leaves `image_index` only
-   after its GPU references retire.
-4. Rebuild/install with the existing command (game profile is mandatory):
-   `podman run --rm --userns=keep-id -v "$PWD:/workspace" -w /workspace localhost/dm-android-tools:1 gradle -p dm/android :app:assembleDebug -PdmGame=0100152000022000`
-   then install the APK. The device may require uninstalling `com.nxdroid` first because debug
-   signatures have conflicted; this preserves `/storage/emulated/0/nxdroid/game`, but verify before
-   doing it.
-5. After each user run, always capture and inspect the log before asking for another test:
-   `python3 scripts/android_gfx_ab.py gfx-read-preflight --clear --no-restart --wait 1 --shot /tmp/nxdroid-test/<name>.png --log /tmp/nxdroid-test/<name>.txt --game-dir /storage/emulated/0/nxdroid --adb /opt/platform-tools/adb`.
-   The script's logcat is cumulative; use timestamps/PID to distinguish the fresh run from stale lines.
+Everything here runs on the Linux machine that has `adb`, podman and the phone (S23 Ultra, USB
+debugging on). Commands run from the repository root. `ADB` below is the `adb` that machine used on
+2026-11-03, `/opt/platform-tools/adb` (§9 names `/tmp/opencode/platform-tools/adb`, an older path):
+pass it to the script with `--adb "$ADB"` when `adb` is not on `PATH`. Name every capture with the
+next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `19`; start at `20`).
+
+1. **Get the code and check it.** `git pull`, then `git log -1 --oneline`. The checkout must contain the
+   2026-11-04 changes: `grep -c alias_invalidate dm/gfx/vulkan/engine/xbg_game.cpp` prints a number
+   above 0, and `grep -c DEPTH_REWRITE scripts/prepare_game_android.py` too. CI must be green for that
+   commit (both jobs of `tests.yml`).
+2. **Build the APK** (the game profile is mandatory):
+   ```sh
+   podman run --rm --userns=keep-id -v "$PWD:/workspace" -w /workspace localhost/dm-android-tools:1 \
+       gradle -p dm/android :app:assembleDebug -PdmGame=0100152000022000
+   ```
+   It writes `dm/android/app/build/outputs/apk/debug/app-debug.apk`.
+3. **Install it:** `"$ADB" install -r dm/android/app/build/outputs/apk/debug/app-debug.apk`. If it fails
+   with a signature conflict (it did on 2026-11-03), `"$ADB" uninstall com.nxdroid` first. Uninstalling
+   deletes the app's private data, the saves in `/data/user/0/com.nxdroid/files/save` among them, but
+   not `/storage/emulated/0/nxdroid/`: check afterwards that `"$ADB" shell ls /storage/emulated/0/nxdroid/game`
+   still lists `main`, `romfs.img` and the `.xgs` bundles. Record the installed commit in the test record.
+4. **Prepare the session:**
+   ```sh
+   "$ADB" logcat -G 16M
+   python3 scripts/android_gfx_ab.py --adb "$ADB" --clear-all --no-restart
+   python3 scripts/android_gfx_ab.py --adb "$ADB" --list      # "the engine reads markers from /storage/emulated/0/nxdroid", nothing else
+   ```
+   Do **not** pass `--game-dir /storage/emulated/0/nxdroid` any more: the 2026-11-03 session needed it
+   with the first version of the script; the script now takes the game folder (default
+   `/storage/emulated/0/nxdroid/game`) and finds the marker folder itself, and the parent of
+   `/storage/emulated/0/nxdroid` would be the wrong folder.
+5. **Run 20, the new APK's baseline, no marker** (the pool-alias experiments are now off, so this can
+   differ from the 2026-11-03 baseline):
+   ```sh
+   "$ADB" logcat -c
+   "$ADB" shell am force-stop com.nxdroid && "$ADB" shell am start -n com.nxdroid/.MainActivity
+   ```
+   In the app press **START GAME** (the automated restart stops at the launcher), start a race on
+   **Mario Kart Stadium**, keep racing about a minute, then:
+   ```sh
+   "$ADB" exec-out screencap -p > /tmp/nxdroid-test/20_base_0411.png
+   "$ADB" logcat -d -s dm > /tmp/nxdroid-test/20_base_0411.txt
+   ```
+6. **Run 21, the depth test** (the bundles on the phone still carry the rewrite, so this marker leaves
+   one conversion, the shaders'):
+   ```sh
+   python3 scripts/android_gfx_ab.py --adb "$ADB" gfx-depth-clip --off --wait 120 \
+       --shot /tmp/nxdroid-test/21_depthclip_off.png --log /tmp/nxdroid-test/21_depthclip_off.txt
+   ```
+   Within the 120 s: press START GAME and race. Then
+   `python3 scripts/android_gfx_ab.py --adb "$ADB" gfx-depth-clip --clear --no-restart`.
+7. **Check the logs of runs 20 and 21 before anything else** (`grep` each file):
+   - `NVN depth clip control (VK_EXT_depth_clip_control)=1`: the device has the extension.
+   - `NVN depth mode near=-w (GL) kept by the game: active via VK_EXT_depth_clip_control`: MK8DX keeps
+     the GL mode, so the engine converts. Its absence means the game sets near = 0: then the engine
+     never converted, and the shaders' rewrite alone was the wrong one; go to step 8 regardless.
+   - `NVN depth clip marker off=0` in run 20 and `=1` in run 21: the marker was read.
+   - `NVN pool-alias invalidation experiment=0` in both.
+   - `[YELLOW] Preserving GPU-written image`, every `[RED]`, `NVN PERF` (fps, `gpu_ms`,
+     `submit_cpu_ms`), `Swapchain`.
+8. **Run 22, the packing without the rewrite** (do it when run 21 looks right, and also when the game
+   turned out to set near = 0 in step 7): prepare the game again with the current script and push it.
+   ```sh
+   python3 scripts/prepare_game_android.py <base game .nsp or .xci> --title-id 0100152000022000 \
+       [-u <update .nsp>] [-k <prod.keys>] --push
+   ```
+   Same input, keys and tools as the last preparation (it needs `hactool`, `prod.keys`, `capstone` in
+   its Python and `dotnet` or podman for `dmsh_xlate`). Its log must say `Shader bundles were built with
+   other settings than 'depth_rewrite=0': rebuilding them`, and `"$ADB" shell cat
+   /storage/emulated/0/nxdroid/game/xgs_build.txt` must print `depth_rewrite=0`. Then, with no marker
+   (`--list` empty), race again as in step 5 and save `22_norewrite.png` / `.txt`. Run 22 must look
+   like run 21.
+9. **Optional, only if runs 20 to 22 all stay wrong:** run 23 with `gfx-alias-invalidate --on` (the
+   2026-11-03 experiments) to check whether they change anything; clear it afterwards.
+10. **Bring back** every `.png` and `.txt` of runs 20 to 23, one line per run saying how the 3D scene
+    looked (same as the 2026-11-03 baseline, better, correct, worse) and anything else seen (crash,
+    hang, stutter; after a crash also `"$ADB" logcat -d -b crash > /tmp/nxdroid-test/<n>_crash.txt`),
+    and append the results to the test record in §8 item 12 step 9, one bullet per run, with the
+    installed commit, the marker, the visual result and the log lines of step 7.
+11. **What the results mean:** run 21 or 22 right → the double conversion was the cause; keep the new
+    packing default, drop the marker, record it in `docs/reference/android.md` (Symptom, Cause, Fix,
+    Found on) and in the MK8DX note, and run `python3 dm/tools/docs_symptoms.py`. Runs 21 and 22 wrong
+    → it was not the cause (keep the new default anyway: one conversion is right in every mode); the
+    next suspects are the shader translation of the 3D passes and the depth / render-target formats,
+    to be traced from the log of run 20.
 
 ### Device fixes and measurements (Sprint 6)
 
@@ -170,9 +233,11 @@ Recommended next session:
    **Unverified:** which build and which defaults the 53.67 fps run had is not recorded, and
    `android.md` still says the defaults are not measured. Re-measure with §8 item 12 step 2.
 
-### Device test session: what to run, and what to bring back
+### Device test session of 2026-11-03 (done): how the A/B runs are made
 
-The next step needs the phone; everything above it is code read, not measured. One session, on a
+**Done on 2026-11-03; the results are in §8 item 12 step 9 and the next session is above.** Kept as the
+reference for an A/B session; use the script's current behaviour (it finds the marker folder itself) and
+`--clear-all --no-restart` before a baseline. One session, on a
 machine with `adb` and the phone connected (USB debugging on), with the APK built from current `main`
 installed (§5) and Mario Kart 8 Deluxe prepared in `/storage/emulated/0/nxdroid/game`. Each run below
 is one race start on **Mario Kart Stadium**, the track of the 2026-11-03 screenshots, held for about a
@@ -590,7 +655,9 @@ Current counts:
        turn that switch off; `gfx-noload` (proven full-overwrite first draws skip the attachment load)
        takes the same `0`. A marker wins over the environment. The full marker list is the `gfx-*`
        names in `xbg_game.cpp` and `vulkan_present.cpp` (`gfx-depth-clip`, `gfx-present-native`,
-       `gfx-present-overlap`, `gfx-present-timing` among them).
+       `gfx-present-overlap`, `gfx-present-timing` among them). Two take `1` to turn a diagnostic on:
+       `gfx-read-preflight` (the engine's default, which the app turns off) and `gfx-alias-invalidate`
+       (the 2026-11-03 pool-alias experiments, off by default since 2026-11-04).
     5. `scripts/android_gfx_ab.py` does step 4 over `adb`: it writes the marker (`--off` / `--on`),
        reads it back, force-stops and starts `com.nxdroid` (`--no-restart` to skip), and after `--wait`
        seconds (45 by default; start the race by hand meanwhile) saves `--shot <png>` and `--log <txt>`
@@ -660,7 +727,7 @@ Current counts:
        `gfx-read-preflight` on, `gfx-tex-dirty` off, then the rest; and grep the log for the `[YELLOW]` line
        above.
 
-    **Interactive test record (2026-11-03):**
+    9. **Device test record (2026-11-03 onwards; append each new run at the end, one bullet per run):**
 
     - **Build provenance:** the APK previously running on the device was built from an older
       revision, not from the current checkout. Therefore its baseline log is retained only as an
@@ -873,8 +940,10 @@ Current counts:
       value. All markers in both `/storage/emulated/0/nxdroid/` and its `game/` directory were removed
       afterward. Future `--clear-all` calls must use `--no-restart`, then the test marker must be the
       only file present; the clean baseline must be repeated.
-    - A/B runs: pending. Results will be added here one at a time, including the marker, build, visual
-      result, relevant log lines and whether the run crashed, hung or stuttered.
+    - (The A/B runs of 2026-11-03 are recorded above, out of order: the clean baseline and the ten
+      single-switch runs, then the alias tracing, runs 12 to 19. Next: runs 20 onwards of the 2026-11-04
+      session, "Next device session" near the top. Each bullet: run number, installed commit, the
+      marker, the visual result, the step 7 log lines, and whether the run crashed, hung or stuttered.)
 
 ## 9. How to work in this tree
 
@@ -886,7 +955,8 @@ Current counts:
 - On the Linux machine podman is rootless and docker's daemon is down. The local image
   `localhost/dm-android-tools:1` is derived from `dm/android/docker/Dockerfile` by
   `/tmp/opencode/Dockerfile.tools`, which only adds `make`, `git` and `file`.
-- `adb` comes from `/tmp/opencode/platform-tools/adb`, not from the image. If the phone refuses the
+- `adb` is not in the image: on the Linux machine it was `/tmp/opencode/platform-tools/adb` (Sprints 1–6)
+  and `/opt/platform-tools/adb` in the 2026-11-03 session; `scripts/android_gfx_ab.py --adb <path>` takes it. If the phone refuses the
   authorization, revoke USB debugging authorizations and re-accept on the device.
 - `xbg_game_initialize` needs neither guest memory nor a shader bundle, so the smoke harness can
   initialize and shut down the engine on any desktop Vulkan driver. A missing shader is fatal through
