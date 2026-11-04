@@ -44,11 +44,34 @@ measured). The one title run so far is **Mario Kart 8 Deluxe** (`010015200002200
 
 ### Resume from the 2026-11-03 graphics investigation
 
-The current working tree is intentionally dirty and has **not** been committed. It contains the
-diagnostic edits in `dm/gfx/vulkan/engine/xbg_game.cpp` and the test record below. The latest APK was
-compiled from this tree and installed on the authorized S23 Ultra; the game data stayed on the device.
-The latest capture is `/tmp/nxdroid-test/19_pool_reuse_fix.png` and its validated log is
-`/tmp/nxdroid-test/19_pool_reuse_fix.txt`.
+The diagnostic edits in `dm/gfx/vulkan/engine/xbg_game.cpp` and the test record below were committed in
+`89dc2dc` (the pool-reuse invalidation and the `copy-upload-color` branch are experiments, not fixes).
+That commit left the vendor row of `xbg_game.cpp` and `opcode_map.txt` stale, so CI's `android-gates`
+failed on it; both were brought up to date afterwards. **Any edit to `xbg_game.cpp` needs both:** the
+row's LF sha256 in `dm/tools/android_vendor.tsv` (by hand, §10) and `CC=gcc python3
+dm/gfx/vk/engine_smoke/opcode_map.py` (it cites the file's line numbers). The latest APK was built from
+`89dc2dc`'s tree and installed on the S23 Ultra; the captures and logs are in `/tmp/nxdroid-test/` on
+the Linux machine (latest: `19_pool_reuse_fix.png` / `.txt`).
+
+**Next device test, first (2026-11-04): the depth convention is converted twice.**
+`scripts/prepare_game_android.py` `_rewrite_depth` writes GL's clip-space z (near = -w) as `[0, w]` into
+every vertex shader it packs. The engine, when the game keeps NVN's GL depth mode, also chains
+`VK_EXT_depth_clip_control` with `negativeOneToOne` (`xbg_game.cpp` `draw()`, `!game_depth_zero`;
+`nvn_vk.c` logs `NVN depth mode near=-w (GL) kept by the game: active via VK_EXT_depth_clip_control`),
+which converts the already converted z again: depth becomes `z_ndc / 4 + 0.75` instead of
+`z_ndc / 2 + 0.5`. Visibility order barely changes, but depth precision halves (z-fighting: the road
+speckle) and every pass that rebuilds a position from depth (deferred lighting, shadows, fog, ambient
+occlusion) reads a wrong position (posterized light, black holes). Sprint 6's fix e) only avoids the
+double conversion when the marker `gfx-depth-clip` holds `0`; that marker was among the stale ones
+removed before the clean baseline, which would explain why the race scene looked "resolved" during
+Sprint 6 and broken in every clean run. Not measured. The test: `python3 scripts/android_gfx_ab.py
+gfx-depth-clip --off` (the script now finds the engine's marker folder, §8 item 12 step 5), one race,
+screenshot and log; and grep the earlier logs for `depth mode` and `depth clip`. If it fixes the picture,
+the root fix is to convert once, by the game's runtime depth mode: drop `_rewrite_depth` from the
+prepare script (it cannot know the runtime mode; a game that sets near = 0 gets a wrong conversion
+from it) and keep the engine's `negativeOneToOne`, which follows `nvnDeviceSetDepthMode`; then prepare
+the game again with `--rebuild-shaders`. A device without `VK_EXT_depth_clip_control` would need the
+conversion done by the engine at shader load, keyed by the mode, not at packing.
 
 What is established:
 
@@ -551,10 +574,13 @@ Current counts:
        reads it back, force-stops and starts `com.nxdroid` (`--no-restart` to skip), and after `--wait`
        seconds (45 by default; start the race by hand meanwhile) saves `--shot <png>` and `--log <txt>`
        (`logcat -d -s dm`); `--clear`, `--clear-all` and `--list` manage the markers; `-s` picks a
-       device. It assumes the game folder is `/storage/emulated/0/nxdroid/game` (`MainActivity`'s
-       default and `prepare_game_android.py`'s `--device-dir`); `--game-dir` otherwise, for a folder
-       picked in the launcher (a game without `shaders/` reads its markers from the folder's parent,
-       step 4). Syntax-checked only: no `adb` or device on the machine it was written on.
+       device. `--game-dir` is the folder with `main` (default `/storage/emulated/0/nxdroid/game`,
+       `MainActivity`'s default and `prepare_game_android.py`'s `--device-dir`); the script writes the
+       marker where the engine reads it, which for a prepared game (no `shaders/` subfolder, the `.xgs`
+       next to `main`) is the game folder's **parent**, `/storage/emulated/0/nxdroid/` (the first
+       version wrote into the game folder, and that run was not applied). `--list` shows the markers of
+       both folders and marks the ones the engine does not read as stale; `--clear-all` clears both.
+       Used on the device on 2026-11-03 for the A/B session below.
     6. **The 3D picture (Status) and what to A/B first.** The screenshots (taken before 3b) show wrong
        data in the 3D chain's intermediate targets, not a gamma or swapchain fault (those darken or wash
        out a smooth picture), so 3b is unlikely to fix it. Read, no fault found: `xbg_spirv_temps.cpp`

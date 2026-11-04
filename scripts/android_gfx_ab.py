@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """A/B one engine switch on the device without rebuilding.
 
-The Vulkan engine reads marker files named gfx-<switch> from the game folder (the folder with `main` and `shaders/`):
-a marker whose first character is 0 turns that switch off, anything else turns it on, and a marker wins over the
-environment the app sets. This script writes or removes a marker, restarts the app, and can save a screenshot and the
+The Vulkan engine reads marker files named gfx-<switch> from the parent of the shader directory MainActivity passes:
+the game folder (the one with `main`) when it has a `shaders/` subfolder, otherwise the game folder's parent, which is
+the case for a folder prepare_game_android.py writes (its `.xgs` bundles sit next to `main`). The script finds which one
+on the device. A marker whose first character is 0 turns that switch off, anything else turns it on, and a marker wins
+over the environment the app sets. This script writes or removes a marker, restarts the app, and can save a screenshot and the
 `dm` log so two runs can be compared.
 
 Examples:
@@ -38,6 +40,13 @@ def adb(args, adb_path, serial) -> str:
     return adb_bytes(args, adb_path, serial).decode(errors="replace")
 
 
+def marker_dir(game_dir, adb_path, serial) -> str:
+    """the folder the engine reads markers from: the parent of the shader directory (`<game>/shaders`, else `<game>` itself)"""
+    cmd = [adb_path] + (["-s", serial] if serial else []) + ["shell", "test -d %s/shaders" % game_dir]
+    has_shaders = subprocess.run(cmd, capture_output=True).returncode == 0
+    return game_dir if has_shaders else game_dir.rsplit("/", 1)[0]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("marker", nargs="?", help="marker name, for example gfx-noload (see gfx-* in xbg_game.cpp)")
@@ -56,20 +65,25 @@ def main():
     ap.add_argument("--log", help="save `logcat -d -s dm` to this path after --wait seconds")
     a = ap.parse_args()
 
-    gd = a.game_dir.rstrip("/")
+    game = a.game_dir.rstrip("/")
+    gd = marker_dir(game, a.adb, a.serial)
+    both = [gd] + [d for d in (game, game.rsplit("/", 1)[0]) if d != gd]   # the one the engine reads first
     if a.list:
-        out = adb(["shell", "ls", gd], a.adb, a.serial)
-        for name in out.split():
-            if name.startswith("gfx-"):
-                val = adb(["shell", "head", "-c", "8", "%s/%s" % (gd, name)], a.adb, a.serial).strip()
-                print("%s = %r" % (name, val))
+        print("the engine reads markers from", gd)
+        for d in both:
+            out = adb(["shell", "ls %s 2>/dev/null; true" % d], a.adb, a.serial)
+            for name in out.split():
+                if name.startswith("gfx-"):
+                    val = adb(["shell", "head", "-c", "8", "%s/%s" % (d, name)], a.adb, a.serial).strip()
+                    print("%s/%s = %r%s" % (d, name, val, "" if d == gd else "   (not read: stale)"))
         return 0
     if not a.marker and not a.clear_all:
         ap.error("give a marker name (or --list / --clear-all)")
 
     if a.clear_all:
-        adb(["shell", "rm -f %s/gfx-*" % gd], a.adb, a.serial)
-        print("removed every gfx-* marker in", gd)
+        for d in both:
+            adb(["shell", "rm -f %s/gfx-*" % d], a.adb, a.serial)
+        print("removed every gfx-* marker in", " and ".join(both))
     elif a.clear:
         adb(["shell", "rm", "-f", "%s/%s" % (gd, a.marker)], a.adb, a.serial)
         print("removed", a.marker)
