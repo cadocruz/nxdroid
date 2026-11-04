@@ -6,6 +6,16 @@ The 4.0.1 build has the same `subsdk0` and `sdk` build IDs as 4.0.0 and a differ
 
 Brought up on the Mac from 4.0.0: boot, the title with its demo race, the Mii pick, the menus (their movie previews play), a 50cc Grand Prix race at Mario Kart Stadium to its results, and a second boot that loads the save. 60 fps (p50 16.7 ms), sound; about 2.4 GB resident and 1.26 GB of Metal allocations in the race, flat over minutes.
 
+## Android (S23 Ultra)
+
+The Mac and iPhone results above are nxnative's. On Android this is the one game run so far, on a Samsung Galaxy S23 Ultra (Adreno 740, Android 16) with update 4.0.1, prepared by `scripts/prepare_game_android.py` and started from the app (`com.nxdroid`); the state of the port and every run are in [HANDOFF.md](../../../HANDOFF.md) (Status, "Next device session", §8 item 12).
+
+- **Current:** it boots, plays its menus and their H.264 previews (`AMediaCodec`), has sound (AAudio) and races. The 2D interface and the videos are right. **The 3D scene is wrong**: posterized colours, dense yellow / black / white speckle on the road, black holes, hard white edges on buildings (screenshots of Mario Kart Stadium, 2026-11-03). In the clean 2026-11-03 runs the race ran at roughly 16–29 fps (`gpu_ms` about 17–28, `submit_cpu_ms` 12–30); menus reached 60. An earlier, unrecorded build reported 53.67 fps.
+- **Ruled out on the device (2026-11-03), one marker at a time from a clean state:** `gfx-noload`, `gfx-read-preflight`, `gfx-tex-dirty`, `gfx-wb-skip`, `gfx-upload-prologue`, `gfx-vcache`, `gfx-pipe-memo`, `gfx-native-bc`, `gfx-forward-temps`, `gfx-ldc-fold` (no change to the picture; `gfx-read-preflight` on cost about 50–74 ms of submit time a frame). The swapchain is sRGB (`format=43 source_srgb=1`).
+- **Found while tracing:** `CopyBufferToTexture` writes small dynamic textures (`512x608` format `0x1`, `256x304` format `0xd`) into pool ranges that GPU-written render targets (`1920x1080` format `0x3d`, `960x540` format `0x25`, `1280x720`) also cover; the engine's experiments that re-uploaded those targets did not fix the picture and are off by default (`gfx-alias-invalidate`).
+- **Next, not yet tested:** depth converted twice (the packing's vertex-shader rewrite plus the engine's `VK_EXT_depth_clip_control`): the device test is `gfx-depth-clip` = `0`, then a re-pack without the rewrite (HANDOFF, "Next device session").
+- The `[RED] … hybrid draws are not collected` line in its log is a Metal-only statistic the Vulkan replay does not collect, not a rendering fault.
+
 ## What it needs
 
 | Setting | Where | Why |
@@ -74,4 +84,5 @@ General host changes first needed here; each applies to every game:
 
 ## Open
 
-- Mii heads draw nothing: the host ships no MiiModel firmware data (the player README notes "no Mii heads").
+- Mii heads draw nothing: the host ships no MiiModel firmware data (the player README notes "no Mii heads"). On Android, `prepare_game_android.py` can import the MiiModel system data from an emulator's NAND; whether heads then draw is not recorded.
+- Android: the 3D scene is wrong (see [Android](#android-s23-ultra)).

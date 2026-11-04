@@ -118,7 +118,8 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
 
 1. **Get the code and check it.** `git pull`, then `git log -1 --oneline`. The checkout must contain the
    2026-11-04 changes: `grep -c alias_invalidate dm/gfx/vulkan/engine/xbg_game.cpp` prints a number
-   above 0, and `grep -c DEPTH_REWRITE scripts/prepare_game_android.py` too. CI must be green for that
+   above 0, and `grep -c DEPTH_REWRITE scripts/prepare_game_android.py` and
+   `grep -c "one texture at two colour slots" dm/gfx/vulkan/engine/xbg_game.cpp` too. CI must be green for that
    commit (both jobs of `tests.yml`).
 2. **Build the APK** (the game profile is mandatory):
    ```sh
@@ -168,6 +169,9 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
      never converted, and the shaders' rewrite alone was the wrong one; go to step 8 regardless.
    - `NVN depth clip marker off=0` in run 20 and `=1` in run 21: the marker was read.
    - `NVN pool-alias invalidation experiment=0` in both.
+   - `[RED] NVN one texture at two colour slots` and `[RED] NVN stencil-mode texture read as depth`
+     (diagnostics added on 2026-11-04, the first five of each): either one present makes it suspect 1 or 2
+     of "If the depth test does not fix it" below. Copy them into the test record.
    - `[YELLOW] Preserving GPU-written image`, every `[RED]`, `NVN PERF` (fps, `gpu_ms`,
      `submit_cpu_ms`), `Swapchain`.
 8. **Run 22, the packing without the rewrite** (do it when run 21 looks right, and also when the game
@@ -198,9 +202,46 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
 11. **What the results mean:** run 21 or 22 right → the double conversion was the cause; keep the new
     packing default, drop the marker, record it in `docs/reference/android.md` (Symptom, Cause, Fix,
     Found on) and in the MK8DX note, and run `python3 dm/tools/docs_symptoms.py`. Runs 21 and 22 wrong
-    → it was not the cause (keep the new default anyway: one conversion is right in every mode); the
-    next suspects are the shader translation of the 3D passes and the depth / render-target formats,
-    to be traced from the log of run 20.
+    → it was not the cause (keep the new default anyway: one conversion is right in every mode); go on
+    with "If the depth test does not fix it" below.
+
+### If the depth test does not fix it: the next suspects (2026-11-04, read, not measured)
+
+A review of how NVN formats reach Vulkan, against `nvn_mtl.m` (the replay that ran these games right),
+found **no wrong format** on Mario Kart 8 Deluxe's path: `0x1` R8, `0xd` RG8, `0x25` RGBA8, `0x29`
+RGBA16F, `0x3d` RGB10A2 (`A2B10G10R10_UNORM_PACK32`, red in the low bits), `0x3f` R11G11B10F, the depth
+formats (D24 kept as D24, closer to the Switch than Metal's D32F) and the BC table all match; views take
+another format only when the game asks, at the same size; clears and blend states map one to one. It
+found Metal-only fixes the Vulkan engine does not have, ranked:
+
+1. **One texture at two colour slots** (verified by reading). `nvn_mtl.m` attaches the same level /
+   layer only once (`rt_dup_slot`, ~3159): Breath of the Wild's G-buffer passes attach a buffer twice
+   with the second slot's write mask 0, and on Apple's tiling GPU the copy stored later (loaded, never
+   written) overwrote the drawn one and blacked out the whole 3D picture. Mario Kart 8 Deluxe runs on the
+   same Nintendo engine family (sead / agl), and Adreno also renders in tiles. The Vulkan engine attaches
+   both (`xbg_game.cpp`, the attachment loop after `targets[]` is filled). The log line
+   `[RED] NVN one texture at two colour slots` says whether the game does it (with both slots' write
+   masks). Fix if it does: attach a repeated level / layer once and leave the later slot unused
+   (`VK_ATTACHMENT_UNUSED`), as Metal does, and say in red when the dropped slot has a non-zero mask.
+2. **Stencil-mode textures read as depth** (verified by reading). The writer records
+   `nvnTextureViewSetDepthStencilMode` / `nvnTextureBuilderSetDepthStencilMode` (`view_t.dsmode`,
+   `tex_t.stencil`), and `nvn_mtl.m` binds a stencil-only view (~4137; reading depth instead striped
+   Pokémon Legends: Z-A's lit picture); nothing in `dm/gfx/vulkan` reads it, so a deferred lighting pass
+   that tests stencil bits tests bits of the depth value instead (speckle, holes, hard edges). The log
+   line `[RED] NVN stencil-mode texture read as depth` says whether the game does it. A fix is more than
+   an aspect flag: a stencil view returns integers, and the translated shader declares a float texture
+   (Metal hands the raw bits through; the Vulkan equivalent needs a check of what the SPIR-V declares).
+3. **Shadow samplers not matched to the shader** (inferred). `compareEnable` comes only from the NVN
+   sampler (`xbg_sampler.cpp`), never checked against the binding's shadow flag (`b.flags` bit 14);
+   Vulkan leaves a compare sampler on a plain fetch (and the reverse) undefined, where Metal ignored the
+   compare function. Could give hard black / white edges. Not logged yet.
+4. Lower likelihood here: alpha forced to 1 only for formats `0x37` and `0x6d` (not `0x6e`-`0x70`, `0x99`,
+   `0x9b`), and the game's swizzle not composed with the format's as Metal does (~4127); 16-bit packed
+   formats that disagree with Metal (`0x3a` / `0x96` RGB5 mapped to R5G6B5, `0x3b` / `0x3c` red and blue
+   swapped, `0x98` A1BGR5 as A1R5G5B5; mostly 2D); min / max sampler reduction dropped by
+   `xbg_sampler_from_nvn` (an SDK this old probably does not use it).
+
+The two `[RED]` lines are in the APK of this session's commit, so run 20's log already answers 1 and 2.
 
 ### Device fixes and measurements (Sprint 6)
 
