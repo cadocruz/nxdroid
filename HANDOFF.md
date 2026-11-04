@@ -101,12 +101,10 @@ What is established:
 - The `[RED] hybrid draws are not collected` line is not a rendering failure: it is the Vulkan stub of
   a Metal-only statistic in `dm/gfx/vulkan/nvn_vk.c` (always zero).
 - Not yet tested: the double depth conversion above.
-- Open in `scripts/prepare_game_android.py`: the RomFS shader scan only reads files under fixed folders
-  and extensions written for Mario Kart 8 Deluxe (`/Course/`, `/RaceCommon/`, `/Kart/`, `/Driver/`,
-  `.bfres`, `.bfsha` and others, in `extract_and_build_shaders`) plus the files the profile's shader map
-  names. A shader elsewhere is never found, for MK8DX too, and the list is a game-specific rule in a
-  general script (`AGENTS.md`); it should come from the profile, or the scan should cover every asset
-  file the shader splitter recognizes. Not changed.
+- Fixed on 2026-11-04, not run yet: `scripts/prepare_game_android.py`'s RomFS shader scan read only
+  files under folders and extensions written for Mario Kart 8 Deluxe (`/Course/`, `/Kart/`, `.bfres`, …),
+  a game-specific rule in a general script that never found a shader elsewhere; it now scans every
+  RomFS file, as `shader_split.py`'s own main does (the profile's `shader_groups` only name groups).
 
 ### Next device session (2026-11-04): step by step
 
@@ -169,9 +167,21 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
      never converted, and the shaders' rewrite alone was the wrong one; go to step 8 regardless.
    - `NVN depth clip marker off=0` in run 20 and `=1` in run 21: the marker was read.
    - `NVN pool-alias invalidation experiment=0` in both.
-   - `[RED] NVN one texture at two colour slots` and `[RED] NVN stencil-mode texture read as depth`
-     (diagnostics added on 2026-11-04, the first five of each): either one present makes it suspect 1 or 2
-     of "If the depth test does not fix it" below. Copy them into the test record.
+   - `[RED] NVN one texture at two colour slots`, `[RED] NVN stencil-mode texture read as depth` and
+     `[RED] NVN sampler compare mode does not match the shader` (diagnostics added on 2026-11-04, the
+     first five of each): each present makes it suspect 1, 2 or 3 of "If the depth test does not fix it"
+     below. Copy them into the test record. `NVN repeated colour slots attached once=0` must be there too
+     (the marker of step 7b, off).
+7b. **Run 21b, only if run 20's log has `[RED] NVN one texture at two colour slots`:** the fix is in the
+   APK behind a marker. With no other marker set:
+   ```sh
+   python3 scripts/android_gfx_ab.py --adb "$ADB" gfx-rt-dedupe --on --wait 120        --shot /tmp/nxdroid-test/21b_rt_dedupe.png --log /tmp/nxdroid-test/21b_rt_dedupe.txt
+   python3 scripts/android_gfx_ab.py --adb "$ADB" gfx-rt-dedupe --clear --no-restart
+   ```
+   Its log must say `NVN repeated colour slots attached once=1`; a `[RED] NVN colour slot … repeats slot …
+   with write mask …` line means a dropped slot really had writes. If 21b fixes the picture, try it once
+   more together with the depth marker (`gfx-depth-clip --off` and `gfx-rt-dedupe --on`, both set) to
+   see whether both faults were present.
    - `[YELLOW] Preserving GPU-written image`, every `[RED]`, `NVN PERF` (fps, `gpu_ms`,
      `submit_cpu_ms`), `Swapchain`.
 8. **Run 22, the packing without the rewrite** (do it when run 21 looks right, and also when the game
@@ -181,7 +191,10 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
        [-u <update .nsp>] [-k <prod.keys>] --push
    ```
    Same input, keys and tools as the last preparation (it needs `hactool`, `prod.keys`, `capstone` in
-   its Python and `dotnet` or podman for `dmsh_xlate`). Its log must say `Shader bundles were built with
+   its Python and `dotnet` or podman for `dmsh_xlate`). Since 2026-11-04 it scans **every** RomFS file
+   for shaders (before: only Mario Kart's folders and a few extensions), so the scan takes longer and may
+   find shaders the earlier packs missed: record its `Total unique shaders identified: N` and compare it
+   with the earlier preparation's count if that log still exists. Its log must say `Shader bundles were built with
    other settings than 'depth_rewrite=0': rebuilding them`, and `"$ADB" shell cat
    /storage/emulated/0/nxdroid/game/xgs_build.txt` must print `depth_rewrite=0`. Read the end of its
    shader section too: since 2026-11-04 it counts what it loses instead of dropping it silently
@@ -223,6 +236,9 @@ found Metal-only fixes the Vulkan engine does not have, ranked:
    `[RED] NVN one texture at two colour slots` says whether the game does it (with both slots' write
    masks). Fix if it does: attach a repeated level / layer once and leave the later slot unused
    (`VK_ATTACHMENT_UNUSED`), as Metal does, and say in red when the dropped slot has a non-zero mask.
+   **Written on 2026-11-04, behind the marker `gfx-rt-dedupe` = `1`** (off by default until a device run
+   shows the case: step 7b of the next session). The render pass with the unused slot is another render
+   pass, so its pipelines never mix with the undeduplicated ones.
 2. **Stencil-mode textures read as depth** (verified by reading). The writer records
    `nvnTextureViewSetDepthStencilMode` / `nvnTextureBuilderSetDepthStencilMode` (`view_t.dsmode`,
    `tex_t.stencil`), and `nvn_mtl.m` binds a stencil-only view (~4137; reading depth instead striped
@@ -234,7 +250,9 @@ found Metal-only fixes the Vulkan engine does not have, ranked:
 3. **Shadow samplers not matched to the shader** (inferred). `compareEnable` comes only from the NVN
    sampler (`xbg_sampler.cpp`), never checked against the binding's shadow flag (`b.flags` bit 14);
    Vulkan leaves a compare sampler on a plain fetch (and the reverse) undefined, where Metal ignored the
-   compare function. Could give hard black / white edges. Not logged yet.
+   compare function. Could give hard black / white edges. Logged since 2026-11-04:
+   `[RED] NVN sampler compare mode does not match the shader` (that bit 14 marks a depth-compare sampler
+   is read from the null-texture code, which picks a depth format for it; not confirmed elsewhere).
 4. Lower likelihood here: alpha forced to 1 only for formats `0x37` and `0x6d` (not `0x6e`-`0x70`, `0x99`,
    `0x9b`), and the game's swizzle not composed with the format's as Metal does (~4127); 16-bit packed
    formats that disagree with Metal (`0x3a` / `0x96` RGB5 mapped to R5G6B5, `0x3b` / `0x3c` red and blue
@@ -710,7 +728,8 @@ Current counts:
        names in `xbg_game.cpp` and `vulkan_present.cpp` (`gfx-depth-clip`, `gfx-present-native`,
        `gfx-present-overlap`, `gfx-present-timing` among them). Two take `1` to turn a diagnostic on:
        `gfx-read-preflight` (the engine's default, which the app turns off) and `gfx-alias-invalidate`
-       (the 2026-11-03 pool-alias experiments, off by default since 2026-11-04).
+       (the 2026-11-03 pool-alias experiments, off by default since 2026-11-04), and `gfx-rt-dedupe`
+       (repeated colour slots attached once, 2026-11-04) takes `1` too.
     5. `scripts/android_gfx_ab.py` does step 4 over `adb`: it writes the marker (`--off` / `--on`),
        reads it back, force-stops and starts `com.nxdroid` (`--no-restart` to skip), and after `--wait`
        seconds (45 by default; start the race by hand meanwhile) saves `--shot <png>` and `--log <txt>`

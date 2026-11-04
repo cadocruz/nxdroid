@@ -392,6 +392,14 @@ bool depth_clip_marker_off=false;
 // geometry: a transient render target sharing its pool range within a frame would be refilled with bytes the GPU never wrote. The
 // log lines that found the aliasing stay on either way.
 bool alias_invalidate=false;
+// Marker gfx-rt-dedupe = '1' (off by default until a device run shows the case): a texture level / layer attached at more than one colour slot
+// is attached once, at the first; the later slot is VK_ATTACHMENT_UNUSED, so its writes are dropped, as nvn_mtl.m's rt_dup_slot does. Breath of
+// the Wild's G-buffer passes attach a buffer twice with the second slot's write mask 0; on a tiling GPU the copy stored later (loaded, never
+// written) overwrites the drawn one. A dropped slot with a non-zero write mask is said in red: those writes are really lost. The render pass
+// (and so its pipelines) differs from the undeduplicated one, so the two never mix.
+bool rt_dedupe=false;uint64_t rt_dedupes=0;
+static inline unsigned rt_level(const view_t *v){return v && v->set_levels?unsigned(v->base_level):0u;}
+static inline unsigned rt_layer(const view_t *v){return v && v->set_layers?unsigned(v->min_layer):0u;}
 extern "C" int xbg_game_set_depth_clip_control(VkBool32 enabled){
     depth_clip_control_supported=enabled!=VK_FALSE;
     xbg_logf("NVN depth clip control (VK_EXT_depth_clip_control)=%d",int(depth_clip_control_supported));
@@ -3269,7 +3277,12 @@ void descriptors_build(Descriptors &out,Commands &commands,bool compute){CPU_SCO
                             }else{
                                 static std::set<int> warned_s;if(warned_s.insert(sid).second)xbg_logf("[RED] Unregistered sampler id=%d: using default sampler",sid);
                                 parameters.ws=parameters.wt=parameters.wr=7;parameters.aniso=1;parameters.cmp_func=1;
-                            }}ii.sampler=sampler(parameters,im,im.view_format(registered.has_view?&registered.view:nullptr),((b.flags>>16)&3)!=0);if(capture.active)capture_log("SAMPLER st=%u binding=%u sid=%d samplerSlot=%u min=%u mag=%u wrap=%u/%u/%u lod=%g/%g bias=%g",st,b.binding,sid,b.sampler_slot,parameters.minf,parameters.magf,parameters.ws,parameters.wt,parameters.wr,parameters.lod_min,parameters.lod_max,parameters.lod_bias);}
+                            }}
+                            // Diagnostic: the shader's sampler is a depth-compare one (binding flag bit 14, which also picks a depth null texture) and the
+                            // NVN sampler's compare mode disagree. Vulkan leaves a compare sampler on a plain fetch, and a shadow fetch with compare off,
+                            // undefined; Metal ignored the compare function for a plain fetch, so the mismatch was harmless there. Logged, not changed.
+                            if(((b.flags>>14)&1)!=unsigned(parameters.cmp_mode!=0)){static unsigned n=0;if(n++<5)xbg_logf("[RED] NVN sampler compare mode does not match the shader: shadow=%u cmp_mode=%u cmp_func=%u shader=%s stage=%u slot=%u serial=%llu fmt=%#x",unsigned((b.flags>>14)&1),unsigned(parameters.cmp_mode),unsigned(parameters.cmp_func),shader.key.c_str(),ns,slot,(unsigned long long)texture.serial,texture.d.format);}
+                            ii.sampler=sampler(parameters,im,im.view_format(registered.has_view?&registered.view:nullptr),((b.flags>>16)&3)!=0);if(capture.active)capture_log("SAMPLER st=%u binding=%u sid=%d samplerSlot=%u min=%u mag=%u wrap=%u/%u/%u lod=%g/%g bias=%g",st,b.binding,sid,b.sampler_slot,parameters.minf,parameters.magf,parameters.ws,parameters.wt,parameters.wr,parameters.lod_min,parameters.lod_max,parameters.lod_bias);}
                     if(b.type==VK_DESCRIPTOR_TYPE_STORAGE_IMAGE){VkFormat viewed=im.view_format(registered.has_view?&registered.view:nullptr);if(!(im.usage&VK_IMAGE_USAGE_STORAGE_BIT))xbg_fatalf("NVN storage image without IMAGE flag serial=%llu format=%#x flags=%#x",(unsigned long long)texture.serial,texture.d.format,texture.d.flags);const VkFormatProperties &fp=format_properties(viewed);need(fp.optimalTilingFeatures&VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,"Format not usable as storage image");
                         if((b.flags&3) && format_feature_flags2){VkFormatProperties3 extra{VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3};VkFormatProperties2 all{VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};all.pNext=&extra;vkGetPhysicalDeviceFormatProperties2(cfg.physical,viewed,&all);if(b.flags&1)need(extra.optimalTilingFeatures&VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT,"Image format lacks formatless-write support");if(b.flags&2)need(extra.optimalTilingFeatures&VK_FORMAT_FEATURE_2_STORAGE_READ_WITHOUT_FORMAT_BIT,"Image format lacks formatless-read support");}
                         else if(b.flags&3){VkFormatProperties fp{};vkGetPhysicalDeviceFormatProperties(cfg.physical,viewed,&fp);bool listed=storage_without_format_listed(viewed) && (fp.optimalTilingFeatures&VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
@@ -3379,6 +3392,9 @@ bool create_pass(Pass &p,Commands &c,int clear_color=-1,bool clear_depth=false,b
     static std::vector<VkAttachmentDescription> descriptions;descriptions.clear();static std::vector<VkImageView> views;views.clear();   // not re-entrant: graphics thread
     static std::vector<VkAttachmentReference> colors;colors.assign(size_t(state.rt.n),{VK_ATTACHMENT_UNUSED,VK_IMAGE_LAYOUT_GENERAL});VkAttachmentReference depth{VK_ATTACHMENT_UNUSED,VK_IMAGE_LAYOUT_GENERAL};
     for(unsigned slot=0;slot<9;slot++)if(targets[slot]){
+        if(rt_dedupe && slot<8){int dup=-1;for(unsigned j=0;j<slot && dup<0;j++)if(targets[j] && targets[j]->serial==targets[slot]->serial && rt_level(selected[j])==rt_level(selected[slot]) && rt_layer(selected[j])==rt_layer(selected[slot]))dup=int(j);
+            if(dup>=0){unsigned mk=unsigned((state.mask.mask>>(4*slot))&15);if(mk){static unsigned n=0;if(n++<5)xbg_logf("[RED] NVN colour slot %u repeats slot %d (serial=%llu) with write mask %#x: attached once (gfx-rt-dedupe), its writes are lost",slot,dup,(unsigned long long)targets[slot]->serial,mk);}
+                ++rt_dedupes;continue;}}
         Image &im=get_image(targets[slot],false);const view_t *view=selected[slot];
         need((slot==8)==(im.aspects!=VK_IMAGE_ASPECT_COLOR_BIT),"Color/depth attachment role mismatches texture aspects");
         if(c.draw)prepare_attachment(im,c.command);else im.transition(c.command,VK_IMAGE_LAYOUT_GENERAL);VkAttachmentDescription a{};a.format=im.view_format(view);a.samples=im.samples;a.loadOp=VK_ATTACHMENT_LOAD_OP_LOAD;a.storeOp=VK_ATTACHMENT_STORE_OP_STORE;a.stencilLoadOp=VK_ATTACHMENT_LOAD_OP_LOAD;a.stencilStoreOp=VK_ATTACHMENT_STORE_OP_STORE;a.initialLayout=a.finalLayout=VK_IMAGE_LAYOUT_GENERAL;
@@ -4526,6 +4542,8 @@ extern "C" int xbg_game_initialize(const xbg_game_config *c,char *error,size_t b
       xbg_logf("NVN depth clip marker off=%d (marker gfx-depth-clip)",int(depth_clip_marker_off));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-alias-invalidate").c_str(),"rb");alias_invalidate=false;if(m){alias_invalidate=fgetc(m)=='1';fclose(m);}
       xbg_logf("NVN pool-alias invalidation experiment=%d (marker gfx-alias-invalidate)",int(alias_invalidate));}
+     {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-rt-dedupe").c_str(),"rb");rt_dedupe=false;if(m){rt_dedupe=fgetc(m)=='1';fclose(m);}
+      xbg_logf("NVN repeated colour slots attached once=%d (marker gfx-rt-dedupe)",int(rt_dedupe));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-read-preflight").c_str(),"rb");read_preflight=true;if(m){read_preflight=fgetc(m)!='0';fclose(m);}else if(const char *e=getenv("DM_GFX_READ_PREFLIGHT"))read_preflight=atoi(e)!=0;
       xbg_logf("NVN CPU reads resolved before each operation=%d (marker gfx-read-preflight)",int(read_preflight));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-sync-cache-save").c_str(),"rb");sync_cache_save=false;if(m){sync_cache_save=fgetc(m)=='1';fclose(m);}}

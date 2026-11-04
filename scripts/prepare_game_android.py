@@ -1035,8 +1035,9 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
             img = None
 
     if img:
-        targets = ("/Course/", "/RaceCommon/", "/UI/", "/Driver/", "/Kart/", "/Item/", "/Obj/", "/Effect/", "/Common/", "/UI3D/")
-        exts = (".ptcl", ".sharcb", ".sarc", ".szs", ".bfsha", ".bnsh", ".bfres")
+        # Every RomFS file is scanned, as dm/gfx/tools/shader_split.py's own main does (it walks the whole RomFS; the profile's
+        # shader_groups only name the groups). This used to keep only Mario Kart 8 Deluxe's folders and a few extensions
+        # (/Course/, /Kart/, .bfres, ...): a game-specific rule in a general script, and a shader in any other file was never found.
 
         def walk_tree(k, path=""):
             a, b, _, _, t, _ = img.entry(k)
@@ -1048,8 +1049,7 @@ def extract_and_build_shaders(title_id, exefs_dir, romfs_img, romfs_dir, out_dir
                     yield from walk_tree(child_k, subpath)
 
         for p, _ in walk_tree(0):
-            if any(p.startswith(t) for t in targets) or any(p.endswith(ext) for ext in exts):
-                romfs_files.add(p)
+            romfs_files.add(p)
 
         scan_items = []
         for rel in sorted(romfs_files):
