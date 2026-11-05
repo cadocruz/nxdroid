@@ -100,7 +100,13 @@ What is established:
   code, not traced on the device).
 - The `[RED] hybrid draws are not collected` line is not a rendering failure: it is the Vulkan stub of
   a Metal-only statistic in `dm/gfx/vulkan/nvn_vk.c` (always zero).
-- Not yet tested: the double depth conversion above.
+- **Depth-convention test completed (2026-11-04):** `gfx-depth-clip=0` was active in the correct
+  marker directory and the fresh log confirms `NVN depth clip marker off=1`,
+  `NVN depth clip control ...=1`, and `NVN depth mode near=-w (GL) kept by the game: active via
+  VK_EXT_depth_clip_control`. Capture: `/tmp/nxdroid-test/20_depth_clip_off.png`; log:
+  `/tmp/nxdroid-test/20_depth_clip_off.txt`. The screenshot remains severely corrupted, with black
+  regions, speckle and displaced geometry; this switch alone is **not the fix**. The run measured
+  approximately `27.59 fps`, `gpu_ms=12.62`, `submit_cpu_ms=14.69`. Do not repeat this exact test.
 - Fixed on 2026-11-04, not run yet: `scripts/prepare_game_android.py`'s RomFS shader scan read only
   files under folders and extensions written for Mario Kart 8 Deluxe (`/Course/`, `/Kart/`, `.bfres`, …),
   a game-specific rule in a general script that never found a shader elsewhere; it now scans every
@@ -1026,6 +1032,76 @@ Current counts:
       single-switch runs, then the alias tracing, runs 12 to 19. Next: runs 20 onwards of the 2026-11-04
       session, "Next device session" near the top. Each bullet: run number, installed commit, the
       marker, the visual result, the step 7 log lines, and whether the run crashed, hung or stuttered.)
+    - **Run 20, `gfx-depth-clip=0` (2026-11-04):** valid capture
+      `/tmp/nxdroid-test/20_depth_clip_off.png` and log
+      `/tmp/nxdroid-test/20_depth_clip_off.txt`. The marker was initially applied in the wrong
+      parent by an explicit `--game-dir`; that stale marker was removed, then the correct
+      `/storage/emulated/0/nxdroid/gfx-depth-clip=0` was tested. The log confirms
+      `NVN depth clip marker off=1`, `VK_EXT_depth_clip_control=1`, and GL near=-w active via
+      `negativeOneToOne`. The picture remained severely corrupted; approximately 27.59 FPS,
+      `gpu_ms=12.62`, `submit_cpu_ms=14.69`. Result: **not the fix**.
+    - **Preparation for run 22 (2026-11-04):** the correct update is
+      `/home/cado/Downloads/MK8/Mario Kart 8 Deluxe [0100152000022800][v1507328].nsp`, not the
+      0100152000023001 DLC. `nx_extract` merged it with the base XCI and reported title
+      `0100152000022000`, display version `4.0.1`, update title `0100152000022000`. The Android
+      preparation found `29,651` shaders, generated `29,642` `.xgs` bundles, and left 9 shaders
+      without a bundle; the missing list is under the temporary preparation work directory.
+      The normal large tar deployment failed with `tar: bad header`, so the validated output was
+      staged with direct `adb push`; the active device folder has `xgs_build.txt` with
+      `depth_rewrite=0` and `53,262` `.xgs` files. The previous device folder is retained as
+      `/storage/emulated/0/nxdroid/game_previous_depth_test` until this run is accepted.
+    - **Run 22, no marker and no shader depth rewrite (2026-11-04):** valid capture
+      `/tmp/nxdroid-test/22_norewrite.png` and log `/tmp/nxdroid-test/22_norewrite.txt`. The log
+      confirms `NVN depth clip marker off=0`, GL near=-w active through
+      `VK_EXT_depth_clip_control`, and shader loads with `rewrite=0`. The screenshot still has
+      severe black regions, speckling and displaced geometry; it is **not a fix**. Fresh race
+      samples ranged from 14.34 to 25.70 FPS (`gpu_ms` 14.79–21.51,
+      `submit_cpu_ms` 18.45–41.09). The run also shows the new `[RED] one texture at two colour
+      slots` diagnostic and the existing partial-write warnings; the hybrid statistic remains
+      only a Vulkan/Metal diagnostic.
+    - **Run 21b, `gfx-rt-dedupe=1` (2026-11-04):** valid capture
+      `/tmp/nxdroid-test/21b_rt_dedupe.png` and log `/tmp/nxdroid-test/21b_rt_dedupe.txt`.
+      The log confirms `NVN repeated colour slots attached once=1`; the duplicate is the
+      observed slot pair `3,4`, serial `60186`, format `0x3d`, mip/layer `0/0`, with masks
+      `0xf,0`. No non-zero-write dropped-slot warning appeared. The screenshot remains severely
+      corrupted, with black regions, speckling and displaced geometry, so matching the Metal
+      attachment behavior is **not the fix**. The run reached roughly 19.14--24.51 FPS
+      (`gpu_ms` 14.25--21.78, `submit_cpu_ms` 20.98--27.28) after startup, with no crash or
+      hang. The marker was cleared after capture.
+    - **Run 23, `gfx-alias-invalidate=1` (2026-11-04):** valid capture
+      `/tmp/nxdroid-test/23_alias_invalidate.png` and log
+      `/tmp/nxdroid-test/23_alias_invalidate.txt`. The log confirms
+      `NVN pool-alias invalidation experiment=1`; the same duplicate-colour diagnostic remains
+      (`slots=3,4`, masks `0xf,0`). Compared with run 22, the stadium geometry is more complete
+      and less displaced, but severe texture speckling, black regions and incorrect shading remain:
+      **partial improvement, not fixed**. Fresh samples ranged from 17.12 to 25.68 FPS
+      (`gpu_ms` 13.40--22.42, `submit_cpu_ms` 18.56--30.39), with one 6.41 FPS sample during
+      the heavy transition and no crash or hang. The marker was cleared after capture.
+    - **Run 24, alias invalidation default-on build (2026-11-04):** APK built from the working
+      tree and installed after replacing the differently signed package. Capture and log:
+      `/tmp/nxdroid-test/24_alias_default.png` and `.txt`. The collector inadvertently wrote
+      `gfx-alias-invalidate=0` while trying to remove the marker, so this run did **not** test
+      the default-on behavior. The log confirms the marker was read as `0`; disregard the earlier
+      conclusion that it confirmed five default-on alias invalidations. The image remains severely
+      corrupted. No crash or hang was found.
+    - **Run 25, `gfx-alias-invalidate=0` (2026-11-04):** capture and log
+      `/tmp/nxdroid-test/25_alias_disabled.png` and `.txt`. The marker was set to `0`; no
+      default-on invalidation message appeared. The screenshot remains severely corrupted and
+      looks broadly comparable to run 24; the single captures are at different race positions,
+      so they do not establish a visual improvement from the default-on change. Samples ranged
+      roughly 18.22--29.44 FPS (`gpu_ms` 12.33--21.41, `submit_cpu_ms` 14.15--28.52), not a
+      controlled performance comparison. No crash or hang was found. The `0` marker is still
+      set on the device and should be cleared before the next test.
+    - **Runtime render-target capture limitation (2026-11-04):** `DM_CTL` is started by
+      `hle_hid.c` only when `DM_CTL` names a file. Its `texdump` command calls
+      `dm_gfx_texdump_next` in `nvn_vk.c`; the Vulkan implementation delegates to
+      `xbg_game_capture_frame`, which rejects capture after any submission/draw/dispatch. Thus
+      `texdump` requested during an Android race logs `[RED]` and captures nothing. Vulkan's
+      `passdump` is also explicitly unimplemented. The current engine capture must be armed before
+      `nnMain`, so it cannot target a chosen race frame through the existing runtime control. Next
+      diagnostic step: add a reviewed runtime capture request that safely arms the next-present
+      frame, or another Android-accessible trigger; do not repeat a `DM_CTL texdump`/`passdump`
+      request expecting output until such support exists.
 
 ## 9. How to work in this tree
 

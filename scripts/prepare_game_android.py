@@ -1405,6 +1405,7 @@ def main():
     parser.add_argument("input", help="Extracted game directory, or .nsp / .xci file")
     parser.add_argument("-u", "--update", help="Update .nsp / .xci file (or auto-detected from folder)")
     parser.add_argument("-o", "--out", help="Output directory for prepared game (default: ./prepared_games/<name>)")
+    parser.add_argument("--work-dir", help="Temporary extraction/work directory (default: beside the input archive)")
     parser.add_argument("-k", "--keys", help="Path to prod.keys (default: auto-detected from emulator dirs)")
     parser.add_argument("--nand", help="Custom path to emulator NAND directory")
     parser.add_argument("--title-id", help="Explicit base title ID (e.g. 0100152000022000)")
@@ -1447,7 +1448,7 @@ def main():
         log(f"Update:  {update_file.name}")
     log(f"Output:  {out_dir}")
 
-    work_dir = (inp.parent if inp.is_file() else inp) / f"{game_stem}-work"
+    work_dir = Path(args.work_dir).resolve() if args.work_dir else (inp.parent if inp.is_file() else inp) / f"{game_stem}-work"
 
     # Case 1: Folder
     if inp.is_dir():
