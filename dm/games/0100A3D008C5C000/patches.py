@@ -12,4 +12,4 @@ CUTS = {
 }
 
 # Whether a general rule could replace these patches (dm/tools/docs_patches.py lists it in docs/agents/game-patches.md)
-GENERALIZE = "No: one constant of Trinity's own allocator call; the cause, an iPhone's address space, cannot be fixed in the host"
+GENERALIZE = "No: one constant of Trinity's own allocator call; the cause, the smaller address space of nxnative's iPhone host, cannot be fixed in the host"

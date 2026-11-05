@@ -397,6 +397,7 @@ bool alias_invalidate=true;
 // written) overwrites the drawn one. A dropped slot with a non-zero write mask is said in red: those writes are really lost. The render pass
 // (and so its pipelines) differs from the undeduplicated one, so the two never mix.
 bool rt_dedupe=false;uint64_t rt_dedupes=0;
+bool cpugpu_refresh=false;uint64_t cpugpu_refreshes=0;   // marker gfx-cpugpu-refresh, see the check after the CPU-coherent pool hashing in get_image_slow
 // Marker gfx-sampler-match = '1' (off by default until a device run shows a mismatch): the sampler's depth compare follows what the shader
 // declares (binding flag bit 14) instead of the NVN sampler's compare mode, where the two disagree. Vulkan leaves either mismatch undefined;
 // Maxwell compares in the texture instruction itself. A compare the NVN sampler did not enable takes its compare function when that is valid,
@@ -1851,8 +1852,18 @@ Image &get_image_slow(const tex_t *t,bool upload){CPU_SCOPE(Image);
             uint64_t stamp=0;if(track){nvn_dirty_protect(t->mem,t->L.size);stamp=nvn_dirty_now();}
             uint64_t hash=hash_memory(t->mem,t->L.size);if(hash!=im.cpu_hash){im.uploaded=false;im.stable_checks=0;}else{++im.stable_checks;if(track){im.dirty_stamp=im.dirty_seen=stamp;++tex_dirty_tracked;}}}
         im.checked_submission=stats.submissions;}
-    // Diagnostic: CPU writes into textures whose contents the GPU produced (copies) are invisible to us.
-    if(upload && im.gpu_written && im.decoded && t->mem && ((stats.submissions+t->serial)&63)==0 && im.checked_submission!=stats.submissions){im.checked_submission=stats.submissions;uint64_t hash=hash_memory(t->mem,t->L.size);if(im.cpu_hash && hash!=im.cpu_hash){static unsigned n=0;if(n++<40)xbg_logf("NVN CPUGPU texture changed by CPU after GPU write serial=%llu fmt=%#x %ux%u layers=%u levels=%u target=%d",(unsigned long long)t->serial,t->d.format,im.width,im.height,im.layers,im.levels,t->d.target);}im.cpu_hash=hash;}
+    // CPU writes into the storage of an image the GPU drew. Once gpu_written, the checks above never look at the image's guest bytes
+    // again, but the replay mirrors guest memory and never writes a render target back to it: a hash change of those bytes can only be
+    // the game's CPU (or a host copy) writing them after the GPU did. On the Switch the memory is one, so the texture would show those
+    // bytes; here it keeps the old drawing. The alias path above makes this reachable: a new texture object over the storage of a drawn
+    // one, with the same description, shares its image (and its gpu_written). Checked every 64th submission per image (staggered), for
+    // every colour image sampled with an upload (it was only decoded BC images before, and only logged). Marker gfx-cpugpu-refresh = '1'
+    // (off by default, HANDOFF.md 2026-11-05) then re-uploads the image from guest memory: right when the CPU rewrote the whole texture,
+    // wrong where it rewrote only part of a texture the GPU drew (that part keeps the GPU's pixels on the Switch).
+    if(upload && im.gpu_written && im.aspects==VK_IMAGE_ASPECT_COLOR_BIT && t->mem && ((stats.submissions+t->serial)&63)==0 && im.checked_submission!=stats.submissions){im.checked_submission=stats.submissions;uint64_t hash=hash_memory(t->mem,t->L.size);
+        if(im.cpu_hash && hash!=im.cpu_hash){static unsigned n=0;if(n++<20)xbg_logf("[RED] NVN CPU wrote the storage of a GPU-drawn texture after the GPU (the replay keeps the GPU's pixels%s): serial=%llu fmt=%#x %ux%u layers=%u levels=%u target=%d decoded=%d",cpugpu_refresh?"; gfx-cpugpu-refresh re-uploads it":"",(unsigned long long)t->serial,t->d.format,im.width,im.height,im.layers,im.levels,t->d.target,int(im.decoded));
+            if(cpugpu_refresh){im.gpu_written=false;im.uploaded=false;provenance_write(im,__LINE__);++cpugpu_refreshes;}}
+        im.cpu_hash=hash;}
     if(upload && !im.uploaded && !im.gpu_written){
         const uint64_t up_t0=timing_clock();const bool reupload=im.cpu_hash!=0;
         im.dirty_stamp=0;   // a new upload starts on the hash checks again
@@ -4554,6 +4565,8 @@ extern "C" int xbg_game_initialize(const xbg_game_config *c,char *error,size_t b
       xbg_logf("NVN repeated colour slots attached once=%d (marker gfx-rt-dedupe)",int(rt_dedupe));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-sampler-match").c_str(),"rb");sampler_match=false;if(m){sampler_match=fgetc(m)=='1';fclose(m);}
       xbg_logf("NVN sampler depth compare follows the shader=%d (marker gfx-sampler-match)",int(sampler_match));}
+     {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-cpugpu-refresh").c_str(),"rb");cpugpu_refresh=false;if(m){cpugpu_refresh=fgetc(m)=='1';fclose(m);}
+      xbg_logf("NVN GPU-drawn textures re-uploaded after a CPU write=%d (marker gfx-cpugpu-refresh)",int(cpugpu_refresh));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-read-preflight").c_str(),"rb");read_preflight=true;if(m){read_preflight=fgetc(m)!='0';fclose(m);}else if(const char *e=getenv("DM_GFX_READ_PREFLIGHT"))read_preflight=atoi(e)!=0;
       xbg_logf("NVN CPU reads resolved before each operation=%d (marker gfx-read-preflight)",int(read_preflight));}
      {FILE *m=fopen(((cut==std::string::npos?dir:dir.substr(0,cut))+"/gfx-sync-cache-save").c_str(),"rb");sync_cache_save=false;if(m){sync_cache_save=fgetc(m)=='1';fclose(m);}}

@@ -19,4 +19,4 @@ CUTS = {
 }
 
 # Whether a general rule could replace these patches (dm/tools/docs_patches.py lists it in docs/agents/game-patches.md)
-GENERALIZE = "Partly: Mario + Rabbids Kingdom Battle and Sparks of Hope cut the same Snowdrop three-pool allocator; one function-matched rule could serve both only if their code matches (not checked). The cause, an iPhone's address space, cannot be fixed in the host"
+GENERALIZE = "Partly: Mario + Rabbids Kingdom Battle and Sparks of Hope cut the same Snowdrop three-pool allocator; one function-matched rule could serve both only if their code matches (not checked). The cause, the smaller address space of nxnative's iPhone host, cannot be fixed in the host"

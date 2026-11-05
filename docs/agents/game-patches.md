@@ -295,7 +295,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
 
 [Mario + Rabbids Kingdom Battle](../../dm/games/010067300059A000/README.md), `010067300059A000`, [patches.py](../../dm/games/010067300059A000/patches.py).
 
-**Generalize?** Partly: Mario + Rabbids Kingdom Battle and Sparks of Hope cut the same Snowdrop three-pool allocator; one function-matched rule could serve both only if their code matches (not checked). The cause, an iPhone's address space, cannot be fixed in the host
+**Generalize?** Partly: Mario + Rabbids Kingdom Battle and Sparks of Hope cut the same Snowdrop three-pool allocator; one function-matched rule could serve both only if their code matches (not checked). The cause, the smaller address space of nxnative's iPhone host, cannot be fixed in the host
 
 - **1.9.589692 `main`** `3b39e0c0…` ([patches.py:11](../../dm/games/010067300059A000/patches.py#L11))
   - cut `+0xea2190`: Snowdrop pool sizes: initialize each range to 512 MB
@@ -309,7 +309,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
 
 [Mario + Rabbids® Sparks of Hope](../../dm/games/0100317013770000/README.md), `0100317013770000`, [patches.py](../../dm/games/0100317013770000/patches.py).
 
-**Generalize?** Partly: Mario + Rabbids Kingdom Battle and Sparks of Hope cut the same Snowdrop three-pool allocator; one function-matched rule could serve both only if their code matches (not checked). The unused 272-byte slot pool is Sparks of Hope's alone (Kingdom Battle's main and subsdk0 have no such init). The cause, an iPhone's address space, cannot be fixed in the host
+**Generalize?** Partly: Mario + Rabbids Kingdom Battle and Sparks of Hope cut the same Snowdrop three-pool allocator; one function-matched rule could serve both only if their code matches (not checked). The unused 272-byte slot pool is Sparks of Hope's alone (Kingdom Battle's main and subsdk0 have no such init). The cause, the smaller address space of nxnative's iPhone host, cannot be fixed in the host
 
 - **1.6.2225577 `main`** `5b76a43b…` ([patches.py:29](../../dm/games/0100317013770000/patches.py#L29))
   - cut `+0x1642c8`: Snowdrop allocator: initialize the three range-size fields to 512 MB (mov x8,#0x20000000); the large range is overridden to 2 GB below
@@ -422,7 +422,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
 
 [Pokémon Scarlet](../../dm/games/0100A3D008C5C000/README.md), `0100A3D008C5C000`, [patches.py](../../dm/games/0100A3D008C5C000/patches.py).
 
-**Generalize?** No: one constant of Trinity's own allocator call; the cause, an iPhone's address space, cannot be fixed in the host
+**Generalize?** No: one constant of Trinity's own allocator call; the cause, the smaller address space of nxnative's iPhone host, cannot be fixed in the host
 
 - **1.0.0 `main`** `ca44e7dd…` ([patches.py:9](../../dm/games/0100A3D008C5C000/patches.py#L9))
   - cut `+0x12df074`: StandardAllocator::Initialize(nullptr, size): virtual address space 12 GB → 4 GB
@@ -525,7 +525,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
 
 [Xenoblade Chronicles 3](../../dm/games/010074F013262000/README.md), `010074F013262000`, [patches.py](../../dm/games/010074F013262000/patches.py).
 
-**Generalize?** No: Monolith's own allocator reservation; the cause, an iPhone's address space, cannot be fixed in the host
+**Generalize?** No: Monolith's own allocator reservation; the cause, the smaller address space of nxnative's iPhone host, cannot be fixed in the host
 
 - **2.2.1 `main`** `82d187fe…` ([patches.py:15](../../dm/games/010074F013262000/patches.py#L15))
   - cut `+0x128e58c`: malloc address region: 60 GB to 4 GB
@@ -537,7 +537,7 @@ Every piece of code that runs for one game and not the others: the rewriter's pa
 
 ## SDK cuts
 
-Cuts of Nintendo SDK `sdk` builds ([sdk_patches.py](../../dm/tools/sdk_patches.py)), applied to every game that ships the build. They fit the SDK's address-space layout into an iPhone's guest block. The games listed are those whose profile registers the build.
+Cuts of Nintendo SDK `sdk` builds ([sdk_patches.py](../../dm/tools/sdk_patches.py)), applied to every game that ships the build. They fit the SDK's address-space layout into the smaller guest block of nxnative's iPhone host. The games listed are those whose profile registers the build.
 
 - **sdk** `9de92bad…` ([sdk_patches.py:9](../../dm/tools/sdk_patches.py#L9)): Mario + Rabbids Kingdom Battle 1.9.589692
   - cut `+0x93dfc`: VammManager node area limit: 1 GB to 64 MB

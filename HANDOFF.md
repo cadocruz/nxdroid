@@ -279,6 +279,25 @@ on the Vulkan replay, the record above), so the next step is a GPU frame capture
 pass, draw, render target and texture, so the first pass whose output is already wrong names the
 faulty stage. The menu names below are from memory of those tools and may differ slightly by version.
 
+**First, two short runs that need no new tool (2026-11-05):** the build of this session's commit
+logs, by default, `[RED] NVN CPU wrote the storage of a GPU-drawn texture after the GPU` (the first 20).
+The reason, read in `xbg_game.cpp` `get_image_slow`: once an image is marked GPU-drawn (`gpu_written`),
+the engine never looks at its guest bytes again (the CPU-coherent pool hashing and the dirty tracker
+skip it), and the replay never writes a render target back to guest memory, so a change of those bytes
+is the game's CPU (or a host copy) writing them after the GPU; on the Switch the texture shows those
+bytes, here it keeps the old drawing. The alias path of `get_image_slow` makes it reachable: a new
+texture object over the storage of a drawn one, with the same description, shares its image and its
+`gpu_written`. This fits the only change that helped (run 23, the pool-alias invalidation) and pool
+storage MK8DX shares between transient render targets and textures. Run A: no marker, a race, log and
+screenshot (`26_base.*`); count the `[RED] NVN CPU wrote …` lines and note their formats and sizes.
+Run B, if run A has any: `android_gfx_ab.py --adb "$ADB" gfx-cpugpu-refresh --on --wait 120 --shot
+/tmp/nxdroid-test/27_cpugpu_refresh.png --log /tmp/nxdroid-test/27_cpugpu_refresh.txt`, then
+`--clear --no-restart`; its log must say `NVN GPU-drawn textures re-uploaded after a CPU write=1`. The
+marker re-uploads such an image from guest memory: right when the CPU rewrote the whole texture, wrong
+where it rewrote only part of one the GPU drew. If run B fixes or improves the picture, the capture is
+still worth doing to see which textures they are, but the cause is found. Record both runs in §8 item
+12 step 9.
+
 **Before:** installing either tool on the Linux machine needs the owner's go-ahead (`AGENTS.md`: ask
 before downloading or installing). The APK must be the debug build (`assembleDebug`, debuggable), from
 current `main`, installed as in the 2026-11-04 session's steps 2 and 3. Clear every marker first
@@ -853,7 +872,8 @@ Current counts:
        `gfx-read-preflight` (the engine's default, which the app turns off) and `gfx-alias-invalidate`
        (the 2026-11-03 pool-alias experiments, off by default since 2026-11-04), and `gfx-rt-dedupe`
        (repeated colour slots attached once, 2026-11-04) and `gfx-sampler-match` (sampler compare follows
-       the shader, 2026-11-04) take `1` too.
+       the shader, 2026-11-04) and `gfx-cpugpu-refresh` (re-upload a GPU-drawn texture whose guest bytes
+       the CPU changed, 2026-11-05) take `1` too.
     5. `scripts/android_gfx_ab.py` does step 4 over `adb`: it writes the marker (`--off` / `--on`),
        reads it back, force-stops and starts `com.nxdroid` (`--no-restart` to skip), and after `--wait`
        seconds (45 by default; start the race by hand meanwhile) saves `--shot <png>` and `--log <txt>`

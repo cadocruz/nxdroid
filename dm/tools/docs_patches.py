@@ -185,7 +185,7 @@ def page():
          *summary, '',
          '## Games', '', *sections,
          '## SDK cuts', '',
-         f'Cuts of Nintendo SDK `sdk` builds ({link(SDK)}), applied to every game that ships the build. They fit the SDK\'s address-space layout into an iPhone\'s guest block. The '
+         f'Cuts of Nintendo SDK `sdk` builds ({link(SDK)}), applied to every game that ships the build. They fit the SDK\'s address-space layout into the smaller guest block of nxnative\'s iPhone host. The '
          'games listed are those whose profile registers the build.', '',
          *sdk_lines, '',
          '### SDK-wide function-matched rules', '',
