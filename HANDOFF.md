@@ -146,7 +146,11 @@ What is established:
   a game-specific rule in a general script that never found a shader elsewhere; it now scans every
   RomFS file, as `shader_split.py`'s own main does (the profile's `shader_groups` only name groups).
 
-### Next device session (2026-11-04): step by step
+### Device session of 2026-11-04 (done): step by step
+
+**Done on 2026-11-04: runs 20 to 25 are recorded in §8 item 12 step 9. The next session is the GPU frame
+capture further down ("Next device session (2026-11-05)"); keep these steps as the reference for
+building, installing, markers and logs.**
 
 Everything here runs on the Linux machine that has `adb`, podman and the phone (S23 Ultra, USB
 debugging on). Commands run from the repository root. `ADB` below is the `adb` that machine used on
@@ -263,6 +267,76 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
     Found on) and in the MK8DX note, and run `python3 dm/tools/docs_symptoms.py`. Runs 21 and 22 wrong
     → it was not the cause (keep the new default anyway: one conversion is right in every mode); go on
     with "If the depth test does not fix it" below.
+
+### Next device session (2026-11-05): capture one race frame with a GPU debugger
+
+The 2026-11-04 session (runs 20 to 25, §8 item 12 step 9) ruled out the double depth conversion, the
+re-pack without the rewrite and the repeated colour slots; only the pool-alias invalidation changed the
+picture (geometry more complete, speckle and black areas left). Guessing switch by switch has run its
+course. The engine cannot capture a chosen race frame itself (`DM_CTL texdump` / `passdump` do nothing
+on the Vulkan replay, the record above), so the next step is a GPU frame capture with **RenderDoc**
+(preferred) or **Android GPU Inspector (AGI)**: either records one whole frame and shows every render
+pass, draw, render target and texture, so the first pass whose output is already wrong names the
+faulty stage. The menu names below are from memory of those tools and may differ slightly by version.
+
+**Before:** installing either tool on the Linux machine needs the owner's go-ahead (`AGENTS.md`: ask
+before downloading or installing). The APK must be the debug build (`assembleDebug`, debuggable), from
+current `main`, installed as in the 2026-11-04 session's steps 2 and 3. Clear every marker first
+(`android_gfx_ab.py --adb "$ADB" --clear-all --no-restart`, then `--list` empty), so the frame shows the
+default build. A capture makes that one frame very slow; that is expected.
+
+**RenderDoc (preferred):**
+
+1. Download the Linux build from renderdoc.org (a `.tar.gz`), unpack it, run `bin/qrenderdoc`.
+2. In the replay-context selector at the bottom left of the window (it starts as "Local"), pick the
+   phone (found through `adb`); the first time, RenderDoc installs its own server app on the phone.
+3. **Launch Application** tab: executable `com.nxdroid`, activity `com.nxdroid/.MainActivity`; **Launch**.
+   The app starts with RenderDoc's layer.
+4. On the phone press **START GAME**, start a race on **Mario Kart Stadium**, and while the broken 3D
+   picture is on screen press **Trigger Capture** in the connected-app tab. Take two or three captures
+   at different moments of the race.
+5. Open a capture (double-click). Replay runs on the phone and shows on the PC.
+   - **Event Browser:** the frame's passes and draws, in order.
+   - **Texture Viewer:** for the selected event, the render targets it writes (Outputs) and the textures
+     it reads (Inputs).
+   - **Pipeline State:** formats, depth / stencil state and samplers of the selected draw.
+
+**AGI (alternative):**
+
+1. Download the Linux release from `github.com/google/agi`, run `agi` (it uses the system `adb`).
+2. **Capture a new trace**: the phone, application `com.nxdroid`, type **Vulkan** (frame capture);
+   **Start and duration**: manual start, 1 frame.
+3. **Run**: AGI starts the app; press START GAME, start the race, then **Start** in AGI's window.
+4. Open the `.gfxtrace`: the command list on the left, and for each render pass its attachments,
+   textures and pipeline state.
+
+**If the tool cannot inject its layer** (the app starts without it, or no capture appears), point the
+app at the GPU debug layers by hand, and undo it afterwards:
+
+```sh
+"$ADB" shell settings put global enable_gpu_debug_layers 1
+"$ADB" shell settings put global gpu_debug_app com.nxdroid
+# afterwards
+"$ADB" shell settings delete global enable_gpu_debug_layers
+"$ADB" shell settings delete global gpu_debug_app
+```
+
+**What to find in the frame:** the **first** render pass whose output is already wrong, walking the
+frame in order. Mario Kart 8 Deluxe renders roughly: shadow maps, the G-buffer (colour / albedo, normals,
+depth, often several targets in one pass; the 1920x1080 format `0x3d` target at slots 3 and 4 found on
+2026-11-04 is one of them), lighting, transparent objects and effects, then post-processing (bloom,
+tonemap, the 32x32x32 colour-correction LUT) and the 2D layout. If the G-buffer targets are right and
+the lit image is wrong, the fault is in lighting (or the shadow maps it reads); if the G-buffer is
+already speckled, the fault is in the geometry pass (its inputs: textures, vertex data, uniform data).
+For the first wrong pass, note: its event number, its render targets' formats and sizes, the shaders'
+keys if the tool shows the SPIR-V module names, and which input texture or buffer already looks wrong.
+
+**Bring back:** for each capture, PNGs of the main render targets at the end of each stage (Texture
+Viewer, **Save Texture**), at least: a shadow map, every G-buffer target, the lit image before post,
+and the final image; the event number and name of the first wrong pass with a screenshot of its Pipeline
+State; and the capture file itself (`.rdc` or `.gfxtrace`) kept on the Linux machine (it can be hundreds of
+MB; opening it on another machine needs the same tool there). Record the session in §8 item 12 step 9 as
+before (run number, installed commit, tool and version, what the first wrong pass is).
 
 ### If the depth test does not fix it: the next suspects (2026-11-04, read, not measured)
 
