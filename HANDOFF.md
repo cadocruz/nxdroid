@@ -395,11 +395,22 @@ found Metal-only fixes the Vulkan engine does not have, ranked:
    **Written on 2026-11-04, behind the marker `gfx-sampler-match` = `1`** (off by default): where the two
    disagree, the sampler's compare follows the shader; a compare the NVN sampler did not enable takes its
    compare function if usable, else `LEQUAL` (an assumption, said in red). Step 7c tests it.
-4. Lower likelihood here: alpha forced to 1 only for formats `0x37` and `0x6d` (not `0x6e`-`0x70`, `0x99`,
-   `0x9b`), and the game's swizzle not composed with the format's as Metal does (~4127); 16-bit packed
-   formats that disagree with Metal (`0x3a` / `0x96` RGB5 mapped to R5G6B5, `0x3b` / `0x3c` red and blue
-   swapped, `0x98` A1BGR5 as A1R5G5B5; mostly 2D); min / max sampler reduction dropped by
-   `xbg_sampler_from_nvn` (an SDK this old probably does not use it).
+4. Lower likelihood here (none of these formats is in Mario Kart 8 Deluxe's race log). **Written on
+   2026-11-05, default on, not measured on the device** (`xbg_game.cpp`, `nvn_no_alpha`, `packed16_pick`
+   and the swizzle in `Image::view`, checked by a harness of the extracted code on the Windows machine):
+   - Alpha 1: every format `nvn_fmt_mtl.c` marks without alpha (`0x37`, `0x3a`, `0x41`, `0x45`,
+     `0x6d`-`0x78`, `0x96`, `0x99`, `0x9b`; it was `0x37` and `0x6d` only), composed with the game's
+     swizzle as `nvn_mtl.m` `tex_by_id` does (~4127): a channel the swizzle points at alpha reads 1, and a
+     swizzled alpha (`(1 1 1 R)`) keeps what the game asked; before, alpha was forced to 1 over it.
+   - 16-bit packed formats by bit: `0x3c` RGB565 → `B5G6R5_UNORM_PACK16` (red in the low bits, as Echoes
+     of Wisdom's RGB565 hearts showed on Metal), `0x96` BGR5 → `A1R5G5B5` (it was R5G6B5, the wrong field
+     widths), `0x98` A1BGR5 → `R5G5B5A1`. Where the device lacks `B5G6R5` or `R5G5B5A1` (sampled, colour
+     attachment, transfer), the old format is kept with one `[RED] NVN format %#x: the device has no
+     Vulkan format …` line. `0x3a` RGB5 / `0x3b` RGB5A1 need `A1B5G5R5_PACK16` (`VK_KHR_maintenance5`, not
+     enabled): they take `A1R5G5B5` (`0x3a` was R5G6B5) and say `[RED] NVN format RGB5 / RGB5A1` once,
+     red and blue still swapped. Mostly 2D: a wrong colour in a menu or a font is where it would show.
+   - Still open: min / max sampler reduction dropped by `xbg_sampler_from_nvn` (an SDK this old probably
+     does not use it).
 
 The two `[RED]` lines are in the APK of this session's commit, so run 20's log already answers 1 and 2.
 
@@ -822,8 +833,9 @@ Current counts:
     `abi_gaps.py`, the `nvn_mtl.m` line citations in `android.md` and in the tests). Then run
     `dm/tools/tests/test_docs.py` (links, anchors, notes, table rows). The `android_audit` baseline is
     the checklist: it should shrink to 0. `8e050e9` keeps everything removed.
-    **Unverified:** `fuzz.yml` (nightly) fails for a reason not read yet; its log needs a signed-in
-    `gh run view --log-failed`.
+    `fuzz.yml` (nightly) failed on 2026-11-03 and 11-04 with one finding, `zlib.error` in
+    `shader_split.py` `monolith_cmp_data` (read from the job's annotations, no sign-in needed); `2880071`
+    makes that a declared rejection, and the run of 2026-11-05 is green.
 11. **[ALL CLOSED] Independent audit follow-ups** (audit of `f7e190d` / `6dc397b`). Facts still relevant:
     - The guest address space is one memfd mapped `MAP_SHARED` (`dm_guest_as_reserve`); `dm_vm_alias`
       maps an alias at the same file offset (`MAP_SHARED | (to ? MAP_FIXED : 0)`), so NVN virtual pools
@@ -834,9 +846,8 @@ Current counts:
     - `xbg_game_config` is 328 bytes (it gained `instance_api_version`, filled by `vulkan_present.cpp`
       and `smoke.c`); `format_feature_flags2` requires `cfg.instance_api_version >= VK_API_VERSION_1_3`
       and `properties.apiVersion >= VK_API_VERSION_1_3`.
-    - Still stale in `docs/reference/android.md` (fix there): the undef_scan entry (~136) says the Apple
-      APIs behind `port.h` are "pending verification under an NDK compile", and the thread-slot entry
-      (~144) says "no Android packing path runs the rewriter yet"; both are done (items 4, 4a, 9).
+    - `docs/reference/android.md`'s undef_scan and thread-slot entries no longer call the NDK link and
+      the Android rewrite pending (items 4, 4a, 9).
 12. **The graphics work on the device (open, needs a build and a log).** The graphics defaults
     (`jni_android.c`, Status item 3b), the present changes (`vulkan_present.cpp`, Status items 1 and 3a)
     and the colour-space filter (3b below) are committed and compiled in CI (`android-build`); none is

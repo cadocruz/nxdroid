@@ -1322,6 +1322,25 @@ struct Commands {
         if(!draw){end_open_pass();full_barrier(command);}}
     void finish(){if(!draw){end_open_pass();full_barrier(command);}}
 };
+// NVN's 16-bit packed formats, by bit (nvn_fmt_mtl.c; Metal names a packed format from the low bits up, Vulkan from the high bits down):
+// BGR565 0x95 = blue in bits 0-4 = R5G6B5_PACK16; BGR5 0x96 / BGR5A1 0x97 = A1R5G5B5_PACK16 (0x96's top bit unused, read as alpha 1 by
+// nvn_no_alpha); A1BGR5 0x98 = alpha in bit 0 = R5G5B5A1_PACK16. The RGB family is the BGR one with red and blue swapped (Echoes of Wisdom's
+// RGB565 hearts drew red without the swap, GitHub PR #66): RGB565 0x3c = B5G6R5_PACK16, RGB5 0x3a / RGB5A1 0x3b = A1B5G5R5_PACK16.
+// B5G6R5 and R5G5B5A1 are core formats a device may leave unsupported; A1B5G5R5 needs VK_KHR_maintenance5, which the engine does not enable.
+// Where the right format is missing, the nearest is taken and said in red once: red and blue (or the alpha bit) then come out swapped.
+VkFormat packed16_pick(VkFormat want,VkFormat fallback,int nvn){
+    static int ok[2]={-1,-1};int &k=ok[nvn==0x98];
+    if(k<0){const VkFormatFeatureFlags need=VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT|VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT|VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+        k=(format_properties(want).optimalTilingFeatures&need)==need;
+        if(!k)xbg_logf("[RED] NVN format %#x: the device has no Vulkan format %d with its bit order (sampled, attachment, transfer); format %d is used, %s",nvn,int(want),int(fallback),nvn==0x98?"alpha and the colour bits are read shifted":"red and blue come out swapped");}
+    return k?want:fallback;
+}
+VkFormat packed16_rgb5(){
+    static bool said=false;if(!said){said=true;xbg_logf("[RED] NVN format RGB5 / RGB5A1 (0x3a / 0x3b): red is in the low bits, as only A1B5G5R5_PACK16 (VK_KHR_maintenance5, not enabled) has it; A1R5G5B5_PACK16 is used, red and blue come out swapped");}
+    return VK_FORMAT_A1R5G5B5_UNORM_PACK16;
+}
+// The NVN formats with no alpha (nvn_fmt_mtl.c's X entries): alpha reads 1, through the game's own swizzle too.
+static inline bool nvn_no_alpha(unsigned f){return f==0x37 || f==0x3a || f==0x41 || f==0x45 || (f>=0x6d && f<=0x78) || f==0x96 || f==0x99 || f==0x9b;}
 VkFormat format(int f) {
     static const VkFormat table[]={VK_FORMAT_UNDEFINED,
         VK_FORMAT_R8_UNORM,VK_FORMAT_R8_SNORM,VK_FORMAT_R8_UINT,VK_FORMAT_R8_SINT,
@@ -1345,7 +1364,7 @@ VkFormat format(int f) {
     if(f>=0x41 && f<=0x50){static const VkFormat bc[16]={VK_FORMAT_BC1_RGB_UNORM_BLOCK,VK_FORMAT_BC1_RGBA_UNORM_BLOCK,VK_FORMAT_BC2_UNORM_BLOCK,VK_FORMAT_BC3_UNORM_BLOCK,
         VK_FORMAT_BC1_RGB_SRGB_BLOCK,VK_FORMAT_BC1_RGBA_SRGB_BLOCK,VK_FORMAT_BC2_SRGB_BLOCK,VK_FORMAT_BC3_SRGB_BLOCK,VK_FORMAT_BC4_UNORM_BLOCK,VK_FORMAT_BC4_SNORM_BLOCK,
         VK_FORMAT_BC5_UNORM_BLOCK,VK_FORMAT_BC5_SNORM_BLOCK,VK_FORMAT_BC7_UNORM_BLOCK,VK_FORMAT_BC7_SRGB_BLOCK,VK_FORMAT_BC6H_SFLOAT_BLOCK,VK_FORMAT_BC6H_UFLOAT_BLOCK};return bc[f-0x41];}
-    switch(f){case 0x37:case 0x38:return VK_FORMAT_R8G8B8A8_SRGB;case 0x39:return VK_FORMAT_R4G4B4A4_UNORM_PACK16;case 0x3a:return VK_FORMAT_R5G6B5_UNORM_PACK16;case 0x3b:return VK_FORMAT_A1R5G5B5_UNORM_PACK16;case 0x3c:return VK_FORMAT_R5G6B5_UNORM_PACK16;case 0x3d:return VK_FORMAT_A2B10G10R10_UNORM_PACK32;case 0x3e:return VK_FORMAT_A2B10G10R10_UINT_PACK32;case 0x3f:return VK_FORMAT_B10G11R11_UFLOAT_PACK32;case 0x40:return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;case 0x69:return VK_FORMAT_A2B10G10R10_SNORM_PACK32;case 0x6a:return VK_FORMAT_A2B10G10R10_SINT_PACK32;case 0x6b:return VK_FORMAT_A2B10G10R10_USCALED_PACK32;case 0x6c:return VK_FORMAT_A2B10G10R10_SSCALED_PACK32;case 0x6d:return VK_FORMAT_R8G8B8A8_UNORM;case 0x6e:return VK_FORMAT_R8G8B8A8_SNORM;case 0x6f:return VK_FORMAT_R8G8B8A8_UINT;case 0x70:return VK_FORMAT_R8G8B8A8_SINT;case 0x95:case 0x96:return VK_FORMAT_R5G6B5_UNORM_PACK16;case 0x97:case 0x98:return VK_FORMAT_A1R5G5B5_UNORM_PACK16;case 0x99:return VK_FORMAT_B8G8R8A8_UNORM;case 0x9a:return VK_FORMAT_B8G8R8A8_UNORM;case 0x9b:return VK_FORMAT_B8G8R8A8_SRGB;case 0x9c:return VK_FORMAT_B8G8R8A8_SRGB;default:xbg_fatalf("Unsupported NVN format %#x",f);}
+    switch(f){case 0x37:case 0x38:return VK_FORMAT_R8G8B8A8_SRGB;case 0x39:return VK_FORMAT_R4G4B4A4_UNORM_PACK16;case 0x3a:case 0x3b:return packed16_rgb5();case 0x3c:return packed16_pick(VK_FORMAT_B5G6R5_UNORM_PACK16,VK_FORMAT_R5G6B5_UNORM_PACK16,0x3c);case 0x3d:return VK_FORMAT_A2B10G10R10_UNORM_PACK32;case 0x3e:return VK_FORMAT_A2B10G10R10_UINT_PACK32;case 0x3f:return VK_FORMAT_B10G11R11_UFLOAT_PACK32;case 0x40:return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;case 0x69:return VK_FORMAT_A2B10G10R10_SNORM_PACK32;case 0x6a:return VK_FORMAT_A2B10G10R10_SINT_PACK32;case 0x6b:return VK_FORMAT_A2B10G10R10_USCALED_PACK32;case 0x6c:return VK_FORMAT_A2B10G10R10_SSCALED_PACK32;case 0x6d:return VK_FORMAT_R8G8B8A8_UNORM;case 0x6e:return VK_FORMAT_R8G8B8A8_SNORM;case 0x6f:return VK_FORMAT_R8G8B8A8_UINT;case 0x70:return VK_FORMAT_R8G8B8A8_SINT;case 0x95:return VK_FORMAT_R5G6B5_UNORM_PACK16;case 0x96:case 0x97:return VK_FORMAT_A1R5G5B5_UNORM_PACK16;case 0x98:return packed16_pick(VK_FORMAT_R5G5B5A1_UNORM_PACK16,VK_FORMAT_A1R5G5B5_UNORM_PACK16,0x98);case 0x99:return VK_FORMAT_B8G8R8A8_UNORM;case 0x9a:return VK_FORMAT_B8G8R8A8_UNORM;case 0x9b:return VK_FORMAT_B8G8R8A8_SRGB;case 0x9c:return VK_FORMAT_B8G8R8A8_SRGB;default:xbg_fatalf("Unsupported NVN format %#x",f);}
 }
 VkImageAspectFlags aspect(int f){if(f==0x31)return VK_IMAGE_ASPECT_STENCIL_BIT;if(f>=0x32 && f<=0x34)return VK_IMAGE_ASPECT_DEPTH_BIT;if(f==0x35 || f==0x36)return VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;return VK_IMAGE_ASPECT_COLOR_BIT;}
 VkFormat decoded_format(uint32_t pixels) {
@@ -1475,8 +1494,13 @@ struct Image {
                 comp.b=to_vk_swizzle((source.swz>>6)&7);
                 comp.a=to_vk_swizzle((source.swz>>9)&7);
             }
+            // A format with no alpha reads 1 wherever the swizzle (the game's or the identity) takes alpha; a channel the game points at
+            // another component keeps it (nvn_mtl.m tex_by_id composes the two the same way). It was 0x37 and 0x6d only, and it set the
+            // alpha output to 1 even where the game's swizzle sent red there.
             unsigned view_code=v&&v->set_format?v->format:source.d.format;
-            if(view_code==0x37 || view_code==0x6d)comp.a=VK_COMPONENT_SWIZZLE_ONE;
+            if(nvn_no_alpha(view_code)){VkComponentSwizzle *c4[4]={&comp.r,&comp.g,&comp.b,&comp.a};
+                for(int c=0;c<4;c++){VkComponentSwizzle s=*c4[c]==VK_COMPONENT_SWIZZLE_IDENTITY?VkComponentSwizzle(VK_COMPONENT_SWIZZLE_R+c):*c4[c];
+                    *c4[c]=s==VK_COMPONENT_SWIZZLE_A?VK_COMPONENT_SWIZZLE_ONE:s==VkComponentSwizzle(VK_COMPONENT_SWIZZLE_R+c)?VK_COMPONENT_SWIZZLE_IDENTITY:s;}}
         }
         uint32_t swz_key=uint32_t(comp.r)|(uint32_t(comp.g)<<4)|(uint32_t(comp.b)<<8)|(uint32_t(comp.a)<<12);
         std::array<uint32_t,9> key{base,n,layer,ls,uint32_t(vf),uint32_t(type),view_aspects,view_usage,swz_key};auto it=views.find(key);if(it!=views.end())return it->second;
