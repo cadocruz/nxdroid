@@ -14,6 +14,40 @@ is untouched). `AGENTS.md` (rewritten for Android, approved by the owner on 2026
 identity and English text; the early commits have Portuguese messages. Check `git log origin/main..main`
 before assuming a commit is on GitHub.
 
+> **Before every commit that touches a vendored file, run the two gates below; CI fails otherwise.**
+> It happened three times (`89dc2dc`, `85031c7`, and once caught before the push): an edit to
+> `dm/gfx/vulkan/engine/xbg_game.cpp` was committed without its manifest row and the opcode report, and
+> CI's `android-gates` went red ("Vendored engine provenance" fails first; "Opcode and ABI vocabularies"
+> would fail next). Every file under `dm/gfx/vulkan/` and most of `dm/android/` is vendored: it has a row
+> in `dm/tools/android_vendor.tsv` with the sha256 of its bytes, and `opcode_map.txt` cites line numbers
+> of `xbg_game.cpp`, so **any** edit to that file (a comment included) changes both. On the Linux machine
+> (an LF checkout), after editing and before `git commit`:
+>
+> ```sh
+> # 1. which vendored files changed (a path printed here needs its row refreshed)
+> git diff --name-only HEAD | grep -Fxf <(cut -f1 dm/tools/android_vendor.tsv)
+> # 2. refresh the row of each such file (LF bytes; edit FILES), then the opcode report
+> FILES="dm/gfx/vulkan/engine/xbg_game.cpp" python3 - <<'EOF'
+> import hashlib, os
+> files = os.environ["FILES"].split()
+> t = "dm/tools/android_vendor.tsv"; rows = open(t, encoding="utf-8", newline="").read().split("\n")
+> for i, row in enumerate(rows):
+>     f = row.split("\t")
+>     if f[0] in files:
+>         f[3] = hashlib.sha256(open(f[0], "rb").read().replace(b"\r\n", b"\n")).hexdigest(); rows[i] = "\t".join(f)
+> open(t, "w", encoding="utf-8", newline="").write("\n".join(rows))
+> EOF
+> CC=gcc python3 dm/gfx/vk/engine_smoke/opcode_map.py
+> # 3. both gates must print no [RED] before the commit
+> python3 dm/tools/android_vendor.py --check && CC=gcc python3 dm/gfx/vk/engine_smoke/opcode_map.py --check \
+>   && python3 dm/gfx/vk/engine_smoke/abi_gaps.py --check
+> ```
+>
+> Commit the refreshed `android_vendor.tsv` and `opcode_map.txt` with the edit. Do not use
+> `android_vendor.py --write` for this (it rewrites every row, §10). The 11 vendored files whose committed
+> bytes are CRLF (§10) are hashed as they are, not LF-folded: do not refresh their rows with the snippet
+> above. On the Windows machine read §10 first (its checkout is CRLF).
+
 ## Status at this cut (2026-11-03)
 
 The port is built with NDK r29, packaged as an APK (`com.nxdroid`) and runs on a physical **Samsung
@@ -1122,6 +1156,10 @@ Current counts:
 
 ## 10. Traps, so they are found once
 
+- **An edit to a vendored file without its manifest row turns CI red.** It happened with
+  `xbg_game.cpp` in `89dc2dc` and `85031c7`; the commands to run before the commit are in the box at the
+  top of this file. `opcode_map.txt` cites line numbers of `xbg_game.cpp`, so it goes stale with any
+  edit there that moves lines, and its gate fails right after the provenance gate.
 - **`android_vendor.py --write` recomputes the sha256 of existing rows.** Needed for adapted files,
   but "edit a vendored file, run `--write`" hides the edit. The right shape is two hashes per row
   (upstream's and ours) and two checks; not implemented.
