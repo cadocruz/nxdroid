@@ -290,6 +290,12 @@ texture object over the storage of a drawn one, with the same description, share
 `gpu_written`. This fits the only change that helped (run 23, the pool-alias invalidation) and pool
 storage MK8DX shares between transient render targets and textures. Run A: no marker, a race, log and
 screenshot (`26_base.*`); count the `[RED] NVN CPU wrote …` lines and note their formats and sizes.
+In the same log, answer the question runs 20 to 25 left open (their record names only the two-slot
+diagnostic, and run 21c, which needed the sampler line, was not run, so both were probably absent, not
+confirmed): `grep -h "stencil-mode texture read as depth\|sampler compare mode does not match\|nvnDeviceGetInteger item"
+/tmp/nxdroid-test/26_base.txt | sort | uniq -c`, and write the result, "none" included, in the run's line
+in §8 item 12 step 9. A stencil-mode line is what the stencil-view fix (suspect 2 below) waits for; the
+`nvnDeviceGetInteger item 0x26` line should not appear (§8 item 2).
 Run B, if run A has any: `android_gfx_ab.py --adb "$ADB" gfx-cpugpu-refresh --on --wait 120 --shot
 /tmp/nxdroid-test/27_cpugpu_refresh.png --log /tmp/nxdroid-test/27_cpugpu_refresh.txt`, then
 `--clear --no-restart`; its log must say `NVN GPU-drawn textures re-uploaded after a CPU write=1`. The
