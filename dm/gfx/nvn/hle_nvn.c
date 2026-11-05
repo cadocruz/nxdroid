@@ -145,6 +145,7 @@ static const int g_devinfo[] = {
 // The NVN API version the game's own driver would report follows its SDK: games check it and create no device on a mismatch. SDK 10 and older are API 53 (Super Mario 3D World 10.4,
 // Age of Calamity 9.6, Link's Awakening 8, Odyssey 7.3, Three Houses 6.5); SDK 11 and later take 55.15
 __attribute__((weak)) int dm_sdk_major(void) { return 0; }   // loader.c; graphics unit tests have no loader
+__attribute__((weak)) int mtl_device_integer(int what, int *out) { (void)what; (void)out; return 0; }   // nvn_mtl.h; nvn_vk.c answers on Vulkan
 __attribute__((weak)) int dm_glslc_gpu_code(int *major, int *minor) { *major = *minor = 0; return 0; }   // hle_glslc.c: the game's own GLSLC's GPU code version
 static void nvn_api(int api[2]) {
 #ifdef DM_GAME_NVN_API_MAJOR
@@ -160,6 +161,9 @@ NVN(nvnDeviceGetInteger, void, const NVNdevice *d, NVNdeviceInfo what, int *out)
     // 0x67 (SDK 19): FINAL FANTASY TACTICS - The Ivalice Chronicles reads it before every program it loads and passes it as the alignment of its copies of the shader's control section and code
     // (main+0x49800; its allocator raises anything below 8 to 8). Not measured on hardware: 256, the alignment of shader code in a memory pool; the host reads shaders by key, so any value works
     if (w == 0x67) { *out = 256; return; }
+    // 0x26 MAX_VIEWPORTS: the viewports the replay can draw, not Tegra's 16. The Vulkan replay answers from the device (nvn_vk.c: 16 at most, 1 without multiViewport),
+    // so a game that sizes its split-screen by it does not select a viewport the draw cannot declare; the Metal replay keeps the table's value (the weak default)
+    if (w == NVN_DEVICE_INFO_MAX_VIEWPORTS && mtl_device_integer((int)w, out)) return;
     if (w >= sizeof g_devinfo / sizeof *g_devinfo) { LOG("[RED] nvnDeviceGetInteger unknown item %#x, returning 0", w); *out = 0; return; }
     *out = g_devinfo[w];
     // 0x2E / 0x30 describe the GPU code the host can translate, not the linked SDK's driver. Precompiled shaders can come from a newer compiler: ASTRAL CHAIN links SDK 6.4 but its
@@ -2381,13 +2385,19 @@ NVN(nvnCommandBufferDrawElementsIndirect, void, NVNcommandBuffer *c, NVNdrawPrim
 
 // Viewport / scissor / depth range: single and multiple forms
 NVN(nvnCommandBufferSetViewport, void, NVNcommandBuffer *c, int x, int y, int w, int h) { float v[4] = {(float)x, (float)y, (float)w, (float)h}; h_nvnCommandBufferSetViewports(c, 0, 1, v); }
+// The multiple forms: index 0 goes in OP_SCISSOR / OP_DEPTH_RANGE as the single forms record it (what every draw reads), indices 1..15 in one OP_SCISSORS /
+// OP_DEPTH_RANGES record holding just those (nvn_obj.h). A draw whose shader selects viewport i (split-screen) then takes scissor and depth range i, as NVN does
 NVN(nvnCommandBufferSetScissors, void, NVNcommandBuffer *c, int first, int n, const int *r) {
+    if (first < 0 || n < 0 || n > 16 || first > 16 - n) { LOG("[RED] SetScissors first=%d n=%d: outside NVN's 16 viewports, not recorded", first, n); return; }
     if (first == 0 && n >= 1) h_nvnCommandBufferSetScissor(c, r[0], r[1], r[2], r[3]);
-    if (first + n > 1) ONCE_LOG("[RED] SetScissors first=%d n=%d: only index 0 is recorded; a draw whose shader selects viewport 1.. (split-screen) is cut by viewport 0's scissor", first, n);
+    int lo = first ? first : 1, k = first + n - lo;
+    if (k > 0) { p_scissors *s = RECN(c, OP_SCISSORS, p_scissors, r, k); s->first = lo; s->n = k; memcpy(s->r, r + 4 * (lo - first), sizeof(p_scissor) * (size_t)k); }
 }
 NVN(nvnCommandBufferSetDepthRanges, void, NVNcommandBuffer *c, int first, int n, const float *r) {
+    if (first < 0 || n < 0 || n > 16 || first > 16 - n) { LOG("[RED] SetDepthRanges first=%d n=%d: outside NVN's 16 viewports, not recorded", first, n); return; }
     if (first == 0 && n >= 1) h_nvnCommandBufferSetDepthRange(c, r[0], r[1]);
-    if (first + n > 1) ONCE_LOG("[RED] SetDepthRanges first=%d n=%d: only index 0 is recorded; a draw whose shader selects viewport 1.. gets viewport 0's depth range", first, n);
+    int lo = first ? first : 1, k = first + n - lo;
+    if (k > 0) { p_depth_ranges *s = RECN(c, OP_DEPTH_RANGES, p_depth_ranges, r, k); s->first = lo; s->n = k; memcpy(s->r, r + 2 * (lo - first), sizeof(p_depth_range) * (size_t)k); }
 }
 
 // GPU value write: ReportValue = write a 32-bit value to the address when this point is reached (the replay layer's event write, applied on completion)

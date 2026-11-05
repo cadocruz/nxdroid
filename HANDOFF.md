@@ -674,7 +674,7 @@ Sprint 6 fixes (Status) and CI on Linux (§5).
 
 Current counts:
 
-- `opcode_map.py --check`: **51 ops, 51 handled, 0 missing, 1 payload-mismatched** (`P8`, barrier
+- `opcode_map.py --check`: **53 ops, 53 handled, 0 missing, 1 payload-mismatched** (51 until `OP_SCISSORS` / `OP_DEPTH_RANGES`, 2026-11-05) (`P8`, barrier
   cache bits, benign: the reader's single full barrier is stronger), **11 fork-only**. `P6`, the
   multi-viewport record, is handled in the draw and not yet reachable end to end (§8 item 2).
 - `abi_gaps.py --check`: **0 `mtl_*` entry points missing, 0 signature mismatches, 28 extra** (the
@@ -728,11 +728,18 @@ Current counts:
    `xbg_game_set_viewport_features` (through `dm_vk_config`); the 1.2 feature struct is chained by the
    instance's `apiVersion` (`xbg_game_config.instance_api_version`), not the loader's. **Not measured on
    the device.** Open:
-   - `g_devinfo` in `hle_nvn.c` answers 16 for `NVN_DEVICE_INFO_MAX_VIEWPORTS`; it should come from the
-     device (`multiViewport ? min(16, maxViewports) : 1`). The engine's `xbg_device_integer` has no caller.
-   - `hle_nvn.c` records `SetScissors` / `SetDepthRanges` at index 0 only (a `[RED]` line each when
-     `first + n > 1`), so a split-screen draw selecting viewport 1 is cut by viewport 0's scissor and
-     takes its depth range until the records carry the arrays.
+   - **[DONE 2026-11-05, not measured on the device]** `NVN_DEVICE_INFO_MAX_VIEWPORTS` comes from the
+     device: `nvnDeviceGetInteger` asks the replay (`mtl_device_integer`, `nvn_mtl.h`; `nvn_vk.c` →
+     `xbg_device_integer`, `multiViewport ? min(16, maxViewports) : 1`); the Tegra table's 16 is left
+     only before the Vulkan replay is up (`[RED] nvnDeviceGetInteger item 0x26 before the Vulkan replay is
+     initialized`, which a device log should not show).
+   - **[DONE 2026-11-05, not measured on the device]** `SetScissors` / `SetDepthRanges` keep every
+     index: index 0 as before (`OP_SCISSOR` / `OP_DEPTH_RANGE`), 1..15 in the new `OP_SCISSORS` /
+     `OP_DEPTH_RANGES` records (`OP_COUNT_` is 53, the `OP_XBG_*` block 54..64, the capture layout says
+     `ops 53`), and a draw that declares viewport *i* sets scissor and depth range *i*. A range past 16
+     is refused with `[RED] SetScissors first=… n=…: outside NVN's 16 viewports`. The Metal replay skips
+     the new records (index 0 only, as before). Checked by a harness of the extracted writer and by the
+     gates; CI's NDK build is the first compile.
    - The `VK_KHR_multiview` fan-out for a viewport mask (gate, SPIR-V rewrite, layered pass and
      composite) is designed, not written.
    - The probe prints `multiViewport`, `multiview`, `shaderOutputViewportIndex`, `shaderOutputLayer` and

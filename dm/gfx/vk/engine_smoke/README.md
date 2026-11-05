@@ -35,16 +35,17 @@ things in this tree did not agree with it. Both are fixed at the cause, and neit
    states what the function already promised; nothing is being silenced. Both headers also carry an
    `extern "C"` guard and a `DM_STATIC_ASSERT` that is `_Static_assert` in C and `static_assert` in C++,
    so the C side is byte-for-byte the same.
-2. **`OP_COPY_IMAGE_STRIDE` did not exist here.** `nvn_obj.h`'s enum stops at `OP_BIND_VBUF1` (50) +
-   `OP_COUNT_` (51); the fork's enum continued with `OP_COPY_IMAGE_STRIDE` (39) and `OP_COUNT_` (40).
+2. **`OP_COPY_IMAGE_STRIDE` did not exist here.** `nvn_obj.h`'s enum stops at `OP_DEPTH_RANGES` (52) +
+   `OP_COUNT_` (53; it was `OP_BIND_VBUF1` (50) + 51 until `OP_SCISSORS` / `OP_DEPTH_RANGES` on
+   2026-11-05); the fork's enum continued with `OP_COPY_IMAGE_STRIDE` (39) and `OP_COUNT_` (40).
    The fork's nine extension ops (its `OP_COUNT_+1..+9`, i.e. 41..49 there) now have names in this
-   header, in a block after `OP_COUNT_`: `OP_XBG_SYNC_WAIT` (52) .. `OP_XBG_TYPED_CLEAR` (60), plus
-   `OP_XBG_COPY_IMAGE_STRIDE` (61) and `OP_XBG_PATCH_SIZE` (62). The engine's case labels still read
+   header, in a block after `OP_COUNT_`: `OP_XBG_SYNC_WAIT` (54) .. `OP_XBG_TYPED_CLEAR` (62), plus
+   `OP_XBG_COPY_IMAGE_STRIDE` (63) and `OP_XBG_PATCH_SIZE` (64). The engine's case labels still read
    `OP_COUNT_+N` — which lands on `OP_XBG_SYNC_WAIT+N`, so the numbering is explicit on both sides — and
    the one name it spells differently is mapped in a single compatibility block at the top of
    `xbg_game.cpp` (`#define OP_COPY_IMAGE_STRIDE OP_XBG_COPY_IMAGE_STRIDE`). Its tessellation case was
-   `case OP_COUNT_:`; that is `case OP_XBG_PATCH_SIZE:` now, because 51 is this host's sentinel and no
-   command of ours is 51. That block plus that one case label is the whole edit to the vendored file; it
+   `case OP_COUNT_:`; that is `case OP_XBG_PATCH_SIZE:` now, because `OP_COUNT_` is this host's sentinel
+   and no command of ours. That block plus that one case label is the whole edit to the vendored file; it
    is recorded in `dm/tools/android_vendor.tsv` and `make check-vendor`-style gates see it as `adapt`.
 
 Warning noise is high: `-Wall -Wextra` gives well over a thousand warnings, mostly
@@ -150,7 +151,7 @@ quoted below are all read, not remembered):
 - `opcode_map.txt` — one row per op: value, the writer call that emits it (`not emitted` when no
   game reaches it), the `case` in `xbg_game.cpp`'s `execute()` (`missing` when it falls into
   `default:`), the `nvn_mtl.m` case and section banner that implements it on Metal, a payload id,
-  and what the handler must do. Today: **51 ops, 51 handled, 0 missing, 1 payload-mismatched**,
+  and what the handler must do. Today: **53 ops, 53 handled, 0 missing, 1 payload-mismatched**,
   plus **11 fork-only rows** in a second block.
 - `payload_mismatch.txt` — the one op both sides implement but read differently, `P8` (barrier
   cache bits, benign), with the writer line, the reader line, which side is right (the writer:
@@ -186,7 +187,7 @@ What the counts say, in the order it will hurt:
    a viewport mask is refused (the multiview fan-out is open; see `docs/reference/android.md`).
 4. **Eleven fork-only rows** in the second block of `opcode_map.txt`: the engine's nine extension
    ops and its `OP_COPY_IMAGE_STRIDE` / `OP_COUNT_`. They are named `OP_XBG_*` in `nvn_obj.h` after
-   our `OP_COUNT_` (52..62, this sprint), each row saying what the fork recorded it for and what
+   our `OP_COUNT_` (54..64 since 2026-11-05), each row saying what the fork recorded it for and what
    this host emits instead (`OP_DISPATCH.ind` for its indirect dispatch, `OP_DRAW.mdi_cnt/mdi_i` for
    its multi-draw, `OP_COPY_T2T | DM_COPY_RESOLVE` for its resolve, `OP_COPY_STRIDE` with
    `image = 1` for its `OP_COPY_IMAGE_STRIDE`, `g_nops` for the rest). Our host emits none of them,

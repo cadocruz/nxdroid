@@ -28,6 +28,7 @@ expected = ['rt', 'shader', 'ub', 'sb', 'vb', 'tex', 'samp', 'img', 'texture_poo
             'attrib', 'stream', 'blend', 'color', 'mask', 'ms', 'poly', 'ds',
             'depth_clamp', 'rast_discard', 'restart_on', 'restart_index', 'vp_sw',   # pipeline state (PipeMemoKey restart)
             'viewport', 'depth_range', 'scissor',
+            'scissor_at', 'depth_range_at', 'scissor_set', 'depth_range_set',         # viewports 1..15 (OP_SCISSORS / OP_DEPTH_RANGES), dynamic state
             'blend_color', 'bias', 'stencil_compare', 'stencil_write', 'stencil_ref', 'copy_stride',
             'copy_image_stride', 'patch_size',
             'viewport_n',                                                            # pipeline input through draw_viewports() (PipeMemoKey viewports)

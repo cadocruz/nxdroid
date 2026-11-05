@@ -5,7 +5,7 @@ dm/gfx/nvn/nvn_obj.h is the master of the record format (dm/gfx/nvn/hle_nvn.c wr
 profiles run through it); dm/gfx/vulkan/engine/xbg_game.cpp reads it. The two were written apart, so
 the map is derived from the tree rather than from memory:
 
-  opcode, value       parsed from the enum in nvn_obj.h (OP_END..OP_BIND_VBUF1, then the fork block)
+  opcode, value       parsed from the enum in nvn_obj.h (OP_END..OP_DEPTH_RANGES, then the fork block)
   emitted by          the first writer call (put_hdr / rec / REC / RECN / REC_SNAP) in dm/gfx/nvn/*.c,
                       or "not emitted"
   handler             the first `case <op>:` inside xbg_game.cpp's execute(), or "missing"
@@ -55,8 +55,8 @@ NOTES = {
     "OP_CLEAR_COLOR": "OK: index/mask/rgba, load action or full-pass triangle.",
     "OP_CLEAR_DS": "OK: depth/stencil with the caller's write masks.",
     "OP_VIEWPORTS": "FIXED in the draw (was P6): writes viewport[first..first+n) of the 16 and keeps viewport_n (highest index set + 1); a draw declares and sets that many viewports and scissors when the vertex / tessellation-evaluation / geometry shader writes ViewportIndex (draw_viewports; multiViewport and the enabled shaderOutputViewportIndex checked, validate_capabilities accepts 57 / 70 / 5254), one otherwise; a viewport mask (5255) is refused with [RED]. The front end enables shaderOutputViewportIndex and calls xbg_game_set_viewport_features (done, not measured on the device); the writer still records SetScissors / SetDepthRanges index 0 only, so a draw selecting viewport 1.. takes viewport 0's scissor and depth range (docs/reference/android.md).",
-    "OP_SCISSOR": "OK: one rectangle, set for every viewport the draw declares (the writer records SetScissors index 0 only).",
-    "OP_DEPTH_RANGE": "OK: minDepth / maxDepth of every viewport (the writer records SetDepthRanges index 0 only).",
+    "OP_SCISSOR": "OK: viewport 0's scissor (SetScissor, and index 0 of SetScissors).",
+    "OP_DEPTH_RANGE": "OK: viewport 0's minDepth / maxDepth (SetDepthRange, and index 0 of SetDepthRanges).",
     "OP_BIND_PROGRAM": "OK structurally (prog_t serial + sd[6]); resolving the stages is the shader sprint's job.",
     "OP_BIND_STATE": "OK: kind selects the state object to copy out of bytes[0x18].",
     "OP_BIND_VATTR": "OK: NVN's BindVertexAttribState(n, states) has no first, so the writer records first = 0 and n <= 16 (hle_nvn.c), which is what the handler requires; the n states replace the table (the Metal replay does the same).",
@@ -94,6 +94,8 @@ NOTES = {
     "OP_PRIM_RESTART": "OK: primitive restart on/off + index; wired to ia.primitiveRestartEnable in the pipeline.",
     "OP_BIND_UBO_SMALL": "OK: a 16-byte uniform binding, read with bind_buf_rec(); must not be read as p_bind_buf.",
     "OP_BIND_VBUF1": "OK: one 24-byte vertex buffer binding, read with vbuf_rec().",
+    "OP_SCISSORS": "OK: scissors of viewports 1..15 (SetScissors past index 0), n entries (RECN); a draw that declares viewport i sets scissor i. Metal ignores it (index 0 only, as before).",
+    "OP_DEPTH_RANGES": "OK: depth ranges of viewports 1..15 (SetDepthRanges past index 0), n entries (RECN); viewport i takes depth range i. Metal ignores it (index 0 only, as before).",
 }
 
 # Ops whose reader does not match the writer. The id is the heading of its account in payload_mismatch.txt;
@@ -314,7 +316,7 @@ def table():
         "# This host: %d ops, %d handled, %d missing, %d payload-mismatched." %
         (len(ours), len(ours) - len(missing), len(missing), len(mismatched)),
         "",
-        "== this host's ops (OP_END..OP_BIND_VBUF1): %d" % len(ours),
+        "== this host's ops (OP_END..OP_DEPTH_RANGES): %d" % len(ours),
         "\t".join(("opcode", "value", "emitted by", "handler", "metal", "payload", "note")),
     ]
     for name, value, where, where_engine, where_metal, payload, note in rows:

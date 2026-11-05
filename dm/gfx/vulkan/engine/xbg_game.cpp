@@ -2049,12 +2049,15 @@ struct State {
     // Only the swizzles themselves are also applied to the dynamic viewports.
     int32_t depth_clamp=0,rast_discard=0;uint32_t restart_on=0,restart_index=0;uint8_t vp_sw[16][4]{};
     // NVN viewports 0..15 as the game recorded them (x, y, width, height; OP_VIEWPORTS writes first..first+n-1); minDepth /
-    // maxDepth come from DEPTH_RANGE, which overrides the record's near / far (p_viewports) for every viewport, as the Metal
-    // replay applies it. The writer records one depth range and one scissor (hle_nvn.c SetDepthRanges / SetScissors keep
-    // index 0), so a draw sets the same ones for each viewport it declares. An index above 0 the game never set, or zeroed,
-    // rasterizes nothing (draw(): a 1x1 viewport behind an empty scissor), as NVN's empty viewport does.
+    // maxDepth come from the depth ranges, which override the record's near / far (p_viewports), as the Metal replay applies
+    // them. Viewport i takes depth range i and scissor i: index 0 is depth_range / scissor (OP_DEPTH_RANGE / OP_SCISSOR), 1..15
+    // are depth_range_at / scissor_at (OP_DEPTH_RANGES / OP_SCISSORS, hle_nvn.c SetDepthRanges / SetScissors), and one the game
+    // never set (its bit clear in depth_range_set / scissor_set) keeps NVN's default, 0..1 and no scissor. An index above 0 the game never set, or zeroed, rasterizes nothing (draw():
+    // a 1x1 viewport behind an empty scissor), as NVN's empty viewport does.
     VkViewport viewport[16]{{0,0,1,1,0,1}};float depth_range[2]{0,1};
-    VkRect2D scissor{{0,0},{UINT32_MAX,UINT32_MAX}};float blend_color[4]{},bias[3]{};uint32_t stencil_compare[2]{~0u,~0u},stencil_write[2]{~0u,~0u},stencil_ref[2]{};int64_t copy_stride=0,copy_image_stride=0;uint32_t patch_size=3;
+    VkRect2D scissor{{0,0},{UINT32_MAX,UINT32_MAX}};
+    VkRect2D scissor_at[16]{};float depth_range_at[16][2]{};uint32_t scissor_set=0,depth_range_set=0;   // viewports 1..15, entry 0 unused (dynamic state, outside PipeMemoKey)
+    float blend_color[4]{},bias[3]{};uint32_t stencil_compare[2]{~0u,~0u},stencil_write[2]{~0u,~0u},stencil_ref[2]{};int64_t copy_stride=0,copy_image_stride=0;uint32_t patch_size=3;
     uint32_t viewport_n=0;   // the viewport array's length: the highest index an OP_VIEWPORTS set, plus one (0 before the first record). A pipeline input through draw_viewports(): the count the pipeline declares when the bound shaders select a viewport, so it is in PipeMemoKey (viewports); nvn_cover reads it the same way
     xbg_depth_bounds bounds{0,0,1};bool count_samples=false;uint64_t samples_passed=0;
     // A render-enable block evaluated false (SetRenderEnableConditional / SetRenderEnable): draws and clears are dropped
@@ -3470,7 +3473,7 @@ bool create_pass(Pass &p,Commands &c,int clear_color=-1,bool clear_depth=false,b
     if(plain_draw && persistent){last_pass.rt=state.rt;last_pass.pass=p;last_pass.valid=true;}else last_pass.valid=false;
     return true;
 }
-VkRect2D scissor(const Pass &p){VkRect2D r{};need(xbg_clear_rectangle(p.width,p.height,state.scissor.offset.x,state.scissor.offset.y,state.scissor.extent.width,state.scissor.extent.height,&r)==0,"Invalid scissor extent");return r;}
+VkRect2D scissor(const Pass &p,uint32_t i=0){static const VkRect2D whole{{0,0},{UINT32_MAX,UINT32_MAX}};const VkRect2D &s=!i?state.scissor:(state.scissor_set>>i&1u)?state.scissor_at[i]:whole;VkRect2D r{};need(xbg_clear_rectangle(p.width,p.height,s.offset.x,s.offset.y,s.extent.width,s.extent.height,&r)==0,"Invalid scissor extent");return r;}
 int pass_prof_reserve(VkCommandBuffer cmd){Slot &s=slots[slot_index];if(!s.prof || cmd!=s.cmd)return -1;
     // 开始时预留首尾查询，预算耗尽时整段跳过，不能留下只有开头的假计时。
     // Reserve both queries up front; skip the whole interval when the frame budget is exhausted.
@@ -3737,7 +3740,7 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
         // An index above 0 the game zeroed or never set: NVN rasterizes nothing there, Vulkan wants a positive size, so the viewport is 1x1 and
         // its scissor (below) empty. Viewport 0 keeps the strict check: every non-selecting draw goes through it.
         empty[i]=i>0 && !(r.width>0 && r.height>0);
-        need(xbg_nvn_viewport(&viewport,r.x,r.y,empty[i]?1:r.width,(empty[i]?1:r.height)*float(ui_vs),state.depth_range[0],state.depth_range[1])==0,"Invalid NVN viewport");
+        need(xbg_nvn_viewport(&viewport,r.x,r.y,empty[i]?1:r.width,(empty[i]?1:r.height)*float(ui_vs),!i?state.depth_range[0]:(state.depth_range_set>>i&1u)?state.depth_range_at[i][0]:0.f,!i?state.depth_range[1]:(state.depth_range_set>>i&1u)?state.depth_range_at[i][1]:1.f)==0,"Invalid NVN viewport");
         // Viewport swizzle (OP_VP_SWIZZLE, XOR the identity): NEGATIVE_Y negates clip y, the same as the viewport flipped about its centre, as nvn_mtl.m
         // applies it; facing is decided after the viewport transform on the GPU, so the winding stays. Other swizzles (axis exchanges, negated x / z / w)
         // are no viewport change: one red line, drawn unswizzled.
@@ -3746,10 +3749,11 @@ void draw(int prim,int first,int count,const p_draw_idx *indexed,uint32_t instan
          else if(sw){static unsigned notes=0;if(notes++<1)xbg_logf("[RED] NVN viewport %u swizzle %d,%d,%d,%d not implemented (drawn unswizzled)",i,state.vp_sw[i][0],state.vp_sw[i][1]^2,state.vp_sw[i][2]^4,state.vp_sw[i][3]^6);}}
         need(viewport.width<=properties.limits.maxViewportDimensions[0] && fabsf(viewport.height)<=properties.limits.maxViewportDimensions[1] && viewport.x>=properties.limits.viewportBoundsRange[0] && viewport.x+viewport.width<=properties.limits.viewportBoundsRange[1] && viewport.y>=properties.limits.viewportBoundsRange[0] && viewport.y<=properties.limits.viewportBoundsRange[1] && viewport.y+viewport.height>=properties.limits.viewportBoundsRange[0] && viewport.y+viewport.height<=properties.limits.viewportBoundsRange[1],"NVN viewport exceeds device bounds");}
     if(bc.vpn!=vpn || memcmp(bc.vp,viewports,vpn*sizeof(VkViewport))){vkCmdSetViewport(c.command,0,vpn,viewports);memcpy(bc.vp,viewports,vpn*sizeof(VkViewport));bc.vpn=vpn;}else ++binds_skipped;
-    VkRect2D sc=scissor(p);
+    VkRect2D scissors[16];
+    for(uint32_t i=0;i<vpn;i++){VkRect2D sc=scissor(p,i);   // viewport i's own scissor
     if(ui_uy>0 || ui_vs!=1){long so=g_ui_moff!=0?lround(ui_uy*p.height):0;int64_t y0=sc.offset.y<=0?0:sc.offset.y+so,y1=ui_vs!=1?int64_t(p.height):int64_t(sc.offset.y)+sc.extent.height+so;   // 剪裁跟着下移；从顶边起的不动（宿主上提的贴顶控件） | the scissor moves down with it; ones starting at the top edge stay (controls the host lifted to the top)
         if(y1>int64_t(p.height))y1=p.height;if(y1<y0)y1=y0;sc.offset.y=int32_t(y0);sc.extent.height=uint32_t(y1-y0);}
-    VkRect2D scissors[16];for(uint32_t i=0;i<vpn;i++)scissors[i]=empty[i]?VkRect2D{{0,0},{0,0}}:sc;   // the one recorded scissor for every declared viewport; empty behind an unset one
+    scissors[i]=empty[i]?VkRect2D{{0,0},{0,0}}:sc;}   // empty behind an unset viewport
     if(bc.scn!=vpn || memcmp(bc.sc,scissors,vpn*sizeof(VkRect2D))){vkCmdSetScissor(c.command,0,vpn,scissors);memcpy(bc.sc,scissors,vpn*sizeof(VkRect2D));bc.scn=vpn;}else ++binds_skipped;
     for(auto &b:vertex_buffers){VkDeviceSize off=b.second->offset;if(b.first<16 && bc.vb[b.first]==b.second->buffer && bc.vbo[b.first]==off){++binds_skipped;continue;}
         vkCmdBindVertexBuffers(c.command,b.first,1,&b.second->buffer,&off);if(b.first<16){bc.vb[b.first]=b.second->buffer;bc.vbo[b.first]=off;}}
@@ -4338,6 +4342,11 @@ void execute(const uint8_t *pc,unsigned depth,uint64_t &budget){
         case OP_VIEWPORTS:{auto a=payload<p_viewports>(p,n);need(a.n>=0 && a.n<=16 && a.first>=0 && a.first<=16-a.n,"Invalid viewport record");for(int i=0;i<a.n;i++){VkViewport &v=state.viewport[a.first+i];v.x=a.v[i][0];v.y=a.v[i][1];v.width=a.v[i][2];v.height=a.v[i][3];}if(uint32_t(a.first+a.n)>state.viewport_n)state.viewport_n=uint32_t(a.first+a.n);break;}
         case OP_SCISSOR:{auto a=payload<p_scissor>(p,n);need(a.w>=0 && a.h>=0,"Invalid scissor dimensions");state.scissor={{a.x,a.y},{uint32_t(a.w),uint32_t(a.h)}};break;}
         case OP_DEPTH_RANGE:{auto a=payload<p_depth_range>(p,n);state.depth_range[0]=a.n;state.depth_range[1]=a.f;break;}
+        // Viewports 1..15 (hle_nvn.c SetScissors / SetDepthRanges): the record holds n entries (RECN), index 0 travels in OP_SCISSOR / OP_DEPTH_RANGE
+        case OP_SCISSORS:{auto a=variable_payload<p_scissors>(p,n);need(a.n>=1 && a.n<=15 && a.first>=1 && a.first<=16-a.n && n>=offsetof(p_scissors,r)+sizeof(p_scissor)*size_t(a.n),"Invalid scissor array record");
+            for(int i=0;i<a.n;i++){const p_scissor &r=a.r[i];need(r.w>=0 && r.h>=0,"Invalid scissor dimensions");state.scissor_at[a.first+i]={{r.x,r.y},{uint32_t(r.w),uint32_t(r.h)}};state.scissor_set|=1u<<(a.first+i);}break;}
+        case OP_DEPTH_RANGES:{auto a=variable_payload<p_depth_ranges>(p,n);need(a.n>=1 && a.n<=15 && a.first>=1 && a.first<=16-a.n && n>=offsetof(p_depth_ranges,r)+sizeof(p_depth_range)*size_t(a.n),"Invalid depth range array record");
+            for(int i=0;i<a.n;i++){state.depth_range_at[a.first+i][0]=a.r[i].n;state.depth_range_at[a.first+i][1]=a.r[i].f;state.depth_range_set|=1u<<(a.first+i);}break;}
         case OP_BIND_PROGRAM:{CPU_SCOPE(Program);auto a=payload<p_bind_program>(p,n);need(!a.prog || a.prog->nstage<=6,"Invalid bound program");for(unsigned st=0;st<6;st++)if(a.stages&(1u<<nvn_stage[st]))state.shader[st]=nullptr;if(!a.prog)break;const std::array<Shader*,6> &loaded=program_shaders(a.prog, a.stages);for(unsigned i=0;i<a.prog->nstage;i++){Shader *s=loaded[i];if(s && s->stage<6 && (a.stages&(1u<<nvn_stage[s->stage])))state.shader[s->stage]=s;}break;}
         case OP_BIND_STATE:{auto a=payload<p_bind_state>(p,n);switch(a.kind){case 0:{blend_st b;memcpy(&b,a.bytes,sizeof(b));state.blend[b.target]=b;break;}case 1:memcpy(&state.color,a.bytes,sizeof(state.color));break;case 2:memcpy(&state.mask,a.bytes,sizeof(state.mask));break;case 3:memcpy(&state.ms,a.bytes,sizeof(state.ms));break;case 4:memcpy(&state.poly,a.bytes,sizeof(state.poly));break;case 5:memcpy(&state.ds,a.bytes,sizeof(state.ds));break;default:xbg_fatalf("Unknown NVN state object %d",a.kind);}break;}
         case OP_BIND_VATTR:{auto a=variable_payload<p_bind_vattr>(p,n);need(a.first==0 && a.n>=0 && a.n<=16 && n>=offsetof(p_bind_vattr,st)+size_t(a.n)*4,"Invalid vertex attribute record");need(xbg_vertex_attributes_replace(state.attrib,reinterpret_cast<const uint32_t*>(a.st),a.n)==0,"Invalid vertex attribute replacement");break;}

@@ -45,6 +45,9 @@ void mtl_sub_event(volatile uint32_t *val, uint32_t mode, uint32_t v);   // Writ
 // the value with no further submit reads a stale one, and a CPU Signal is later overwritten by the older GPU write. The Metal replay writes at completion: hle_nvn.c's weak
 // default does nothing there
 void mtl_event_read(const volatile uint32_t *val);
+// A device property the replay answers from the GPU it runs on, instead of hle_nvn.c's Tegra table (nvnDeviceGetInteger): 1 when *out was set. Asked for
+// NVN_DEVICE_INFO_MAX_VIEWPORTS only. hle_nvn.c's weak default answers nothing (the Metal replay); nvn_vk.c asks the Vulkan engine once it is initialized
+int mtl_device_integer(int what, int *out);
 void mtl_sub_counter(uint64_t addr, uint32_t type);                       // Write the counter record after completion
 uint64_t mtl_sub_commit(void);
 

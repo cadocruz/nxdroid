@@ -29,12 +29,13 @@ fix:     nothing for correctness; if passes are to be merged as nvn_mtl.m merges
 
 # Fixed, recorded in opcode_map.txt's note column: P1-P5, P7 (the first sprint) and P6 (OP_VIEWPORTS, in the
 # draw: the handler writes viewport[first..first+n) and keeps the array's length; the draw declares that many
-# viewports as dynamic state, with the one recorded scissor and depth range for each, only when the last
+# viewports as dynamic state, each with its own scissor and depth range, only when the last
 # pre-raster shader writes ViewportIndex, and one otherwise, which keeps nvn_cover's one-viewport proof for
 # every non-selecting draw; multiViewport / maxViewports / the enabled shaderOutputViewportIndex are checked
 # and validate_capabilities accepts the viewport capabilities; a viewport mask (ViewportMaskNV) is refused
-# with a [RED] line). Still unreachable end to end: the front end does not enable shaderOutputViewportIndex,
-# the writer collapses SetScissors / SetDepthRanges to index 0, the multiview fan-out is open; see
+# with a [RED] line). Viewports 1..15 take their own scissor and depth range since 2026-11-05 (OP_SCISSORS /
+# OP_DEPTH_RANGES), and MAX_VIEWPORTS comes from the device. Still unreachable end to end: the front end does not
+# enable shaderOutputViewportIndex, the multiview fan-out is open; see
 # docs/reference/android.md, "The replay refused a record of more than one viewport".
 #
 # Not mismatches, checked and left alone:
