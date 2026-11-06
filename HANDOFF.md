@@ -279,7 +279,7 @@ on the Vulkan replay, the record above), so the next step is a GPU frame capture
 pass, draw, render target and texture, so the first pass whose output is already wrong names the
 faulty stage. The menu names below are from memory of those tools and may differ slightly by version.
 
-**First, two short runs that need no new tool (2026-11-05):** the build of this session's commit
+**First, two short runs that need no new tool (2026-11-05, executed as Runs 26 and 27):** the build of this session's commit
 logs, by default, `[RED] NVN CPU wrote the storage of a GPU-drawn texture after the GPU` (the first 20).
 The reason, read in `xbg_game.cpp` `get_image_slow`: once an image is marked GPU-drawn (`gpu_written`),
 the engine never looks at its guest bytes again (the CPU-coherent pool hashing and the dirty tracker
@@ -288,21 +288,14 @@ is the game's CPU (or a host copy) writing them after the GPU; on the Switch the
 bytes, here it keeps the old drawing. The alias path of `get_image_slow` makes it reachable: a new
 texture object over the storage of a drawn one, with the same description, shares its image and its
 `gpu_written`. This fits the only change that helped (run 23, the pool-alias invalidation) and pool
-storage MK8DX shares between transient render targets and textures. Run A: no marker, a race, log and
-screenshot (`26_base.*`); count the `[RED] NVN CPU wrote …` lines and note their formats and sizes.
-In the same log, answer the question runs 20 to 25 left open (their record names only the two-slot
-diagnostic, and run 21c, which needed the sampler line, was not run, so both were probably absent, not
-confirmed): `grep -h "stencil-mode texture read as depth\|sampler compare mode does not match\|nvnDeviceGetInteger item"
-/tmp/nxdroid-test/26_base.txt | sort | uniq -c`, and write the result, "none" included, in the run's line
-in §8 item 12 step 9. A stencil-mode line is what the stencil-view fix (suspect 2 below) waits for; the
-`nvnDeviceGetInteger item 0x26` line should not appear (§8 item 2).
-Run B, if run A has any: `android_gfx_ab.py --adb "$ADB" gfx-cpugpu-refresh --on --wait 120 --shot
-/tmp/nxdroid-test/27_cpugpu_refresh.png --log /tmp/nxdroid-test/27_cpugpu_refresh.txt`, then
-`--clear --no-restart`; its log must say `NVN GPU-drawn textures re-uploaded after a CPU write=1`. The
-marker re-uploads such an image from guest memory: right when the CPU rewrote the whole texture, wrong
-where it rewrote only part of one the GPU drew. If run B fixes or improves the picture, the capture is
-still worth doing to see which textures they are, but the cause is found. Record both runs in §8 item
-12 step 9.
+storage MK8DX shares between transient render targets and textures.
+Run A (Run 26): no marker, a race, log and screenshot (`26_base.*`); confirmed 2 `[RED] NVN CPU wrote …` lines
+(1920x1080 fmt 0x3d, 960x540 fmt 0x25). In the same log, confirmed absent: `stencil-mode texture read as depth` (none),
+`sampler compare mode does not match` (none), and `nvnDeviceGetInteger item 0x26` (none).
+Run B (Run 27, `gfx-cpugpu-refresh=1`): log confirms `NVN GPU-drawn textures re-uploaded after a CPU write=1`
+and re-uploaded the 960x540 target. Visual result: corrupted 3D picture remained (black pixels increased
+to 25.9%). Marker cleared. Both runs recorded in §8 item 12 step 9. With these short runs done, proceed
+to the GPU frame capture below.
 
 **Before:** installing either tool on the Linux machine needs the owner's go-ahead (`AGENTS.md`: ask
 before downloading or installing). The APK must be the debug build (`assembleDebug`, debuggable), from
@@ -734,18 +727,18 @@ Current counts:
    `xbg_game_set_viewport_features` (through `dm_vk_config`); the 1.2 feature struct is chained by the
    instance's `apiVersion` (`xbg_game_config.instance_api_version`), not the loader's. **Not measured on
    the device.** Open:
-   - **[DONE 2026-11-05, not measured on the device]** `NVN_DEVICE_INFO_MAX_VIEWPORTS` comes from the
+   - **[DONE 2026-11-05, measured on the device in run 26]** `NVN_DEVICE_INFO_MAX_VIEWPORTS` comes from the
      device: `nvnDeviceGetInteger` asks the replay (`mtl_device_integer`, `nvn_mtl.h`; `nvn_vk.c` →
      `xbg_device_integer`, `multiViewport ? min(16, maxViewports) : 1`); the Tegra table's 16 is left
      only before the Vulkan replay is up (`[RED] nvnDeviceGetInteger item 0x26 before the Vulkan replay is
-     initialized`, which a device log should not show).
-   - **[DONE 2026-11-05, not measured on the device]** `SetScissors` / `SetDepthRanges` keep every
+     initialized`, which a device log should not show; confirmed absent in run 26).
+   - **[DONE 2026-11-05, measured on the device in run 26]** `SetScissors` / `SetDepthRanges` keep every
      index: index 0 as before (`OP_SCISSOR` / `OP_DEPTH_RANGE`), 1..15 in the new `OP_SCISSORS` /
      `OP_DEPTH_RANGES` records (`OP_COUNT_` is 53, the `OP_XBG_*` block 54..64, the capture layout says
      `ops 53`), and a draw that declares viewport *i* sets scissor and depth range *i*. A range past 16
      is refused with `[RED] SetScissors first=… n=…: outside NVN's 16 viewports`. The Metal replay skips
      the new records (index 0 only, as before). Checked by a harness of the extracted writer and by the
-     gates; CI's NDK build is the first compile.
+     gates; CI's NDK build is the first compile. Confirmed clean on device in run 26 (no out-of-range red).
    - The `VK_KHR_multiview` fan-out for a viewport mask (gate, SPIR-V rewrite, layered pass and
      composite) is designed, not written.
    - The probe prints `multiViewport`, `multiview`, `shaderOutputViewportIndex`, `shaderOutputLayer` and
@@ -1254,6 +1247,30 @@ Current counts:
       diagnostic step: add a reviewed runtime capture request that safely arms the next-present
       frame, or another Android-accessible trigger; do not repeat a `DM_CTL texdump`/`passdump`
       request expecting output until such support exists.
+    - **Run 26, clean baseline (2026-11-05, `HEAD=f3a8513`):** valid capture
+      `/tmp/nxdroid-test/26_base.png` and log `/tmp/nxdroid-test/26_base.txt` with all markers
+      cleared (`scripts/android_gfx_ab.py --clear-all --no-restart`). Fresh install of debug APK
+      (`app-debug.apk`, assembled from commit `f3a8513`). The new CPU-write check found two occurrences:
+      `[RED] NVN CPU wrote the storage of a GPU-drawn texture after the GPU (the replay keeps the GPU's pixels): serial=196427 fmt=0x3d 1920x1080 layers=1 levels=1 target=1 decoded=0`
+      and `serial=197650 fmt=0x25 960x540 layers=1 levels=1 target=1 decoded=0`. The questions left
+      open by runs 20 to 25 were answered: `stencil-mode texture read as depth` (none), `sampler compare
+      mode does not match` (none), and `nvnDeviceGetInteger item 0x26 before the Vulkan replay is
+      initialized` (none; confirms device-backed `NVN_DEVICE_INFO_MAX_VIEWPORTS` operates cleanly).
+      The duplicate colour slot diagnostic remained (`slots=3,4`, format `0x3d`, masks `0xf,0`).
+      Across 18 race samples, FPS was 7.15--49.80 (mean 23.08), `gpu_ms` 7.71--20.65 (mean 16.76),
+      and `submit_cpu_ms` 8.73--114.15 (mean 28.38). Visual result: **3D corruption remains**
+      (speckle, black areas, posterized lighting); center crop has 16.5% black pixels. No crash or hang.
+    - **Run 27, `gfx-cpugpu-refresh=1` (2026-11-05, `HEAD=f3a8513`):** valid capture
+      `/tmp/nxdroid-test/27_cpugpu_refresh.png` and log `/tmp/nxdroid-test/27_cpugpu_refresh.txt`.
+      The log confirms `NVN GPU-drawn textures re-uploaded after a CPU write=1 (marker gfx-cpugpu-refresh)`.
+      Re-upload was triggered once for the 960x540 target: `[RED] NVN CPU wrote the storage of a
+      GPU-drawn texture after the GPU (the replay keeps the GPU's pixels; gfx-cpugpu-refresh re-uploads
+      it): serial=316271 fmt=0x25 960x540 layers=1 levels=1 target=1 decoded=0`. Across 26 race
+      samples, FPS was 17.48--40.21 (mean 27.22), `gpu_ms` 8.38--22.41 (mean 15.02), and `submit_cpu_ms`
+      11.39--28.40 (mean 18.32). Visual result: **no visual improvement; 3D scene remains severely
+      corrupted**, with black regions increasing from 16.5% to 25.9% in the center crop due to
+      blindly re-uploading guest memory over GPU-rendered data. Result: **`gfx-cpugpu-refresh` is not
+      the fix**. All markers cleared after capture (`scripts/android_gfx_ab.py gfx-cpugpu-refresh --clear --no-restart`).
 
 ## 9. How to work in this tree
 
