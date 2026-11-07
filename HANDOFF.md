@@ -76,6 +76,15 @@ measured). The one title run so far is **Mario Kart 8 Deluxe** (`010015200002200
   The Vulkan replay engine (`xbg_game.cpp`) consequently bound `ii.sampler = VK_NULL_HANDLE` for all
   193,457 texture bindings across the game's 29,000+ shaders. Fixed in `prepare_game_android.py` and
   locally batch-updated across all 27,869 `.xgs` bundle files; pending device deployment.
+- **Race-start crash on Adreno 740 diagnosed and resolved (2026-11-07).** After deploying the `.xgs`
+  combined image sampler fix, the title screen and menus rendered with proper texture filtering, but entering
+  a race aborted with `NVN sampler linear filtering unsupported ...`. Cause: `sampler_slow` in `xbg_game.cpp`
+  aborted via `xbg_fatalf` when linear filtering or PCF was requested on formats lacking
+  `VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT` on Adreno 740 (`D32_SFLOAT`, `R32_SFLOAT`,
+  `R32G32B32A32_SFLOAT`), and `null_texture` created dummy depth textures using `0x34` (`D32_SFLOAT`).
+  Resolved by clamping unsupported linear/anisotropic filtering to nearest in `sampler_slow` with a one-time log,
+  using NVN format `0x32` (`D16` / `X8_D24`) for unbound depth/shadow slots in `null_texture`, including shadow
+  flags in `ImgKey::kind`, and clearing stale pipeline cache files (`vk-pipeline-*.bin`).
 - `dm/games/0100152000022000/README.md` records the Android runs and findings (`AGENTS.md`: a game counts
   as running on Android only when its note says so).
 
@@ -514,6 +523,7 @@ host address, and guest memory is mapped memory.
 | `dm/gfx/nvn/nvn_obj.h` | master | The engine adapts to our command vocabulary, not the reverse. The NVN profiles (93 when this was decided) record through `dm/gfx/nvn/hle_nvn.c`; the engine's fork had diverged from it |
 | Zero-copy | **not available**; mirror is the baseline | `VK_EXT_external_memory_host` is absent on the Adreno 740. The only remaining route is to allocate pool memory *as* an `AHardwareBuffer` and import it, unmeasured: §8 item 6 |
 | Platforms | **Android only**, owner's decision | nxdroid is never built for Mac or iOS again. `regress.py check --games` and the Mac `make -C dm/host` are no longer requirements; the Apple branch of `port.h`, the `.m` files and the IPA tooling stay in the tree only until the **last** task (§8 item 10), because `nvn_mtl.m` is still the reference the `opcode_map` / `abi_gaps` gates compare against |
+| Adreno 740 float/depth sampler filtering | **Nearest fallback + D16/D24 dummy depth** | On Adreno 740, `VK_FORMAT_D32_SFLOAT`, `VK_FORMAT_R32_SFLOAT`, and `VK_FORMAT_R32G32B32A32_SFLOAT` lack `VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT`. Aborting in `sampler_slow` crashes the race start immediately when `.xgs` bindings are `COMBINED_IMAGE_SAMPLER` (`type = 1`). Clamping unsupported linear/aniso sampler states to `VK_FILTER_NEAREST` with a one-time log avoids aborts, and using NVN format `0x32` (`D16` / `X8_D24`) for unbound depth/shadow dummy textures in `null_texture` provides hardware-supported linear/PCF filtering |
 
 ## 3. The target, measured
 
@@ -544,7 +554,7 @@ new fact in `docs/reference/android.md`, not here.
 
 | Path | What it is | State |
 |---|---|---|
-| `dm/gfx/vulkan/` (85 tracked files) | the vendored Vulkan engine and its `nvn_vk.c` adapter | pinned, adapted (12 handlers in `xbg_game.cpp`, 27 entry points in `nvn_vk.c`, the Sprint 6 fixes) |
+| `dm/gfx/vulkan/` (85 tracked files) | the vendored Vulkan engine and its `nvn_vk.c` adapter | pinned, adapted (12 handlers in `xbg_game.cpp`, 27 entry points in `nvn_vk.c`, the Sprint 6 fixes, sampler linear filtering fallback, D16 dummy depth, and ImgKey shadow separation) |
 | `dm/android/` | the bionic compatibility layer (`compat/`), build environment (`docker/`, `CMakeLists.txt`, Gradle), `front_android.c` (our `front.h`), `vulkan_present.cpp`, `jni_android.c`, `port_android.c`, `apple_stubs.c` (+ `apple_stubs/include`), `app/` (Java), `tools/`, `tests/` (`test_device_bionic.c`, `test_vm_alias.c`), `mockups/` | NDK r29 build of `dmhost` and `libdm.so`, both run on the device; CI compiles them |
 | `dm/tools/android_vendor.py` + `.tsv` | provenance gate: 108 rows, 13 adapted | green in CI; on a Windows checkout read §10 |
 | `dm/gfx/vk/probe/` | the device capability probe (`vk_probe.c`, Makefile with desktop and `android` targets, output contract in `tests/test_probe_output.py`) | run on the device, 0 breaches |
@@ -1267,6 +1277,19 @@ Current counts:
       `ii.sampler = VK_NULL_HANDLE`. Adreno 740 hardware sampling without a sampler returned zeroes,
       rendering all textured geometry (road, kart) pitch black. Fixed in `prepare_game_android.py` and
       all 27,869 `.xgs` bundles batch-updated locally in 11.95s. Next: deploy updated `.xgs` shaders to device.
+    - **Run 29, race-start crash diagnosis and resolution (2026-11-07):** after pushing the corrected
+      `.xgs` bundles (`type = 1`), menus and title screen rendered with correct filtering, but clicking OK
+      to start a race immediately aborted with `NVN sampler linear filtering unsupported ...`.
+      Cause: with `b.type = 1`, `descriptors_build` invokes `sampler_slow` on depth/shadow bindings
+      (1,705 bindings with `flags & (1 << 14)`) and 32-bit float textures. On Adreno 740, `VK_FORMAT_D32_SFLOAT`
+      (`0x34`), `VK_FORMAT_R32_SFLOAT` (`0x2d`), and `VK_FORMAT_R32G32B32A32_SFLOAT` (`0x2e`) do not support
+      linear filtering in `optimalTilingFeatures`, and `null_texture` allocated 1x1 dummy depth textures with
+      format `0x34`. In addition, persistent pipeline cache files (`/sdcard/nxdroid/vk-pipeline-*.bin`) held
+      layouts compiled with descriptor type 2.
+      Fix: `null_texture` now uses NVN `0x32` (`D16`, widened to `X8_D24_UNORM_PACK32`), `sampler_slow` clamps
+      unsupported linear/aniso filtering to `VK_FILTER_NEAREST` with a one-time log instead of aborting,
+      `ImgKey::kind` includes shadow flags (`b.flags & 0xffffff00u`) to prevent collisions in `img_cache`,
+      and stale pipeline caches are cleared.
 
 ## 9. How to work in this tree
 

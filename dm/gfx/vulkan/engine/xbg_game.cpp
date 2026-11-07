@@ -1959,7 +1959,7 @@ const RegisteredTexture &null_texture(const xbg_shader_binding &b){
     unsigned dim=(b.flags&(1u<<31))?(b.flags>>8)&7:1;bool array=b.flags&(1u<<12);unsigned scalar=(b.flags>>16)&3;
     need(!(b.flags&(1u<<13)),"Null multisample texture descriptor unsupported");
     RegisteredTexture r;tex_t &t=r.texture;t.magic=MAGIC('T','E','X',0);t.serial=nvn_new_serial();t.d.width=t.d.height=t.d.depth=t.d.levels=1;
-    t.d.format=b.flags&(1u<<14)?0x34:scalar==1?0x2f:scalar==2?0x30:dim==5?0x2e:0x25;
+    t.d.format=b.flags&(1u<<14)?0x32:scalar==1?0x2f:scalar==2?0x30:dim==5?0x2e:0x25;
     t.d.target=dim==0?(array?3:0):dim==1?(array?4:1):dim==2?2:dim==3?(array?9:8):dim==5?10:-1;need(t.d.target>=0,"Unknown null texture dimension");
     nvn_tex_layout(&t.d,&t.L);
     if(dim==5){static uint8_t zero[65536]{};t.mem=zero;t.L.size=sizeof(zero);}
@@ -2819,7 +2819,16 @@ VkSampler sampler_slow(const samp_par &p,Image &im,VkFormat viewed,bool integer_
     VkSamplerCreateInfo s{};int result=xbg_sampler_from_nvn(&input,&limits,&s);
     if(result)xbg_fatalf("NVN sampler %s result=%d min=%u mag=%u wrap=%u/%u/%u lod=%g/%g bias=%g aniso=%g compare=%u/%u border=%g,%g,%g,%g texture=%llu format=%#x vk=%u mirrorEnabled=%u",xbg_sampler_error(result),result,p.minf,p.magf,p.ws,p.wt,p.wr,p.lod_min,p.lod_max,p.lod_bias,p.aniso,p.cmp_mode,p.cmp_func,p.border[0],p.border[1],p.border[2],p.border[3],(unsigned long long)im.source.serial,im.source.d.format,unsigned(viewed),sampler_mirror_clamp_enabled);
     const VkFormatProperties &fp=format_properties(viewed);
-    if((s.minFilter==VK_FILTER_LINEAR || s.magFilter==VK_FILTER_LINEAR) && !(fp.optimalTilingFeatures&VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))xbg_fatalf("NVN sampler linear filtering unsupported min=%u mag=%u compare=%u/%u format=%#x vk=%u optimalFeatures=%#x texture=%llu decoded=%d imfmt=%u",p.minf,p.magf,p.cmp_mode,p.cmp_func,im.source.d.format,unsigned(viewed),fp.optimalTilingFeatures,(unsigned long long)im.source.serial,int(im.decoded),unsigned(im.fmt));
+    if((s.minFilter==VK_FILTER_LINEAR || s.magFilter==VK_FILTER_LINEAR || s.mipmapMode==VK_SAMPLER_MIPMAP_MODE_LINEAR || s.anisotropyEnable) && !(fp.optimalTilingFeatures&VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)){
+        static std::set<std::pair<uint32_t,unsigned>> warned;
+        if(warned.insert({im.source.d.format,unsigned(viewed)}).second)
+            xbg_logf("NVN sampler linear filtering unsupported for format=%#x vk=%u optimalFeatures=%#x: clamping to nearest",im.source.d.format,unsigned(viewed),fp.optimalTilingFeatures);
+        s.minFilter=VK_FILTER_NEAREST;
+        s.magFilter=VK_FILTER_NEAREST;
+        s.mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        s.anisotropyEnable=VK_FALSE;
+        s.maxAnisotropy=1.0f;
+    }
     need(s.pNext==nullptr,"Unexpected sampler extension chain");
     auto bits=[](float f){uint32_t u;memcpy(&u,&f,4);return u;};
     std::array<uint32_t,16> key{s.flags,uint32_t(s.magFilter),uint32_t(s.minFilter),uint32_t(s.mipmapMode),uint32_t(s.addressModeU),uint32_t(s.addressModeV),uint32_t(s.addressModeW),bits(s.mipLodBias),s.anisotropyEnable,bits(s.maxAnisotropy),s.compareEnable,uint32_t(s.compareOp),bits(s.minLod),bits(s.maxLod),uint32_t(s.borderColor),s.unnormalizedCoordinates};
@@ -3240,7 +3249,7 @@ void descriptors_build(Descriptors &out,Commands &commands,bool compute){CPU_SCO
                     uint64_t handle=state.tex[ns][b.slot+element];int id=int(handle&0xfffff);
                     if(id!=0){
                         uint64_t sh=b.type==VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER?(b.sampler_slot!=UINT32_MAX?state.samp[ns][b.sampler_slot]:handle):0;
-                        ikey={handle,sh,uint64_t(uintptr_t(state.texture_pool.pool->mem)),uint64_t(state.texture_pool.off),state.sampler_pool.pool?uint64_t(uintptr_t(state.sampler_pool.pool->mem)):0,uint64_t(state.sampler_pool.off),uint64_t(b.type)|(uint64_t((b.flags>>16)&3)<<8)};img_cacheable=true;
+                        ikey={handle,sh,uint64_t(uintptr_t(state.texture_pool.pool->mem)),uint64_t(state.texture_pool.off),state.sampler_pool.pool?uint64_t(uintptr_t(state.sampler_pool.pool->mem)):0,uint64_t(state.sampler_pool.off),uint64_t(b.type)|(uint64_t(b.flags&0xffffff00u)<<8)};img_cacheable=true;
                         auto it=img_cache.find(ikey);
                         auto live=it==img_cache.end()?images.end():images.find(it->second.tex->serial);
                         if(it!=img_cache.end() && it->second.record->revision==it->second.revision &&
