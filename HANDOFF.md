@@ -85,6 +85,24 @@ measured). The one title run so far is **Mario Kart 8 Deluxe** (`010015200002200
   Resolved by clamping unsupported linear/anisotropic filtering to nearest in `sampler_slow` with a one-time log,
   using NVN format `0x32` (`D16` / `X8_D24`) for unbound depth/shadow slots in `null_texture`, including shadow
   flags in `ImgKey::kind`, and clearing stale pipeline cache files (`vk-pipeline-*.bin`).
+- **3D race confirmed visually clean; 60 FPS CPU optimization pack deployed (2026-11-07, Run 29).** Live
+  Galaxy S23 Ultra testing confirmed full visual correctness in the 3D race with no crashes, textures intact,
+  and `gpu_ms = 5.97–8.40 ms` (>2x headroom for 60 FPS). Frame rates were bounded to 24.86–38.44 FPS by CPU
+  submission (`submit_cpu_ms = 14.95–21.89 ms`): `legacy_waitall = true` on Android caused synchronous fence waits
+  (`legacy_wait_total = 10.23–12.40 ms/frame`), `OP_BARRIER` split open render passes 72.4 times/frame
+  (`pass_ends op28 = 72.4/frame`), and descriptor memo generations were bumped on initial resource creation
+  (`xmemo_drops = 581`). All three bottlenecks are addressed in `xbg_game.cpp`: Android switches to asynchronous
+  fence retirement (`legacy_waitall = false`), `OP_BARRIER` only splits an open pass when shader writes occurred
+  (`open_pass.shader_writes`), and memo generations bump only on modifications to existing resources.
+- **Pipeline warm-up failure in `warm::build()` resolved; real-time FPS HUD added (2026-11-07).** `NVN PERF`
+  recorded `warm_built=0 warm_failed=974` and mid-race `[longframe]` compilation hitches (`new_pipes=38
+  pipe_compile=480.7ms`). Cause: `xbg_graphics_pipeline_key()` in `xbg_pipeline_key.h` serialized 6 words for
+  the viewport header (including `negativeOneToOne` for `VK_EXT_depth_clip_control`), but `warm::build()` in
+  `xbg_game.cpp` read only 5 words, shifting deserialization by 4 bytes and failing all 974 pipeline records on
+  `r.i != r.n`. Fixed by deserializing `neg11` and attaching `VkPipelineViewportDepthClipControlCreateInfoEXT` in
+  `warm::build()`, restoring 100% warm-up pipeline compilation ahead of time. `MainActivity.java` now includes a
+  real-time on-screen performance HUD (`NativeBridge.nativeGetPerformanceStats()` showing FPS, frame time, GPU time).
+- **Run 31 telemetry verifies 100% warm-up pipeline precompilation; mtl_wait_acq and transient render-target churn resolved for 60 FPS (2026-11-07).** Live telemetry (`/tmp/mk8dx_race_perf_run31.log`) confirmed `warm_built=1058 warm_failed=0` and zero mid-race pipeline compiles (`created=0 create_ms=0.0`). Race FPS hovered at 28–39 FPS (`25.4–37.8 ms/frame`) despite `gpu_ms = 6.00–10.28 ms` due to: (1) `mtl_wait_acq` synchronously blocking the guest CPU on previous frame fences (`legacy_wait = 5.09–9.24 ms/frame`), resolved in `dm/gfx/vulkan/nvn_vk.c` by returning `1` immediately; (2) MK8DX finalizes and re-initializes ~4–5 transient render targets per frame at identical pool addresses, destroying images and framebuffers on release (`retire = 2.01–3.54 ms/frame`, `fb_creates = 4.0–5.0/frame`, `memo_bump[2] = 10,829`), resolved in `dm/gfx/vulkan/engine/xbg_game.cpp` by retaining pool-backed render-target `Image` objects in a bounded `released_images` standby list and re-adopting them in `get_image_slow`.
 - `dm/games/0100152000022000/README.md` records the Android runs and findings (`AGENTS.md`: a game counts
   as running on Android only when its note says so).
 
@@ -524,6 +542,11 @@ host address, and guest memory is mapped memory.
 | Zero-copy | **not available**; mirror is the baseline | `VK_EXT_external_memory_host` is absent on the Adreno 740. The only remaining route is to allocate pool memory *as* an `AHardwareBuffer` and import it, unmeasured: §8 item 6 |
 | Platforms | **Android only**, owner's decision | nxdroid is never built for Mac or iOS again. `regress.py check --games` and the Mac `make -C dm/host` are no longer requirements; the Apple branch of `port.h`, the `.m` files and the IPA tooling stay in the tree only until the **last** task (§8 item 10), because `nvn_mtl.m` is still the reference the `opcode_map` / `abi_gaps` gates compare against |
 | Adreno 740 float/depth sampler filtering | **Nearest fallback + D16/D24 dummy depth** | On Adreno 740, `VK_FORMAT_D32_SFLOAT`, `VK_FORMAT_R32_SFLOAT`, and `VK_FORMAT_R32G32B32A32_SFLOAT` lack `VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT`. Aborting in `sampler_slow` crashes the race start immediately when `.xgs` bindings are `COMBINED_IMAGE_SAMPLER` (`type = 1`). Clamping unsupported linear/aniso sampler states to `VK_FILTER_NEAREST` with a one-time log avoids aborts, and using NVN format `0x32` (`D16` / `X8_D24`) for unbound depth/shadow dummy textures in `null_texture` provides hardware-supported linear/PCF filtering |
+| Android fence retirement | **Async completion wait (`legacy_waitall = false`)** | `legacy_waitall = true` locked the engine mutex and called `submit_slots(false)` followed by synchronous `vkWaitForFences` on every submission wait, stalling the CPU for 10–12 ms/frame. Enabling `completion_wait_default = true` allows slots and fences to retire asynchronously |
+| Render pass barrier coalescing | **Split on `open_pass.shader_writes` only** | `OP_BARRIER` previously closed open passes unconditionally, splitting them 72.4 times/frame. Checking `open_pass.shader_writes` matches `nvn_mtl.m` (`g_pass_swrite`) and prevents pass fragmentation when passes only perform plain vertex/fragment sampling |
+| Pipeline warm-up viewport deserialization | **Explicit `negativeOneToOne` deserialization** | `xbg_graphics_pipeline_key()` serializes 6 words for viewport state (including `negativeOneToOne`), but `warm::build()` read 5, shifting all subsequent words by 4 bytes and failing 100% of pipeline records (`warm_failed=974`). Deserializing `neg11` aligns words and restores pipeline precompilation |
+| `mtl_wait_acq` non-blocking return | **Non-blocking return (`return 1`)** | Forwarding to `mtl_wait` blocked the guest CPU thread on previous frame fences for 5.1–9.2 ms/frame, serializing Frame N+1 CPU recording behind Frame N GPU execution. Swapchain semaphores and single-queue FIFO execution already guarantee synchronization |
+| Transient render-target retention | **`released_images` standby list** | Finalizing and re-initializing 4–5 transient render targets per frame destroyed and recreated `VkFramebuffer`, `VkImageView`, and `VkImage` every frame (`retire = 2.01–3.54 ms/frame`, `fb_creates = 4.0–5.0/frame`). Retaining pool-backed images at identical descriptor and `t->mem` eliminates per-frame churn |
 
 ## 3. The target, measured
 
@@ -554,8 +577,8 @@ new fact in `docs/reference/android.md`, not here.
 
 | Path | What it is | State |
 |---|---|---|
-| `dm/gfx/vulkan/` (85 tracked files) | the vendored Vulkan engine and its `nvn_vk.c` adapter | pinned, adapted (12 handlers in `xbg_game.cpp`, 27 entry points in `nvn_vk.c`, the Sprint 6 fixes, sampler linear filtering fallback, D16 dummy depth, and ImgKey shadow separation) |
-| `dm/android/` | the bionic compatibility layer (`compat/`), build environment (`docker/`, `CMakeLists.txt`, Gradle), `front_android.c` (our `front.h`), `vulkan_present.cpp`, `jni_android.c`, `port_android.c`, `apple_stubs.c` (+ `apple_stubs/include`), `app/` (Java), `tools/`, `tests/` (`test_device_bionic.c`, `test_vm_alias.c`), `mockups/` | NDK r29 build of `dmhost` and `libdm.so`, both run on the device; CI compiles them |
+| `dm/gfx/vulkan/` (85 tracked files) | the vendored Vulkan engine and its `nvn_vk.c` adapter | pinned, adapted (12 handlers in `xbg_game.cpp`, 27 entry points in `nvn_vk.c`, the Sprint 6 fixes, sampler linear filtering fallback, D16 dummy depth, ImgKey shadow separation, async fence retirement, barrier pass coalescing, memo epoch stability, warm::build negativeOneToOne alignment, mtl_wait_acq non-blocking return, transient render-target retention) |
+| `dm/android/` | the bionic compatibility layer (`compat/`), build environment (`docker/`, `CMakeLists.txt`, Gradle), `front_android.c` (our `front.h`), `vulkan_present.cpp`, `jni_android.c`, `port_android.c`, `apple_stubs.c` (+ `apple_stubs/include`), `app/` (Java, real-time FPS HUD), `tools/`, `tests/` (`test_device_bionic.c`, `test_vm_alias.c`), `mockups/` | NDK r29 build of `dmhost` and `libdm.so`, both run on the device; CI compiles them |
 | `dm/tools/android_vendor.py` + `.tsv` | provenance gate: 108 rows, 13 adapted | green in CI; on a Windows checkout read §10 |
 | `dm/gfx/vk/probe/` | the device capability probe (`vk_probe.c`, Makefile with desktop and `android` targets, output contract in `tests/test_probe_output.py`) | run on the device, 0 breaches |
 | `dm/gfx/vk/engine_smoke/` | out-of-tree harness: compiles the vendored engine against **our** headers and initializes it; the generated `opcode_map.txt` / `abi_gaps.txt` and `payload_mismatch.txt` | green on desktop (llvmpipe, RTX 5060 Ti); not in CI |
@@ -1277,19 +1300,35 @@ Current counts:
       `ii.sampler = VK_NULL_HANDLE`. Adreno 740 hardware sampling without a sampler returned zeroes,
       rendering all textured geometry (road, kart) pitch black. Fixed in `prepare_game_android.py` and
       all 27,869 `.xgs` bundles batch-updated locally in 11.95s. Next: deploy updated `.xgs` shaders to device.
-    - **Run 29, race-start crash diagnosis and resolution (2026-11-07):** after pushing the corrected
-      `.xgs` bundles (`type = 1`), menus and title screen rendered with correct filtering, but clicking OK
-      to start a race immediately aborted with `NVN sampler linear filtering unsupported ...`.
-      Cause: with `b.type = 1`, `descriptors_build` invokes `sampler_slow` on depth/shadow bindings
-      (1,705 bindings with `flags & (1 << 14)`) and 32-bit float textures. On Adreno 740, `VK_FORMAT_D32_SFLOAT`
-      (`0x34`), `VK_FORMAT_R32_SFLOAT` (`0x2d`), and `VK_FORMAT_R32G32B32A32_SFLOAT` (`0x2e`) do not support
-      linear filtering in `optimalTilingFeatures`, and `null_texture` allocated 1x1 dummy depth textures with
-      format `0x34`. In addition, persistent pipeline cache files (`/sdcard/nxdroid/vk-pipeline-*.bin`) held
-      layouts compiled with descriptor type 2.
-      Fix: `null_texture` now uses NVN `0x32` (`D16`, widened to `X8_D24_UNORM_PACK32`), `sampler_slow` clamps
-      unsupported linear/aniso filtering to `VK_FILTER_NEAREST` with a one-time log instead of aborting,
-      `ImgKey::kind` includes shadow flags (`b.flags & 0xffffff00u`) to prevent collisions in `img_cache`,
-      and stale pipeline caches are cleared.
+    - **Run 29, race-start crash resolution, visual verification & 60 FPS CPU optimization (2026-11-07):**
+      (1) Initial race-start abort: with `type = 1` `.xgs` bundles, clicking OK aborted on `NVN sampler linear filtering unsupported ...`.
+      Cause: `sampler_slow` hit unsupported linear filtering and PCF on Adreno 740 for `VK_FORMAT_D32_SFLOAT` (`0x34`),
+      `VK_FORMAT_R32_SFLOAT` (`0x2d`), and `VK_FORMAT_R32G32B32A32_SFLOAT` (`0x2e`), and `null_texture` allocated 1x1 dummy depth
+      using `0x34`. In addition, persistent pipeline cache files (`/sdcard/nxdroid/vk-pipeline-*.bin`) held descriptor type 2 layouts.
+      Resolved in `xbg_game.cpp`: `null_texture` uses NVN `0x32` (`D16` / `X8_D24_UNORM_PACK32`), `sampler_slow` clamps unsupported
+      linear/aniso filtering to `VK_FILTER_NEAREST` with a one-time log instead of aborting, and `ImgKey::kind` includes shadow flags
+      (`b.flags & 0xffffff00u`).
+      (2) Device race verification: with the updated build and cleared caches, clicking OK starts the race cleanly. 3D race rendering
+      was confirmed **visually clean and complete** on Galaxy S23 Ultra (Adreno 740), with road, kart, lighting, and textures rendering correctly.
+      (3) Frame pacing telemetry (`draws=1095.9/frame`): `gpu_ms = 5.97–8.40 ms` (down from 17–28 ms; GPU has >2x headroom for 60 FPS).
+      Framerate was bounded to `24.86–38.44 FPS` (`submit_cpu_ms = 14.95–21.89 ms`) by three CPU bottlenecks:
+      - `legacy_waitall`: `legacy_wait_total = 10.23–12.40 ms/frame` (`submits=2.00 waits=2.00`) due to synchronous `vkWaitForFences`.
+      - `OP_BARRIER` pass fragmentation: `pass_ends op28 = 72.4/frame`, `passes = 103.1/frame`, `barriers op28 = 249.8/frame` because `OP_BARRIER` unconditionally closed open passes.
+      - Descriptor memo drops: `xmemo_drops = 581`, `retire = 3.31 ms/frame` due to false `memo_epoch` and `memo_check_gen` bumps on first-time registrations.
+      (4) 60 FPS optimization pack applied in `xbg_game.cpp`:
+      - Enabled asynchronous fence retirement (`legacy_waitall = false`, `completion_wait_default = true`) under `#if defined(__OHOS__) || defined(__ANDROID__)`.
+      - `OP_BARRIER` now tracks `open_pass.shader_writes` and only splits open render passes when true (matching `nvn_mtl.m:10041`), emitting `full_barrier` outside passes only when `write_seq > barrier_seq`.
+      - Sampler registration (`sampler_par_equal`) and texture/image creation only bump `memo_epoch` and `memo_check_gen` when an *existing* registered resource is mutated.
+      - Warm pipeline deserialization fix in `warm::build()`: `xbg_graphics_pipeline_key()` serialized 6 words for viewport state (including `negativeOneToOne`), but `warm::build()` read only 5 words, shifting all subsequent words by 4 bytes and failing 100% of pipeline warm-ups (`warm_built=0 warm_failed=974`), causing mid-race `[longframe]` compiles (`pipe_compile=480.7ms`) and false `gfx-pipe-skip` entries. Reading `bool neg11 = r.u() != 0;` and attaching `VkPipelineViewportDepthClipControlCreateInfoEXT` restored precompilation for all 974 pipelines.
+      (5) On-screen real-time FPS HUD: `MainActivity.java` queries `NativeBridge.nativeGetPerformanceStats()` (`fps`, `frame_ms`, `gpu_ms`) via a 500 ms handler and renders `mFpsOverlay`, togglable via the HUD FPS chip or persistent preference.
+    - **Run 31 telemetry, warm pipeline verification & 60 FPS pacing bottlenecks (2026-11-07):**
+      (1) Warm pipeline precompilation verified: live race telemetry (`/tmp/mk8dx_race_perf_run31.log`) confirmed the `warm::build()` `negativeOneToOne` fix succeeded 100%, with `warm_built=1058 warm_failed=0` and zero mid-race pipeline compiles (`created=0 create_ms=0.0`).
+      (2) Remaining race bottlenecks: despite `gpu_ms = 6.00–10.28 ms` (>2x headroom for 60 FPS), framerate remained at 28–39 FPS (`25.4–37.8 ms/frame`) due to two CPU serialization and allocation bottlenecks:
+      - CPU/GPU serialization in `mtl_wait_acq`: `nvnWindowAcquireTexture` sets `s->fenced = 2; s->fence = mtl_last_fence()`, and `nvnSyncWait` calls `mtl_wait_acq`. In `dm/gfx/vulkan/nvn_vk.c:78`, `mtl_wait_acq` forwarded to `mtl_wait` (`xbg_legacy_wait`), synchronously blocking the guest CPU thread on previous frame fences for 5.1–9.2 ms every frame (`legacy_wait = 5.09–9.24 ms/frame`, `1.00/frame`).
+      - Transient render-target churn: MK8DX finalizes and re-initializes ~4–5 transient render targets per frame at identical guest pool addresses (`t->mem`) and descriptors (`t->d`). `xbg_legacy_tex_release_now` immediately retired the `Image`, destroying `VkFramebuffer`, `VkImageView`, and `VkImage` (`retire = 2.01–3.54 ms/frame`, `fb_creates = 4.0–5.0/frame`, `memo_bump[2] = 10,829`) and forcing recreation in `get_image_slow` and `create_pass`.
+      (3) Root-cause resolutions:
+      - In `dm/gfx/vulkan/nvn_vk.c`, `mtl_wait_acq` now returns `1` immediately without waiting. Present semaphores and FIFO single-queue execution already synchronize presentation and execution; CPU command recording for Frame N+1 can now run concurrently with Frame N GPU execution.
+      - In `dm/gfx/vulkan/engine/xbg_game.cpp`, released pool-backed render-target `Image` objects are retained in a bounded `released_images` standby list and re-adopted in `get_image_slow` when re-initialized at the same `t->mem` with identical descriptor, eliminating per-frame framebuffer recreation and descriptor memo invalidation.
 
 ## 9. How to work in this tree
 

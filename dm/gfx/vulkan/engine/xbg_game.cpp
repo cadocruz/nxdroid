@@ -351,7 +351,7 @@ std::atomic<uint64_t> completed{0};uint64_t submitted=0; // guest fence values: 
 // Completion notification (on by default on HarmonyOS; DM_GFX_COMPLETION_WAIT=0/1 overrides): a game thread waiting on a fence is woken at the publish point as soon as its
 // batch completes, instead of queueing for the engine lock behind later submits. Off, the publish point writes completed directly, as before.
 // ifdef __OHOS__
-#ifdef __OHOS__
+#if defined(__OHOS__) || defined(__ANDROID__)
 constexpr bool completion_wait_default=true;
 #else
 constexpr bool completion_wait_default=false;
@@ -359,7 +359,7 @@ constexpr bool completion_wait_default=false;
 bool completion_wait_enabled=completion_wait_default;
 // 栅栏等待是否持引擎锁（旧路径）：鸿蒙缺省不持，标记 gfx-legacy-waitall = 1 退回
 // ifdef __OHOS__
-#ifdef __OHOS__
+#if defined(__OHOS__) || defined(__ANDROID__)
 bool legacy_waitall=false;
 #else
 bool legacy_waitall=true;
@@ -695,7 +695,7 @@ struct ImageList{Image *v[9];uint32_t n=0;void push_back(Image *i){if(n<9)v[n++]
     size_t size()const{return n;}bool empty()const{return !n;}Image *operator[](size_t i)const{return v[i];}};
 // depth_attached / depth_used (NVN PERF pass_ends depth_idle, NVN GPASS dz=1): a pass that carries a depth attachment no
 // draw tests and no clear touches; a tiler loads and stores that attachment for nothing.
-struct OpenPass {VkRenderPass pass{};VkFramebuffer framebuffer{};VkCommandBuffer cmd{};ImageList images;bool depth_attached=false,depth_used=false;} open_pass;
+struct OpenPass {VkRenderPass pass{};VkFramebuffer framebuffer{};VkCommandBuffer cmd{};ImageList images;bool depth_attached=false,depth_used=false,shader_writes=false;} open_pass;
 // Framebuffers of cached render passes, kept across frames (creating and destroying one per pass per frame was ~5% of the
 // render thread on Adreno 730). Each attachment Image lists the keys of the framebuffers that use its views; the first of
 // them to be destroyed (all GPU work that used it is complete by then) takes the framebuffer along. gfx-no-persistent-fb
@@ -1514,6 +1514,7 @@ struct Image {
     }
 };
 std::map<uint64_t,std::shared_ptr<Image>> images;
+static std::vector<std::shared_ptr<Image>> released_images;
 // Address-ordered index of image storage, rebuilt lazily when images change.
 struct ImageRange {uint64_t begin,end;Image *image;};
 std::vector<ImageRange> image_index;bool image_index_dirty=true;uint64_t image_index_maxlen=0;
@@ -1604,8 +1605,9 @@ static bool registered_texture_equal(const RegisteredTexture &a,const Registered
 static bool register_texture_record(RegisteredTexture &slot,const tex_t &texture,const view_t *view){
     RegisteredTexture next;next.texture=texture;
     if(view && (view->set_levels || view->set_layers || view->set_format || view->set_target || view->set_swizzle)){next.view=*view;next.has_view=true;}
+    const bool had=slot.revision!=0;
     bool changed=!slot.revision || !registered_texture_equal(slot,next);
-    next.revision=slot.revision+uint64_t(changed);slot=next;if(changed)++memo_check_gen;return changed;
+    next.revision=slot.revision+uint64_t(changed);slot=next;if(had && changed)++memo_check_gen;return changed;
 }
 struct MemoImage{const tex_t *first;Image *second;const RegisteredTexture *record;uint64_t revision;};
 using PoolKey=std::pair<uintptr_t,int64_t>;
@@ -1803,6 +1805,26 @@ Image &get_image_slow(const tex_t *t,bool upload){CPU_SCOPE(Image);
     auto it=hit?images.end():images.find(t->serial);
     if(!hit){
     if(it==images.end() && t->mem){
+        for(auto rit=released_images.begin();rit!=released_images.end();){
+            if((*rit)->source.mem==t->mem){
+                if(!memcmp(&(*rit)->source.d,&t->d,sizeof(t->d))){
+                    std::shared_ptr<Image> reused=std::move(*rit);
+                    released_images.erase(rit);
+                    reused->source=*t;
+                    it=images.emplace(t->serial,std::move(reused)).first;
+                    image_index_dirty=true;
+                    provenance_image("REUSE",t,*it->second);
+                    break;
+                }else{
+                    retire_object(*rit);
+                    rit=released_images.erase(rit);
+                    continue;
+                }
+            }
+            ++rit;
+        }
+    }
+    if(it==images.end() && t->mem){
         // Reinitialized or copied NVN objects with the same storage/layout share
         // GPU contents. Serial-only caches would incorrectly re-upload stale CPU
         // bytes when the new object aliases an already-rendered attachment.
@@ -1853,7 +1875,7 @@ Image &get_image_slow(const tex_t *t,bool upload){CPU_SCOPE(Image);
         VK(vkCreateImage(cfg.device,&ci,nullptr,&p->image));p->create=ci;VkMemoryRequirements r;vkGetImageMemoryRequirements(cfg.device,p->image,&r);
         p->mem_bytes=int64_t(r.size);image_bytes_live+=p->mem_bytes;if(xbg_bc_format_info(t->d.format,&info)==0){p->bc_bytes=p->mem_bytes;p->bc_data=int64_t(t->L.size);bc_image_bytes_live+=p->bc_bytes;bc_data_bytes_live+=p->bc_data;}
         VkMemoryAllocateInfo ai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};ai.allocationSize=r.size;ai.memoryTypeIndex=memory_type(r.memoryTypeBits,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);VK(vkAllocateMemory(cfg.device,&ai,nullptr,&p->memory));VK(vkBindImageMemory(cfg.device,p->image,p->memory,0));
-        it=images.emplace(t->serial,std::move(p)).first;image_index_dirty=true;++memo_check_gen;++memo_bump[4];provenance_image("CREATE",t,*it->second);
+        it=images.emplace(t->serial,std::move(p)).first;image_index_dirty=true;++memo_bump[4];provenance_image("CREATE",t,*it->second);
     }
     hit=it->second.get();front.serial=t->serial;front.epoch=images_epoch;front.im=hit;}
     Image &im=*hit;
@@ -2553,7 +2575,8 @@ bool build(const Rec &rec){
     v.vertexBindingDescriptionCount=nvb;v.pVertexBindingDescriptions=vb.data();v.vertexAttributeDescriptionCount=nva;v.pVertexAttributeDescriptions=va.data();
     VkPipelineInputAssemblyStateCreateInfo a{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};a.flags=r.u();a.topology=VkPrimitiveTopology(r.u());a.primitiveRestartEnable=r.u();
     VkPipelineTessellationStateCreateInfo t{VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO};bool ht=r.u()!=0;if(ht){t.flags=r.u();t.patchControlPoints=r.u();}
-    VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};vp.flags=r.u();vp.viewportCount=r.u();vp.scissorCount=r.u();bool hv=r.u()!=0,hs=r.u()!=0;if(vp.viewportCount>16 || vp.scissorCount>16)return false;
+    VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};vp.flags=r.u();vp.viewportCount=r.u();vp.scissorCount=r.u();bool hv=r.u()!=0,hs=r.u()!=0,neg11=r.u()!=0;if(vp.viewportCount>16 || vp.scissorCount>16)return false;
+    VkPipelineViewportDepthClipControlCreateInfoEXT dcc{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_DEPTH_CLIP_CONTROL_CREATE_INFO_EXT};dcc.negativeOneToOne=VK_TRUE;if(neg11){if(!depth_clip_control_supported)return false;vp.pNext=&dcc;}
     std::vector<VkViewport> vps(hv?vp.viewportCount:0);for(auto &x:vps){x.x=r.f();x.y=r.f();x.width=r.f();x.height=r.f();x.minDepth=r.f();x.maxDepth=r.f();}
     std::vector<VkRect2D> scs(hs?vp.scissorCount:0);for(auto &x:scs){x.offset.x=int32_t(r.u());x.offset.y=int32_t(r.u());x.extent.width=r.u();x.extent.height=r.u();}
     vp.pViewports=hv?vps.data():nullptr;vp.pScissors=hs?scs.data():nullptr;
@@ -3342,7 +3365,7 @@ void descriptors_build(Descriptors &out,Commands &commands,bool compute){CPU_SCO
                         if((b.flags&3) && format_feature_flags2){VkFormatProperties3 extra{VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3};VkFormatProperties2 all{VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};all.pNext=&extra;vkGetPhysicalDeviceFormatProperties2(cfg.physical,viewed,&all);if(b.flags&1)need(extra.optimalTilingFeatures&VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT,"Image format lacks formatless-write support");if(b.flags&2)need(extra.optimalTilingFeatures&VK_FORMAT_FEATURE_2_STORAGE_READ_WITHOUT_FORMAT_BIT,"Image format lacks formatless-read support");}
                         else if(b.flags&3){VkFormatProperties fp{};vkGetPhysicalDeviceFormatProperties(cfg.physical,viewed,&fp);bool listed=storage_without_format_listed(viewed) && (fp.optimalTilingFeatures&VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
                             if((b.flags&1) && !(listed && cfg.enabled_core.shaderStorageImageWriteWithoutFormat))xbg_fatalf("Image format %d lacks formatless-write support without VK_KHR_format_feature_flags2 (shader=%s listedWithStorageImage=%d shaderStorageImageWriteWithoutFormat=%u)",int(viewed),shader.key.c_str(),int(listed),unsigned(cfg.enabled_core.shaderStorageImageWriteWithoutFormat));
-                            if((b.flags&2) && !(listed && cfg.enabled_core.shaderStorageImageReadWithoutFormat))xbg_fatalf("Image format %d lacks formatless-read support without VK_KHR_format_feature_flags2 (shader=%s listedWithStorageImage=%d shaderStorageImageReadWithoutFormat=%u)",int(viewed),shader.key.c_str(),int(listed),unsigned(cfg.enabled_core.shaderStorageImageReadWithoutFormat));}im.gpu_written=true,provenance_write(im,__LINE__);im.last_write=++write_seq;}
+                            if((b.flags&2) && !(listed && cfg.enabled_core.shaderStorageImageReadWithoutFormat))xbg_fatalf("Image format %d lacks formatless-read support without VK_KHR_format_feature_flags2 (shader=%s listedWithStorageImage=%d shaderStorageImageReadWithoutFormat=%u)",int(viewed),shader.key.c_str(),int(listed),unsigned(cfg.enabled_core.shaderStorageImageReadWithoutFormat));}im.gpu_written=true,provenance_write(im,__LINE__);im.last_write=++write_seq;if(open_pass.cmd)open_pass.shader_writes=true;}
                     image_infos.push_back(ii);write.pImageInfo=&image_infos.back();
                     if(img_cacheable){img_cache.emplace(ikey,ImgEntry{&texture,&im,ii.imageView,ii.sampler,record,record->revision});++img_cache_misses;}
                 }
@@ -4382,7 +4405,22 @@ void execute(const uint8_t *pc,unsigned depth,uint64_t &budget){
         // Commands ends the open pass and records a full barrier. The explicit barrier and finish() recorded the same barrier
         // twice more with no command between them (3 per game barrier, ~130 per D2R fight frame), which Vulkan treats as one.
         // A/B target barrier3 records all three again.
-        case OP_BARRIER:{Commands c;if(ab_off("barrier3")){VkMemoryBarrier b{VK_STRUCTURE_TYPE_MEMORY_BARRIER};b.srcAccessMask=VK_ACCESS_MEMORY_WRITE_BIT;b.dstAccessMask=VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;vkCmdPipelineBarrier(c.command,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,0,1,&b,0,nullptr,0,nullptr);c.finish();}break;}
+        case OP_BARRIER:{
+            if(open_pass.cmd){
+                if(open_pass.shader_writes || ab_off("barrier3")){
+                    Commands c;
+                    if(ab_off("barrier3")){
+                        VkMemoryBarrier b{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+                        b.srcAccessMask=VK_ACCESS_MEMORY_WRITE_BIT;
+                        b.dstAccessMask=VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
+                        vkCmdPipelineBarrier(c.command,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,0,1,&b,0,nullptr,0,nullptr);
+                        c.finish();
+                    }
+                }
+            }else{
+                if(write_seq>barrier_seq || ab_off("barrier3"))full_barrier(recording_slot().cmd);
+            }
+            break;}
         case OP_SET_TEX_POOL:{auto a=payload<p_set_pool>(p,n);need(a.pool,"Null texture pool");state.texture_pool=*a.pool;break;}
         case OP_SET_SAMP_POOL:{auto a=payload<p_set_pool>(p,n);need(a.pool,"Null sampler pool");state.sampler_pool=*a.pool;break;}
         case OP_COPY_B2T:copy_texture_buffer(payload<p_copy_b2t>(p,n),false);break;
@@ -4725,13 +4763,13 @@ extern "C" int xbg_game_profile_cpu(uint64_t first_frame,uint32_t frame_count){
     xbg_logf("NVN CPU_TIMING armed first=%llu count=%u maxSeconds=60 clock=steady elapsed-not-thread-cpu",(unsigned long long)first_frame,frame_count);
     if(first_frame==1)timing_start();return 0;
 }
-extern "C" int xbg_game_shutdown(){gfx_drain();gfx_async_stop();std::lock_guard<std::recursive_mutex> lock(mutex);if(!initialized)return 0;timing_report("shutdown-partial");provenance_close("SHUTDOWN");resolve_pending();submit_slots(true);save_pipeline_cache();pending_writebacks.clear();pending_reports.clear();pending_events.clear();recording_events.clear();epochs.clear();VkResult r=vkQueueWaitIdle(cfg.queue);if(r!=VK_SUCCESS)return r;wtrack::release();destroy_slots();clear_pipeline_objects();cache_save_join();warm::shutdown();bright::shutdown();clear_descriptor_caches();clear_render_pass_cache();images.clear();++images_epoch;for(auto &f:persistent_framebuffers)vkDestroyFramebuffer(cfg.device,f.second,nullptr);persistent_framebuffers.clear();image_index.clear();image_index_dirty=true;program_cache.clear();shaders.clear();textures.clear();texture_pool_cache=nullptr;samplers.clear();null_textures.clear();texture_pool_cache=nullptr;pools.clear();host_segments.clear();host_ranges.clear();host_bytes=0;cmd_range_lo=0;cmd_range_bytes=0;vkDestroyPipelineCache(cfg.device,pipeline_cache,nullptr);pipeline_cache=VK_NULL_HANDLE;vkDestroyCommandPool(cfg.device,command_pool,nullptr);command_pool=VK_NULL_HANDLE;initialized=false;return 0;}
+extern "C" int xbg_game_shutdown(){gfx_drain();gfx_async_stop();std::lock_guard<std::recursive_mutex> lock(mutex);if(!initialized)return 0;timing_report("shutdown-partial");provenance_close("SHUTDOWN");resolve_pending();submit_slots(true);save_pipeline_cache();pending_writebacks.clear();pending_reports.clear();pending_events.clear();recording_events.clear();epochs.clear();VkResult r=vkQueueWaitIdle(cfg.queue);if(r!=VK_SUCCESS)return r;wtrack::release();destroy_slots();clear_pipeline_objects();cache_save_join();warm::shutdown();bright::shutdown();clear_descriptor_caches();clear_render_pass_cache();images.clear();released_images.clear();++images_epoch;for(auto &f:persistent_framebuffers)vkDestroyFramebuffer(cfg.device,f.second,nullptr);persistent_framebuffers.clear();image_index.clear();image_index_dirty=true;program_cache.clear();shaders.clear();textures.clear();texture_pool_cache=nullptr;samplers.clear();null_textures.clear();texture_pool_cache=nullptr;pools.clear();host_segments.clear();host_ranges.clear();host_bytes=0;cmd_range_lo=0;cmd_range_bytes=0;vkDestroyPipelineCache(cfg.device,pipeline_cache,nullptr);pipeline_cache=VK_NULL_HANDLE;vkDestroyCommandPool(cfg.device,command_pool,nullptr);command_pool=VK_NULL_HANDLE;initialized=false;return 0;}
 extern "C" void xbg_game_get_stats(xbg_game_stats *out){if(out)*out={stats.submissions.load(),stats.draws.load(),stats.dispatches.load(),stats.presents.load(),stats.shader_loads.load()};}
 extern "C" void xbg_game_frame_counters(xbg_frame_counters *out){if(out)*out={hud::pipelines.load(),hud::pipeline_ns.load(),hud::shaders.load(),hud::shader_ns.load(),hud::uploads.load(),hud::reuploads.load(),hud::upload_bytes.load(),hud::upload_ns.load()};}
 extern "C" void xbg_game_set_frame(uint64_t frame){hud::frame.store(frame,std::memory_order_relaxed);}
 extern "C" double xbg_game_gpu_ms(uint64_t frame){const hud::Gpu &g=hud::gpu[frame%64];if(g.frame.load(std::memory_order_acquire)!=frame)return -1;return double(g.ns.load(std::memory_order_acquire))/1e6;}
 static void xbg_legacy_pool_add_now(void *p,size_t n){std::lock_guard<std::recursive_mutex> lock(mutex);need(p&&n,"Invalid NVN pool");pools[uintptr_t(p)]=n;cmd_range_lo=0;cmd_range_bytes=0;auto epoch=provenance.pool(uint64_t(p),true);provenance_log("POOL_ADD mem=%p bytes=%zu epoch=%llu",p,n,epoch);}
-static void xbg_legacy_pool_del_now(void *p){std::lock_guard<std::recursive_mutex> lock(mutex);provenance_log("POOL_DEL mem=%p epoch=%llu",p,provenance.epoch(uint64_t(p)));provenance.pool(uint64_t(p),false);{auto pit=pools.find(uintptr_t(p));if(pit!=pools.end())vcache::drop_pool(uintptr_t(p),pit->second);}pools.erase(uintptr_t(p));cmd_range_lo=0;cmd_range_bytes=0;}
+static void xbg_legacy_pool_del_now(void *p){std::lock_guard<std::recursive_mutex> lock(mutex);provenance_log("POOL_DEL mem=%p epoch=%llu",p,provenance.epoch(uint64_t(p)));provenance.pool(uint64_t(p),false);for(auto it=released_images.begin();it!=released_images.end();){auto pit=pools.find(uintptr_t(p));size_t n=pit!=pools.end()?pit->second:0;if((*it)->source.mem==p || (n && uintptr_t((*it)->source.mem)>=uintptr_t(p) && uintptr_t((*it)->source.mem)<uintptr_t(p)+n)){retire_object(*it);it=released_images.erase(it);}else{++it;}}{auto pit=pools.find(uintptr_t(p));if(pit!=pools.end())vcache::drop_pool(uintptr_t(p),pit->second);}pools.erase(uintptr_t(p));cmd_range_lo=0;cmd_range_bytes=0;}
 static void xbg_register_texture_now(const dpool_t *p,int id,const tex_t *t,const view_t *v){
     std::lock_guard<std::recursive_mutex> lock(mutex);
     need(p&&id>=0&&id<p->n,"Invalid texture registration");
@@ -4744,20 +4782,28 @@ static void xbg_register_texture_now(const dpool_t *p,int id,const tex_t *t,cons
     auto &slot=pool_map[id];
     if(register_texture_record(slot,*t,v))++memo_bump[0];
 }
+static bool sampler_par_equal(const samp_par &a,const samp_par &b){
+    return a.minf==b.minf && a.magf==b.magf && a.ws==b.ws && a.wt==b.wt && a.wr==b.wr &&
+           a.cmp_mode==b.cmp_mode && a.cmp_func==b.cmp_func && a.reduction==b.reduction &&
+           a.lod_min==b.lod_min && a.lod_max==b.lod_max && a.lod_bias==b.lod_bias &&
+           a.aniso==b.aniso && !memcmp(a.border,b.border,sizeof(a.border));
+}
 static void xbg_register_sampler_now(const dpool_t *p,int id,const samp_par *s){
     std::lock_guard<std::recursive_mutex> lock(mutex);
     need(p&&id>=0&&id<p->n,"Invalid sampler registration");
     auto &pool_map=samplers[pool_key(p)];
+    auto it=pool_map.find(id);
     if(!s){
-        auto it=pool_map.find(id);
         if(it!=pool_map.end()){pool_map.erase(it);++memo_epoch;++memo_bump[1];}
         return;
     }
-    auto &slot=pool_map[id];
-    if(memcmp(&slot,s,sizeof(*s))){++memo_epoch;++memo_bump[1];}
-    slot=*s;
+    if(it==pool_map.end()){
+        pool_map.emplace(id,*s);
+    }else if(!sampler_par_equal(it->second,*s)){
+        it->second=*s;++memo_epoch;++memo_bump[1];
+    }
 }
-static void xbg_legacy_tex_release_now(tex_t *t){std::lock_guard<std::recursive_mutex> lock(mutex);if(t){auto i=images.find(t->serial);if(i!=images.end()){provenance_image("RELEASE",t,*i->second);retire_object(i->second);++memo_bump[2];}images.erase(t->serial);image_index_dirty=true;++images_epoch;++memo_check_gen;}}
+static void xbg_legacy_tex_release_now(tex_t *t){std::lock_guard<std::recursive_mutex> lock(mutex);if(t){auto i=images.find(t->serial);if(i!=images.end()){provenance_image("RELEASE",t,*i->second);if(t->mem && (!i->second->fb_keys.empty() || i->second->gpu_written)){if(released_images.size()>=64){retire_object(released_images.front());released_images.erase(released_images.begin());++memo_bump[2];++memo_check_gen;}released_images.push_back(i->second);}else{retire_object(i->second);++memo_bump[2];++memo_check_gen;}}images.erase(t->serial);image_index_dirty=true;++images_epoch;}}
 static void xbg_legacy_prog_release_now(prog_t *p){/* Immutable shader modules are keyed by original control digest, shared safely. */std::lock_guard<std::recursive_mutex> lock(mutex);if(p && p->serial)program_cache.erase(p->serial);}
 static void xbg_texture_invalidate_now(const tex_t *t){std::lock_guard<std::recursive_mutex> lock(mutex);if(t){auto i=images.find(t->serial);if(i!=images.end()){if(i->second->gpu_written){static unsigned nw=0;if(nw++<5)xbg_logf("[YELLOW] CPU invalidation of GPU-written texture: serial=%llu (marking dirty for re-upload)",(unsigned long long)t->serial);i->second->gpu_written=false;}i->second->uploaded=false;}}}
 extern "C" void *xbg_host_command_memory(cmd_t *owner,size_t n){gfx_drain();std::lock_guard<std::recursive_mutex> lock(mutex);need(n<=64*1024*1024 && host_bytes+n<=256ull*1024*1024,"Host command memory cap reached; finalize handles before reusing");auto p=std::make_unique<uint8_t[]>(n);void *out=p.get();host_ranges[uintptr_t(out)]=n;host_segments.push_back({owner,std::move(p),n});host_bytes+=n;return out;}
@@ -4907,10 +4953,14 @@ extern "C" void xbg_legacy_register_texture(int id,const tex_t *t,const view_t *
 extern "C" void xbg_legacy_register_sampler(int id,const samp_par *s){
     std::lock_guard<std::recursive_mutex> l(mutex);
     need(id>=0,"Invalid legacy sampler registration");
+    auto it=legacy_samplers.find(id);
     if(!s){
-        auto it=legacy_samplers.find(id);
         if(it!=legacy_samplers.end()){legacy_samplers.erase(it);++memo_epoch;++memo_bump[1];}
         return;
     }
-    legacy_samplers[id]=*s;++memo_epoch;++memo_bump[1];
+    if(it==legacy_samplers.end()){
+        legacy_samplers.emplace(id,*s);
+    }else if(!sampler_par_equal(it->second,*s)){
+        it->second=*s;++memo_epoch;++memo_bump[1];
+    }
 }

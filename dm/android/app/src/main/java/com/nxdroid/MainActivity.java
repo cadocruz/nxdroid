@@ -14,6 +14,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.DocumentsContract;
 import android.provider.Settings;
 import android.util.Log;
@@ -65,6 +67,7 @@ public class MainActivity extends Activity {
     private static final int REQUEST_SELECT_FOLDER = 1001;
     private static final String PREF_NAME = "nxdroid_prefs";
     private static final String PREF_GAME_DIR = "game_dir";
+    private static final String PREF_SHOW_FPS = "show_fps";
 
     private FrameLayout mRootContainer;
     private GameSurfaceView mSurfaceView;
@@ -74,6 +77,31 @@ public class MainActivity extends Activity {
     private TextView mStatusTextView;
     private Button mLaunchButton;
     private Button mPermButton;
+    private TextView mFpsOverlay;
+    private TextView mChipFps;
+    private boolean mShowFps = true;
+
+    private final Handler mFpsHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mFpsUpdater = new Runnable() {
+        @Override
+        public void run() {
+            if (!NativeBridge.nativeIsRunning()) {
+                return;
+            }
+            float[] stats = NativeBridge.nativeGetPerformanceStats();
+            if (stats != null && stats.length >= 3 && mFpsOverlay != null) {
+                float fps = stats[0];
+                float frameMs = stats[1];
+                float gpuMs = stats[2];
+                if (gpuMs > 0.0f) {
+                    mFpsOverlay.setText(String.format(Locale.US, "%.1f FPS | %.1f ms (GPU: %.1f ms)", fps, frameMs, gpuMs));
+                } else {
+                    mFpsOverlay.setText(String.format(Locale.US, "%.1f FPS | %.1f ms", fps, frameMs));
+                }
+            }
+            mFpsHandler.postDelayed(this, 500);
+        }
+    };
 
     private String mGameDir;
     private float mDisplayHz = 60.0f;
@@ -150,6 +178,7 @@ public class MainActivity extends Activity {
 
     private void loadInitialGameDir() {
         SharedPreferences prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        mShowFps = prefs.getBoolean(PREF_SHOW_FPS, true);
         String saved = prefs.getString(PREF_GAME_DIR, null);
         if (saved != null && !saved.trim().isEmpty()) {
             mGameDir = saved;
@@ -157,6 +186,20 @@ public class MainActivity extends Activity {
             File ext = Environment.getExternalStorageDirectory();
             File defaultDir = new File(ext, "nxdroid/game");
             mGameDir = defaultDir.getAbsolutePath();
+        }
+    }
+
+    private void updateFpsBadge() {
+        if (mChipFps == null) return;
+        float density = getResources().getDisplayMetrics().density;
+        if (mShowFps) {
+            mChipFps.setText("HUD FPS: ON");
+            mChipFps.setTextColor(0xFF00FF66);
+            mChipFps.setBackground(createRoundedDrawable(0xFF132A18, 0xFF00FF66, 12, density));
+        } else {
+            mChipFps.setText("HUD FPS: OFF");
+            mChipFps.setTextColor(0xFF888888);
+            mChipFps.setBackground(createRoundedDrawable(0xFF222222, 0xFF555555, 12, density));
         }
     }
 
@@ -210,6 +253,29 @@ public class MainActivity extends Activity {
         });
         mRootContainer.addView(mVirtualController, controllerParams);
 
+        // 1c. On-screen FPS / Performance HUD Overlay
+        mFpsOverlay = new TextView(this);
+        mFpsOverlay.setText("FPS: --");
+        mFpsOverlay.setTextSize(12);
+        mFpsOverlay.setTextColor(0xFF00FF66);
+        mFpsOverlay.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        mFpsOverlay.setPadding(dp(8), dp(4), dp(8), dp(4));
+        mFpsOverlay.setBackground(createRoundedDrawable(0xAA000000, 0x4400FF66, 6, density));
+        mFpsOverlay.setClickable(false);
+        mFpsOverlay.setFocusable(false);
+        mFpsOverlay.setVisibility(View.GONE);
+        mFpsOverlay.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                return false;
+            }
+        });
+        FrameLayout.LayoutParams fpsParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        fpsParams.gravity = Gravity.TOP | Gravity.END;
+        fpsParams.setMargins(0, dp(12), dp(20), 0);
+        mRootContainer.addView(mFpsOverlay, fpsParams);
+
         // 2. Launcher Overlay
         mLauncherOverlay = new ScrollView(this);
         mLauncherOverlay.setBackgroundColor(0xF0101216);
@@ -259,6 +325,24 @@ public class MainActivity extends Activity {
         chipHz.setPadding(dp(10), dp(4), dp(10), dp(4));
         chipHz.setBackground(createRoundedDrawable(0xFF1E2A1E, 0xFF76FF03, 12, density));
         badgeRow.addView(chipHz);
+
+        View spacerFps = new View(this);
+        badgeRow.addView(spacerFps, new LinearLayout.LayoutParams(dp(8), 1));
+
+        mChipFps = new TextView(this);
+        mChipFps.setTextSize(11);
+        mChipFps.setPadding(dp(10), dp(4), dp(10), dp(4));
+        updateFpsBadge();
+        mChipFps.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mShowFps = !mShowFps;
+                getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                        .edit().putBoolean(PREF_SHOW_FPS, mShowFps).apply();
+                updateFpsBadge();
+            }
+        });
+        badgeRow.addView(mChipFps);
 
         header.addView(badgeRow);
         contentLayout.addView(header);
@@ -608,6 +692,15 @@ public class MainActivity extends Activity {
         mVirtualController.bringToFront();
         mVirtualController.requestFocus();
 
+        if (mShowFps && mFpsOverlay != null) {
+            mFpsOverlay.setVisibility(View.VISIBLE);
+            mFpsOverlay.bringToFront();
+            mFpsHandler.removeCallbacks(mFpsUpdater);
+            mFpsHandler.postDelayed(mFpsUpdater, 500);
+        } else if (mFpsOverlay != null) {
+            mFpsOverlay.setVisibility(View.GONE);
+        }
+
         NativeBridge.nativeStartHost(mGameDir, shaderDir, romfsDir, saveDir, null);
     }
 
@@ -615,6 +708,10 @@ public class MainActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (mFpsOverlay != null) {
+                    mFpsOverlay.setVisibility(View.GONE);
+                }
+                mFpsHandler.removeCallbacks(mFpsUpdater);
                 mVirtualController.setVisibility(View.GONE);
                 mSurfaceView.setVisibility(View.GONE);
                 mLauncherOverlay.setVisibility(View.VISIBLE);
@@ -650,11 +747,24 @@ public class MainActivity extends Activity {
         super.onResume();
         applyImmersiveMode();
         updateStatusDisplay();
+        if (NativeBridge.nativeIsRunning() && mShowFps && mFpsOverlay != null) {
+            mFpsOverlay.setVisibility(View.VISIBLE);
+            mFpsOverlay.bringToFront();
+            mFpsHandler.removeCallbacks(mFpsUpdater);
+            mFpsHandler.postDelayed(mFpsUpdater, 500);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mFpsHandler.removeCallbacks(mFpsUpdater);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        mFpsHandler.removeCallbacks(mFpsUpdater);
         NativeBridge.nativeStopHost();
     }
 

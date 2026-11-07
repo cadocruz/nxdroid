@@ -390,11 +390,77 @@ static void nativeStopHost(JNIEnv *env, jclass clazz) {
     }
 }
 
+// ---- Real-time Performance Statistics ----
+typedef struct xbg_game_stats {
+    uint64_t submissions, draws, dispatches, presents, shader_loads;
+} xbg_game_stats;
+
+void xbg_game_get_stats(xbg_game_stats *out);
+double xbg_recent_gpu_ms(void);
+double xbg_recent_cpu_ms(void);
+
+static uint64_t s_last_presents = 0;
+static struct timespec s_last_time = {0, 0};
+static float s_fps = 0.0f;
+static float s_frame_ms = 0.0f;
+
+static jfloatArray nativeGetPerformanceStats(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    if (!atomic_load(&g_host_running)) {
+        s_last_time.tv_sec = 0;
+        s_last_time.tv_nsec = 0;
+        s_last_presents = 0;
+        s_fps = 0.0f;
+        s_frame_ms = 0.0f;
+        jfloat buf[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        jfloatArray res = (*env)->NewFloatArray(env, 4);
+        if (res) (*env)->SetFloatArrayRegion(env, res, 0, 4, buf);
+        return res;
+    }
+
+    xbg_game_stats stats = {0};
+    xbg_game_get_stats(&stats);
+    uint64_t presents = stats.presents;
+
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    if (s_last_time.tv_sec != 0 || s_last_time.tv_nsec != 0) {
+        double dt = (double)(now.tv_sec - s_last_time.tv_sec) +
+                    (double)(now.tv_nsec - s_last_time.tv_nsec) * 1e-9;
+        if (dt >= 0.25) {
+            int64_t dp = (int64_t)(presents - s_last_presents);
+            if (dp >= 0 && dt > 0.0) {
+                s_fps = (float)((double)dp / dt);
+                s_frame_ms = dp > 0 ? (float)(dt * 1000.0 / (double)dp) : 0.0f;
+            }
+            s_last_presents = presents;
+            s_last_time = now;
+        }
+    } else {
+        s_last_presents = presents;
+        s_last_time = now;
+    }
+
+    float gpu_ms = (float)xbg_recent_gpu_ms();
+    float cpu_ms = (float)xbg_recent_cpu_ms();
+    if (gpu_ms < 0.0f) gpu_ms = 0.0f;
+    if (cpu_ms < 0.0f) cpu_ms = 0.0f;
+
+    jfloat buf[4] = {s_fps, s_frame_ms, gpu_ms, cpu_ms};
+    jfloatArray result = (*env)->NewFloatArray(env, 4);
+    if (result) {
+        (*env)->SetFloatArrayRegion(env, result, 0, 4, buf);
+    }
+    return result;
+}
+
 // ---- JNI Native Registration and JNI_OnLoad ----
 static const JNINativeMethod k_methods[] = {
     {"nativeStartHost", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)Z", (void *)nativeStartHost},
     {"nativeStopHost", "()V", (void *)nativeStopHost},
     {"nativeIsRunning", "()Z", (void *)nativeIsRunning},
+    {"nativeGetPerformanceStats", "()[F", (void *)nativeGetPerformanceStats},
     {"nativeSetSurface", "(Landroid/view/Surface;II)V", (void *)nativeSetSurface},
     {"nativeSurfaceDestroyed", "()V", (void *)nativeSurfaceDestroyed},
     {"nativeSetRefreshRate", "(F)V", (void *)nativeSetRefreshRate},
@@ -445,6 +511,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 JNI_EXPORT_BRIDGE(nativeStartHost, jboolean, (JNIEnv *env, jclass clazz, jstring a, jstring b, jstring c, jstring d, jobjectArray e), (env, clazz, a, b, c, d, e))
 JNI_EXPORT_BRIDGE_VOID(nativeStopHost, (JNIEnv *env, jclass clazz), (env, clazz))
 JNI_EXPORT_BRIDGE(nativeIsRunning, jboolean, (JNIEnv *env, jclass clazz), (env, clazz))
+JNI_EXPORT_BRIDGE(nativeGetPerformanceStats, jfloatArray, (JNIEnv *env, jclass clazz), (env, clazz))
 JNI_EXPORT_BRIDGE_VOID(nativeSetSurface, (JNIEnv *env, jclass clazz, jobject s, jint w, jint h), (env, clazz, s, w, h))
 JNI_EXPORT_BRIDGE_VOID(nativeSurfaceDestroyed, (JNIEnv *env, jclass clazz), (env, clazz))
 JNI_EXPORT_BRIDGE_VOID(nativeSetRefreshRate, (JNIEnv *env, jclass clazz, jfloat hz), (env, clazz, hz))

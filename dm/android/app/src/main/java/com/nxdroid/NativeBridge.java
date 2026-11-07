@@ -41,6 +41,13 @@ public final class NativeBridge {
     public static native boolean nativeIsRunning();
 
     /**
+     * Query real-time performance statistics: [fps, frame_ms, gpu_ms, cpu_ms].
+     *
+     * @return float array with {fps, frame_ms, gpu_ms, cpu_ms}.
+     */
+    public static native float[] nativeGetPerformanceStats();
+
+    /**
      * Set or update the active native render surface.
      *
      * @param surface Active Android Surface (or null to detach).

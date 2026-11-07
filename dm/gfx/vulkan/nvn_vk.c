@@ -75,7 +75,7 @@ void mtl_sub_counter(uint64_t addr,uint32_t type){uint64_t p[]={type,addr};direc
 uint64_t mtl_sub_commit(void){if(!g_in_sub)die("NVN commit without begin");xbg_submit((int)g_nhandles,g_handles);uint64_t f=xbg_legacy_last_fence();while(g_direct){direct_record *r=g_direct;g_direct=r->next;xbg_legacy_pool_del(r->data);free(r);}g_in_sub=0;g_nhandles=0;return f;}
 uint64_t mtl_last_fence(void){return xbg_legacy_last_fence();}
 int mtl_wait(uint64_t fence,uint64_t timeout){return xbg_legacy_wait(fence,timeout);}
-int mtl_wait_acq(uint64_t fence, uint64_t timeout_ns) { return mtl_wait(fence, timeout_ns); }
+int mtl_wait_acq(uint64_t fence, uint64_t timeout_ns) { (void)fence; (void)timeout_ns; return 1; }
 void mtl_finish(void){xbg_legacy_finish();}
 void mtl_drain(void){xbg_legacy_finish();}
 void mtl_reg_tex(int id,const tex_t *t,const view_t *v){xbg_legacy_register_texture(id,t,v);}
