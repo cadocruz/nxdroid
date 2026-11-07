@@ -671,6 +671,7 @@ def _parse_spirv_resources(words):
 def _inspect_image_type(types, type_id):
     curr = type_id
     count = 1
+    is_sampled_image = False
     while curr in types:
         op, w = types[curr]
         if op == 32:
@@ -678,17 +679,13 @@ def _inspect_image_type(types, type_id):
         elif op == 28:
             curr = w[2]
         elif op == 27:
+            is_sampled_image = True
             curr = w[2]
             break
         elif op == 25:
             break
         else:
             break
-
-    is_sampled_image = False
-    if curr in types and types[curr][0] == 27:
-        is_sampled_image = True
-        curr = types[curr][1][2]
 
     if curr not in types or types[curr][0] != 25:
         flags = (1 << 31) | (1 << 8)

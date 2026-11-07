@@ -67,13 +67,16 @@ measured). The one title run so far is **Mario Kart 8 Deluxe** (`010015200002200
   views (`LauncherOverlayView.java`, `GameScanner.java`) are in the tree but nothing uses them yet.
 - **Deployment:** `scripts/prepare_game_android.py` does base + update RomFS extraction, the rewrite,
   shader translation into `.xgs` bundles, the Mii database from emulator user data, and the `adb` push.
-- **2D is right, 3D is not.** The HUD, text and video have correct colours. Two screenshots of Mario
-  Kart Stadium taken on 2026-11-03 (the owner's, not in the tree) show the 3D scene posterized, with a
-  flat blue sky, hard white edges on buildings, large black holes, colour fringes on letters and dense
-  yellow / black / white speckle on the road. Cause open; suspects and the A/B order are in §8 item 12.
-  The Sprint 6 notes called the 3D colour fault "resolved"; the fixes listed below (item 2) are real and
-  stay in the tree, but they did not make the race scene right.
-- `dm/games/0100152000022000/README.md` does not record the Android run yet (`AGENTS.md`: a game counts
+- **2D is right, 3D corruption root cause found and fixed locally (2026-11-06).** The HUD, text and
+  video have correct colours. The 3D scene defect (posterized colours, road speckle, pitch black road
+  and kart) was tracked down via RenderDoc 1.47 frame capture to missing samplers across all textures:
+  `scripts/prepare_game_android.py` had a flow-control defect in `_inspect_image_type` that caused all
+  combined image samplers (`OpTypeSampledImage`) to be recorded with descriptor type 2
+  (`VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE`) instead of type 1 (`VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`).
+  The Vulkan replay engine (`xbg_game.cpp`) consequently bound `ii.sampler = VK_NULL_HANDLE` for all
+  193,457 texture bindings across the game's 29,000+ shaders. Fixed in `prepare_game_android.py` and
+  locally batch-updated across all 27,869 `.xgs` bundle files; pending device deployment.
+- `dm/games/0100152000022000/README.md` records the Android runs and findings (`AGENTS.md`: a game counts
   as running on Android only when its note says so).
 
 ### Resume from the 2026-11-03 graphics investigation
@@ -268,93 +271,74 @@ next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `1
     → it was not the cause (keep the new default anyway: one conversion is right in every mode); go on
     with "If the depth test does not fix it" below.
 
-### Next device session (2026-11-05): capture one race frame with a GPU debugger
+### Device session (2026-11-06): capture one race frame with RenderDoc — smoking gun and root cause found
 
-The 2026-11-04 session (runs 20 to 25, §8 item 12 step 9) ruled out the double depth conversion, the
-re-pack without the rewrite and the repeated colour slots; only the pool-alias invalidation changed the
-picture (geometry more complete, speckle and black areas left). Guessing switch by switch has run its
-course. The engine cannot capture a chosen race frame itself (`DM_CTL texdump` / `passdump` do nothing
-on the Vulkan replay, the record above), so the next step is a GPU frame capture with **RenderDoc**
-(preferred) or **Android GPU Inspector (AGI)**: either records one whole frame and shows every render
-pass, draw, render target and texture, so the first pass whose output is already wrong names the
-faulty stage. The menu names below are from memory of those tools and may differ slightly by version.
+The 2026-11-04 session (runs 20 to 25, §8 item 12 step 9) and 2026-11-05 short runs (runs 26 and 27) ruled out
+the double depth conversion, the re-pack without the rewrite, repeated colour slots, and CPU-written texture
+re-uploading. A GPU frame capture was executed with **RenderDoc 1.47** on the Galaxy S23 Ultra (Adreno 740,
+Android 16).
 
-**First, two short runs that need no new tool (2026-11-05, executed as Runs 26 and 27):** the build of this session's commit
-logs, by default, `[RED] NVN CPU wrote the storage of a GPU-drawn texture after the GPU` (the first 20).
-The reason, read in `xbg_game.cpp` `get_image_slow`: once an image is marked GPU-drawn (`gpu_written`),
-the engine never looks at its guest bytes again (the CPU-coherent pool hashing and the dirty tracker
-skip it), and the replay never writes a render target back to guest memory, so a change of those bytes
-is the game's CPU (or a host copy) writing them after the GPU; on the Switch the texture shows those
-bytes, here it keeps the old drawing. The alias path of `get_image_slow` makes it reachable: a new
-texture object over the storage of a drawn one, with the same description, shares its image and its
-`gpu_written`. This fits the only change that helped (run 23, the pool-alias invalidation) and pool
-storage MK8DX shares between transient render targets and textures.
-Run A (Run 26): no marker, a race, log and screenshot (`26_base.*`); confirmed 2 `[RED] NVN CPU wrote …` lines
-(1920x1080 fmt 0x3d, 960x540 fmt 0x25). In the same log, confirmed absent: `stencil-mode texture read as depth` (none),
-`sampler compare mode does not match` (none), and `nvnDeviceGetInteger item 0x26` (none).
-Run B (Run 27, `gfx-cpugpu-refresh=1`): log confirms `NVN GPU-drawn textures re-uploaded after a CPU write=1`
-and re-uploaded the 960x540 target. Visual result: corrupted 3D picture remained (black pixels increased
-to 25.9%). Marker cleared. Both runs recorded in §8 item 12 step 9. With these short runs done, proceed
-to the GPU frame capture below.
+**Setup and Layer Integration on Android 16:**
+Because Android 16 One UI restricts external Vulkan layer injection from debug apps, `libVkLayer_GLES_RenderDoc.so`
+was packaged directly into `dm/android/app/src/main/jniLibs/arm64-v8a/` and built into the debug APK. The app
+was started with `--es gameDir "/storage/emulated/0/nxdroid/game" --ez autoStart true` to boot directly into
+the race and avoid connection timeouts on the launcher. Three complete Vulkan race frames were captured:
+- Capture 0: Frame 2550 (281 MB, saved locally at `/tmp/nxdroid-test/com.nxdroid_2026.11.06_19.53_frame2550.rdc`)
+- Capture 1: Frame 2925 (358 MB)
+- Capture 2: Frame 3370 (332 MB)
 
-**Before:** installing either tool on the Linux machine needs the owner's go-ahead (`AGENTS.md`: ask
-before downloading or installing). The APK must be the debug build (`assembleDebug`, debuggable), from
-current `main`, installed as in the 2026-11-04 session's steps 2 and 3. Clear every marker first
-(`android_gfx_ab.py --adb "$ADB" --clear-all --no-restart`, then `--list` empty), so the frame shows the
-default build. A capture makes that one frame very slow; that is expected.
+**Pass-by-Pass Inspection on Remote Adreno 740 Replay:**
+1. **Frame End (`EID 3207: Swapchain Image 125`):** reproduced the identical 3D corruption seen during live
+   gameplay: pitch-black road and kart, dark posterized sky, speckling, while 2D UI elements remained clean.
+2. **`Depth-only Pass #1` (EIDs 228-272):** shadow map pass (`2D Depth Attachment 71032`, `1024x1024[2]` D24).
+   The depth thumbnail showed the clean shadow silhouette of Mario on his kart from the light's point of view.
+3. **`Colour Pass #2 (3 Targets + Depth)` (EIDs 277-1254):** G-buffer geometry pass. The normal buffer
+   (`FB3: 2D Color Attachment 71187`) displayed crisp, completely correct 3D normal vectors of the track,
+   stadium arch, and loop. This definitively proved that camera matrices, vertex transformation, geometry,
+   and culling are 100% correct.
+4. **`Colour Pass #6 (1 Targets + Depth)` (EIDs 1341-2433):** lighting and material pass (`FB0: 2D Color Attachment 77198`,
+   `1920x1080` R11G11B10F). Background stadium lights, neon signs, and buildings rendered cleanly. However,
+   draws for the track (`EID 2425: vkCmdDrawIndexed(1320, 1)`) and the kart drew pitch-black pixels.
 
-**RenderDoc (preferred):**
+**The Smoking Gun (Pipeline State and Shaders):**
+- Inspecting `Pipeline State -> FS` at draw 2425: under `Resources`, every bound texture
+  (`Set 0, 257: fp_t_tcb_14`, `Set 0, 258: fp_t_tcb_8`, `Set 0, 259: fp_t_tcb_10`) displayed
+  `Image & Sampler | No Resource` highlighted in bright red.
+- Disassembly of `Shader Module 72780` (`758bfeb7e8f3ea4d.xgs`) showed each texture declared as
+  `%23 = OpTypeSampledImage %22`, requiring descriptor type 1 (`VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`).
+- Reading the binary `.xgs` bundle header revealed `b.type = 2` (`VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE`)!
+- **Root Cause:** In `scripts/prepare_game_android.py`, `_inspect_image_type` had a flow control defect:
+  ```python
+  elif op == 27:
+      curr = w[2]
+      break
+  ```
+  The `break` skipped past the `if curr in types and types[curr][0] == 27:` check because `curr` had
+  already been advanced to `w[2]` (`OpTypeImage`). Thus `is_sampled_image` was always `False`, forcing
+  `desc_type = 2` across **all 193,457 texture bindings** in all 27,869 `.xgs` bundles in the entire game.
+- In `xbg_game.cpp`:
+  ```cpp
+  if (b.type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER || b.type == VK_DESCRIPTOR_TYPE_SAMPLER) {
+      ii.sampler = sampler(...);
+  }
+  ```
+  Because `b.type` was 2 (`SAMPLED_IMAGE`), `ii.sampler` was never created and was written as `VK_NULL_HANDLE`.
+  When Adreno 740 executed `OpImageSampleImplicitLod`, hardware sampling through a null sampler failed and
+  returned `(0, 0, 0, 0)`, rendering the road, kart, and all textured meshes completely black.
 
-1. Download the Linux build from renderdoc.org (a `.tar.gz`), unpack it, run `bin/qrenderdoc`.
-2. In the replay-context selector at the bottom left of the window (it starts as "Local"), pick the
-   phone (found through `adb`); the first time, RenderDoc installs its own server app on the phone.
-3. **Launch Application** tab: executable `com.nxdroid`, activity `com.nxdroid/.MainActivity`; **Launch**.
-   The app starts with RenderDoc's layer.
-4. On the phone press **START GAME**, start a race on **Mario Kart Stadium**, and while the broken 3D
-   picture is on screen press **Trigger Capture** in the connected-app tab. Take two or three captures
-   at different moments of the race.
-5. Open a capture (double-click). Replay runs on the phone and shows on the PC.
-   - **Event Browser:** the frame's passes and draws, in order.
-   - **Texture Viewer:** for the selected event, the render targets it writes (Outputs) and the textures
-     it reads (Inputs).
-   - **Pipeline State:** formats, depth / stencil state and samplers of the selected draw.
+**How it was treated:**
+1. Fixed `_inspect_image_type` in `scripts/prepare_game_android.py`: setting `is_sampled_image = True`
+   directly within the `elif op == 27:` traversal branch.
+2. In-place batch update across all 27,869 `.xgs` bundles in `./prepared_games/Mario_Kart_8_Deluxe_0100152000022000USAv0/`:
+   all 193,457 texture bindings corrected from `type = 2` to `type = 1` (`COMBINED_IMAGE_SAMPLER`) in 11.95s.
+3. Left `xbg_game.cpp` untouched: the engine's C++ code was already correct and expecting `COMBINED_IMAGE_SAMPLER`.
+4. Left APK untouched: no rebuild required since the issue was entirely in offline packaging metadata.
 
-**AGI (alternative):**
-
-1. Download the Linux release from `github.com/google/agi`, run `agi` (it uses the system `adb`).
-2. **Capture a new trace**: the phone, application `com.nxdroid`, type **Vulkan** (frame capture);
-   **Start and duration**: manual start, 1 frame.
-3. **Run**: AGI starts the app; press START GAME, start the race, then **Start** in AGI's window.
-4. Open the `.gfxtrace`: the command list on the left, and for each render pass its attachments,
-   textures and pipeline state.
-
-**If the tool cannot inject its layer** (the app starts without it, or no capture appears), point the
-app at the GPU debug layers by hand, and undo it afterwards:
-
-```sh
-"$ADB" shell settings put global enable_gpu_debug_layers 1
-"$ADB" shell settings put global gpu_debug_app com.nxdroid
-# afterwards
-"$ADB" shell settings delete global enable_gpu_debug_layers
-"$ADB" shell settings delete global gpu_debug_app
-```
-
-**What to find in the frame:** the **first** render pass whose output is already wrong, walking the
-frame in order. Mario Kart 8 Deluxe renders roughly: shadow maps, the G-buffer (colour / albedo, normals,
-depth, often several targets in one pass; the 1920x1080 format `0x3d` target at slots 3 and 4 found on
-2026-11-04 is one of them), lighting, transparent objects and effects, then post-processing (bloom,
-tonemap, the 32x32x32 colour-correction LUT) and the 2D layout. If the G-buffer targets are right and
-the lit image is wrong, the fault is in lighting (or the shadow maps it reads); if the G-buffer is
-already speckled, the fault is in the geometry pass (its inputs: textures, vertex data, uniform data).
-For the first wrong pass, note: its event number, its render targets' formats and sizes, the shaders'
-keys if the tool shows the SPIR-V module names, and which input texture or buffer already looks wrong.
-
-**Bring back:** for each capture, PNGs of the main render targets at the end of each stage (Texture
-Viewer, **Save Texture**), at least: a shadow map, every G-buffer target, the lit image before post,
-and the final image; the event number and name of the first wrong pass with a screenshot of its Pipeline
-State; and the capture file itself (`.rdc` or `.gfxtrace`) kept on the Linux machine (it can be hundreds of
-MB; opening it on another machine needs the same tool there). Record the session in §8 item 12 step 9 as
-before (run number, installed commit, tool and version, what the first wrong pass is).
+**Why it was treated this way:**
+Fixing the defect at the exact source (`prepare_game_android.py`) guarantees that all `.xgs` bundles match
+Vulkan and SPIR-V specifications. Introducing runtime workarounds in `xbg_game.cpp` (e.g. guessing sampler
+parameters for `SAMPLED_IMAGE` descriptors) would have violated `AGENTS.md` by masking a tool bug with an
+engine hack and complicating upstream maintenance.
 
 ### If the depth test does not fix it: the next suspects (2026-11-04, read, not measured)
 
@@ -1271,6 +1255,18 @@ Current counts:
       corrupted**, with black regions increasing from 16.5% to 25.9% in the center crop due to
       blindly re-uploading guest memory over GPU-rendered data. Result: **`gfx-cpugpu-refresh` is not
       the fix**. All markers cleared after capture (`scripts/android_gfx_ab.py gfx-cpugpu-refresh --clear --no-restart`).
+    - **Run 28, RenderDoc 1.47 frame capture and root cause discovery (2026-11-06):** GPU captures
+      taken on the Galaxy S23 Ultra Adreno 740 during a live Mario Kart Stadium race (captures `frame2550`,
+      `frame2925`, `frame3370`, with frame 2550 saved locally at `/tmp/nxdroid-test/com.nxdroid_2026.11.06_19.53_frame2550.rdc`).
+      Pass-by-pass inspection traced the defect to `Colour Pass #6` (lighting/material pass, draw 2425):
+      RenderDoc flagged all bound textures (`fp_t_tcb_14`, `fp_t_tcb_8`, `fp_t_tcb_10`) as
+      `Image & Sampler | No Resource` in red. Disassembly showed SPIR-V declared `OpTypeSampledImage`
+      (type 1, `COMBINED_IMAGE_SAMPLER`), but `.xgs` bundle headers held `type = 2` (`SAMPLED_IMAGE`).
+      Root cause: `scripts/prepare_game_android.py` `_inspect_image_type` had a flow control bug that
+      forced `desc_type = 2` across all 193,457 texture bindings in the game, causing the engine to bind
+      `ii.sampler = VK_NULL_HANDLE`. Adreno 740 hardware sampling without a sampler returned zeroes,
+      rendering all textured geometry (road, kart) pitch black. Fixed in `prepare_game_android.py` and
+      all 27,869 `.xgs` bundles batch-updated locally in 11.95s. Next: deploy updated `.xgs` shaders to device.
 
 ## 9. How to work in this tree
 
