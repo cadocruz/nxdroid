@@ -122,6 +122,7 @@ OSStatus AudioUnitInitialize(AudioUnit u) {
 
     int32_t rate = (int32_t)(inst->fmt.mSampleRate > 0 ? inst->fmt.mSampleRate : 48000);
     int32_t channels = (int32_t)(inst->fmt.mChannelsPerFrame > 0 ? inst->fmt.mChannelsPerFrame : 2);
+    int32_t frames_per_cb = rate / 200; // 5 ms frames (240 at 48 kHz), matching audren block size
 
     AAudioStreamBuilder_setDirection(b, AAUDIO_DIRECTION_OUTPUT);
     AAudioStreamBuilder_setSampleRate(b, rate);
@@ -130,7 +131,9 @@ OSStatus AudioUnitInitialize(AudioUnit u) {
     AAudioStreamBuilder_setSharingMode(b, AAUDIO_SHARING_MODE_SHARED);
     AAudioStreamBuilder_setUsage(b, AAUDIO_USAGE_GAME);
     AAudioStreamBuilder_setContentType(b, AAUDIO_CONTENT_TYPE_MUSIC);
-    AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_NONE);
+    AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
+    AAudioStreamBuilder_setFramesPerDataCallback(b, frames_per_cb);
+    AAudioStreamBuilder_setBufferCapacityInFrames(b, frames_per_cb * 8);
     AAudioStreamBuilder_setDataCallback(b, aaudio_data_cb, inst);
 
     res = AAudioStreamBuilder_openStream(b, &inst->stream);
@@ -140,7 +143,16 @@ OSStatus AudioUnitInitialize(AudioUnit u) {
         inst->stream = NULL;
         return kStubFailed;
     }
-    LOG("AudioUnit (AAudio) initialized: %d Hz, %d channels, shared AudioTrack", rate, channels);
+    int32_t burst = AAudioStream_getFramesPerBurst(inst->stream);
+    if (burst > 0) {
+        int32_t target_buf = burst * 2;
+        if (target_buf < frames_per_cb * 2) target_buf = frames_per_cb * 2;
+        AAudioStream_setBufferSizeInFrames(inst->stream, target_buf);
+    }
+    LOG("AudioUnit (AAudio) initialized: %d Hz, %d channels, frames/cb %d, burst %d, buf %d, capacity %d, low-latency",
+        rate, channels, frames_per_cb, burst,
+        AAudioStream_getBufferSizeInFrames(inst->stream),
+        AAudioStream_getBufferCapacityInFrames(inst->stream));
     return noErr;
 }
 

@@ -599,7 +599,7 @@ struct Slot {
     // The HLE frame at submission: on retire this submission's GPU time is added to it (hud::gpu_add).
     uint64_t hud_frame=0;
     struct WaitCount{std::atomic<int> n{0};WaitCount()=default;WaitCount(const WaitCount&){}WaitCount &operator=(const WaitCount&){n.store(0);return *this;}} waiters;   // 不持引擎锁等本槽栅栏的线程数（xbg_legacy_wait）；复位栅栏前须等它们离开 | threads waiting on this slot's fence without the engine lock (xbg_legacy_wait); the fence is reset only after they leave
-    VkCommandBuffer cmd{};VkCommandPool pool{};VkFence fence{};VkQueryPool timestamps{};bool recording=false,pending=false;uint64_t ops=0,covers=0; // covers: guest fence value complete once this slot retires
+    VkCommandBuffer cmd{};VkCommandPool pool{};VkFence fence{};VkQueryPool timestamps{};bool recording=false,pending=false,has_draws=false;uint64_t ops=0,covers=0; // covers: guest fence value complete once this slot retires
     std::vector<VkQueryPool> occlusion_pools,timestamp_pools;uint32_t occlusion_used=0,timestamp_used=0;
     Retire retire;Arena stream,readback;std::vector<VkDescriptorPool> pools;size_t pool_next=0;
     // gfx-xview-guard (recording_slot, readback_buffer): ranges of this slot's readback buffers the other slot read through
@@ -892,7 +892,8 @@ Slot &recording_slot(){
         if(!s.timestamps && timestamp_bits){VkQueryPoolCreateInfo q{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};q.queryType=VK_QUERY_TYPE_TIMESTAMP;q.queryCount=2;VK(vkCreateQueryPool(cfg.device,&q,nullptr,&s.timestamps));}
         bind_cache_reset();if(s.pool){if(s.reset_queued){poolreset::finish(s);s.reset_queued=false;if(s.reset_result==VK_TIMEOUT)xbg_fatalf("The GPU did not finish this slot's work within %llu ms (fence wait timed out), so the device is hung",(unsigned long long)(std::max<uint64_t>(cfg.fence_timeout_ns,10000000000ull)/1000000ull));else VK(s.reset_result);}else VK(vkResetCommandPool(cfg.device,s.pool,0));}else{VK(vkResetCommandBuffer(s.cmd,0));if(s.pro)VK(vkResetCommandBuffer(s.pro,0));}VkCommandBufferBeginInfo b{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};b.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;VK(vkBeginCommandBuffer(s.cmd,&b));
         if(s.timestamps){vkCmdResetQueryPool(s.cmd,s.timestamps,0,2);vkCmdWriteTimestamp(s.cmd,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,s.timestamps,0);}
-        s.recording=true;s.ops=0;
+        s.recording=true;s.ops=0;s.has_draws=false;
+        if(open_pass.cmd==s.cmd)open_pass=OpenPass{};last_pass_reset();
         const uint64_t frame=stats.presents.load()+1;
         if(pass_prof_enabled && timestamp_bits){
             if(stats.presents.load()>=pass_prof_next && stats.presents.load()<pass_prof_until && pass_prof_frame!=frame){pass_prof_frame=frame;pass_prof_next=stats.presents.load()+pass_prof_period;pass_prof_queries=pass_prof_slots=pass_prof_skipped_slots=0;}
@@ -946,7 +947,7 @@ void submit_slots(bool wait){
             VK(vkEndCommandBuffer(s.pro));cbs[0]=s.pro;cbs[1]=s.cmd;ncb=2;s.pro_ops.clear();}
         VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};si.commandBufferCount=ncb;si.pCommandBuffers=cbs;
         {CPU_SCOPE(Submit);VK(vkQueueSubmit(cfg.queue,1,&si,s.fence));}++submit_by[sync_site];poolreset::queue(s);
-        s.recording=false;s.pending=true;s.covers=submitted;s.hud_frame=hud::frame.load(std::memory_order_relaxed);slot_index^=1;++perf.submits;snapshot_reset();++slot_serial;
+        s.recording=false;s.pending=true;s.has_draws=false;s.covers=submitted;s.hud_frame=hud::frame.load(std::memory_order_relaxed);slot_index^=1;++perf.submits;snapshot_reset();++slot_serial;
         pending_events.insert(pending_events.end(),recording_events.begin(),recording_events.end());recording_events.clear();
     }
     if(wait){retire_slot(slots[slot_index]);retire_slot(slots[slot_index^1]);}
@@ -1318,7 +1319,7 @@ struct Commands {
     VkCommandBuffer command{};bool draw=false;
     // Non-draw operations keep the former submit-per-operation semantics: they
     // end any open pass and are fenced by full barriers before and after.
-    explicit Commands(bool is_draw=false):draw(is_draw){Slot &s=recording_slot();command=s.cmd;++perf.ops;++s.ops;
+    explicit Commands(bool is_draw=false):draw(is_draw){Slot &s=recording_slot();command=s.cmd;++perf.ops;++s.ops;if(draw)s.has_draws=true;
         if(!draw){end_open_pass();full_barrier(command);}}
     void finish(){if(!draw){end_open_pass();full_barrier(command);}}
 };
@@ -3897,7 +3898,7 @@ void dispatch(const p_dispatch &p){preflight_cpu_reads();CPU_SCOPE(Dispatch);pro
         xbg_logf("[YELLOW] Dispatch called with no genuine compute shader, skipping");
         return;
     }
-    need(p.x>=0 && p.y>=0 && p.z>=0,"Negative compute dispatch");if(!p.x||!p.y||!p.z)return;if(pipeguard::skipped(pipeguard::compute_key(state.shader[5]->key)))return;need(uint32_t(p.x)<=properties.limits.maxComputeWorkGroupCount[0] && uint32_t(p.y)<=properties.limits.maxComputeWorkGroupCount[1] && uint32_t(p.z)<=properties.limits.maxComputeWorkGroupCount[2],"Compute dispatch exceeds device limit");Commands c;Descriptors &d=acquire_descriptors();descriptors(d,c,true);VkComputePipelineCreateInfo ci{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};ci.stage={VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};ci.stage.stage=VK_SHADER_STAGE_COMPUTE_BIT;ci.stage.module=state.shader[5]->module;ci.stage.pName="main";ci.layout=d.pipeline_layout;PipelineLease pipeline;{CPU_SCOPE(Pipeline);XbgPipelineKey key;bool cacheable=xbg_compute_pipeline_key(key,ci,d.entry->definition.view());pipeline_lookup(pipeline,key,cacheable,nullptr,&ci);}if(!pipeline.pipeline){c.finish();return;}vkCmdBindPipeline(c.command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline.pipeline);vkCmdBindDescriptorSets(c.command,VK_PIPELINE_BIND_POINT_COMPUTE,d.pipeline_layout,0,1,&d.set,uint32_t(d.dynamic_offsets.size()),d.dynamic_offsets.data());int prof_dispatch=pass_prof_compute_begin(c.command,p);vkCmdDispatch(c.command,p.x,p.y,p.z);pass_prof_complete(c.command,prof_dispatch);bright::after_dispatch(c);VkMemoryBarrier b{VK_STRUCTURE_TYPE_MEMORY_BARRIER};b.srcAccessMask=VK_ACCESS_SHADER_WRITE_BIT;b.dstAccessMask=VK_ACCESS_HOST_READ_BIT;vkCmdPipelineBarrier(c.command,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_HOST_BIT,0,1,&b,0,nullptr,0,nullptr);c.finish();++perf.dispatches;d.defer_writeback();++stats.dispatches;}
+    need(p.x>=0 && p.y>=0 && p.z>=0,"Negative compute dispatch");if(!p.x||!p.y||!p.z)return;if(pipeguard::skipped(pipeguard::compute_key(state.shader[5]->key)))return;need(uint32_t(p.x)<=properties.limits.maxComputeWorkGroupCount[0] && uint32_t(p.y)<=properties.limits.maxComputeWorkGroupCount[1] && uint32_t(p.z)<=properties.limits.maxComputeWorkGroupCount[2],"Compute dispatch exceeds device limit");Slot &cur_slot=slots[slot_index];if(cur_slot.recording && cur_slot.has_draws && xbg_adreno_compute_needs_clean_cmd(properties.vendorID)){submit_slots(false);}Commands c;Descriptors &d=acquire_descriptors();descriptors(d,c,true);VkComputePipelineCreateInfo ci{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};ci.stage={VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};ci.stage.stage=VK_SHADER_STAGE_COMPUTE_BIT;ci.stage.module=state.shader[5]->module;ci.stage.pName="main";ci.layout=d.pipeline_layout;PipelineLease pipeline;{CPU_SCOPE(Pipeline);XbgPipelineKey key;bool cacheable=xbg_compute_pipeline_key(key,ci,d.entry->definition.view());pipeline_lookup(pipeline,key,cacheable,nullptr,&ci);}if(!pipeline.pipeline){c.finish();return;}vkCmdBindPipeline(c.command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline.pipeline);vkCmdBindDescriptorSets(c.command,VK_PIPELINE_BIND_POINT_COMPUTE,d.pipeline_layout,0,1,&d.set,uint32_t(d.dynamic_offsets.size()),d.dynamic_offsets.data());int prof_dispatch=pass_prof_compute_begin(c.command,p);vkCmdDispatch(c.command,p.x,p.y,p.z);pass_prof_complete(c.command,prof_dispatch);bright::after_dispatch(c);VkMemoryBarrier b{VK_STRUCTURE_TYPE_MEMORY_BARRIER};b.srcAccessMask=VK_ACCESS_SHADER_WRITE_BIT;b.dstAccessMask=VK_ACCESS_HOST_READ_BIT;vkCmdPipelineBarrier(c.command,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_HOST_BIT,0,1,&b,0,nullptr,0,nullptr);c.finish();bind_cache_reset();++perf.dispatches;d.defer_writeback();++stats.dispatches;}
 
 struct MaskedClear {
     VkShaderModule vs{},fs{};VkPipelineLayout layout{};VkPipeline pipeline{};
@@ -3920,7 +3921,7 @@ struct MaskedClear {
         VK(vkCreateGraphicsPipelines(cfg.device,pipeline_cache,1,&ci,nullptr,&pipeline));
     }
     void encode(Commands &c,const Pass &p,const VkRect2D &rect,const void *color){
-        bind_cache_reset();VkViewport viewport{0,0,float(p.width),float(p.height),0,1};vkCmdBindPipeline(c.command,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline);vkCmdSetViewport(c.command,0,1,&viewport);vkCmdSetScissor(c.command,0,1,&rect);
+        bind_cache_reset();recording_slot().has_draws=true;VkViewport viewport{0,0,float(p.width),float(p.height),0,1};vkCmdBindPipeline(c.command,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline);vkCmdSetViewport(c.command,0,1,&viewport);vkCmdSetScissor(c.command,0,1,&rect);
         if(color)vkCmdPushConstants(c.command,layout,VK_SHADER_STAGE_FRAGMENT_BIT,0,16,color);vkCmdDraw(c.command,3,1,0,0);
     }
 };
@@ -4867,6 +4868,9 @@ extern "C" int xbg_legacy_wait(uint64_t fence,uint64_t timeout){
             if(!older.pending && !newer.pending && !(cur.recording && cur.ops)){resolve_known_reports();if(pending_writebacks.empty()&&pending_reports.empty()){publish_completed(std::max(completed.load(),submitted));}if(fence<=completed)return 1;break;}
             if(!timeout)return 0;
             Slot *t=older.pending && older.covers>=fence?&older:newer.pending && newer.covers>=fence?&newer:nullptr;
+#if defined(__ANDROID__)
+            if(t && t->pending && t->covers>=fence && !cur.pending && !(cur.recording && cur.ops))return 1;
+#endif
             if(!t){if(cur.recording && cur.ops){SiteScope site(SITE_LEGACY_WAIT);submit_slots(false);continue;}   // 目标还在录制中的槽：交掉再等 | target still in the recording slot: submit it, then wait
                 t=newer.pending?&newer:&older;}   // 目标提交没有 GPU 命令：等最新的在途批次 | the target submit has no GPU commands: wait for the newest in-flight batch
             uint64_t remaining=completion_path?deadline.remaining_ns():timeout;if(!completion_path && timeout!=UINT64_MAX){auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-begin).count();remaining=uint64_t(elapsed)>=timeout?0:timeout-uint64_t(elapsed);}

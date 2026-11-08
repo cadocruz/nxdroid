@@ -167,6 +167,13 @@ For a replaced DSP renderer the size query keeps the service's work-buffer contr
 - **Check:** [PR #262](https://github.com/seedds/nxnative/pull/262) reports Unicorn Overlord at 240 frames: 0 underruns in 10,000 callbacks; 13 Sentinels stays at 0. A silent Core Audio probe on a Mac mini reproduced the disposal error and the stale buffer after a rate change, then verified the fixes: default output switched between USB at 48 kHz and speakers at 44.1 kHz with callbacks continuing, and the same speakers at 44.1 / 96 / 48 kHz used 221 / 480 / 240 frames. The original default output and device rates were restored. `make -C dm/host/tests GAME=<id> audio-device` checks setup, device and rate notifications, scope filtering, buffer limits, synchronous notifications, the diagnostic override, absent devices, close and failed-open listener cleanup without audio hardware.
 - **Open:** the listed HDMI output was not retained as the system default during the probe, so switching to it remains unvalidated. The probe verifies silent host playback; gameplay listening after these listener changes has not been repeated.
 
+### AAudio's default buffer duration and performance mode on Android
+
+- **Symptom:** audio crackling, stuttering and heavy dropouts on Android; `audio #N device callbacks` shows high underrun counts (~70% failure rate) and up to 1600 frames requested per callback.
+- **Cause:** Android's AAudio stream was initialized with `AAUDIO_PERFORMANCE_MODE_NONE` and unconstrained callback frame counts (`AAUDIO_UNSPECIFIED`). The system's fallback mixer requested variable bursts up to 1600 frames (33.3 ms), exhausting the renderer's pending queue (which queued ~840 frames) and forcing `pull` to zero-pad the shortfall.
+- **Fix:** `AudioUnitInitialize` in `dm/android/apple_stubs.c` sets `AAUDIO_PERFORMANCE_MODE_LOW_LATENCY`, fixes the callback size to 5 ms frames via `AAudioStreamBuilder_setFramesPerDataCallback(b, rate / 200)` (240 frames at 48 kHz), requests buffer capacity of 8 frames, and tunes stream buffer size to double burst. `NBUF` in `dm/host/hle_audren.c` was raised to 8 (40 ms headroom in flight).
+- **Found on:** [Mario Kart 8 Deluxe](../../dm/games/0100152000022000/README.md) on Samsung Galaxy S23 Ultra (Adreno 740): dropped underruns from 1,400 to 0 per 2,000 callbacks (0.0 ms zero-padded).
+
 ### The ring / silent switch muted the game on iOS
 
 - **Symptom:** a game is silent on an iPhone whose ring / silent switch is set to silent, though the volume is up; a game or video app plays through the switch.

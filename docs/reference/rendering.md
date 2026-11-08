@@ -174,6 +174,13 @@ The replay on Metal (`dm/gfx/nvn/nvn_mtl.m`) and the Vulkan and OpenGL layers. E
 - **Fix:** reduction samplers filter mips linearly (`samp_by_id`): at the integer LODs reductions are used with, that is the same level.
 - **Found on:** [Pokémon Legends: Z-A](../../dm/games/0100F43008C44000/README.md): its depth pyramid is built with a min-reduction sampler (`SamplerBuilderSetReductionFilter 1`; `151607c7a92386cc` samples the level above at an explicit LOD).
 
+### Sampler LOD bias and anisotropy beyond Vulkan limits
+
+- **Symptom:** abort with `FATAL: NVN sampler invalid LOD range/bias result=-4 min=... bias=-32` or `-5` on Vulkan during course loading or track transitions.
+- **Cause:** Tegra X1 NVN samplers allow signed LOD biases in `[-32.0, 31.996]` to force the sharpest mipmap level. Vulkan VUID 01079 requires `|mipLodBias| <= maxSamplerLodBias` (typically 15.0 or 16.0 on Adreno 740 and mobile GPUs). The engine previously rejected the sampler with `-4` or `-5`, causing an abort.
+- **Fix:** `xbg_sampler_from_nvn` in `dm/gfx/vulkan/engine/xbg_sampler.cpp` clamps `p->lod_bias` to `[-limits->max_lod_bias, limits->max_lod_bias]` and `p->anisotropy` to `limits->max_anisotropy` before writing `s.mipLodBias` and `s.maxAnisotropy`.
+- **Found on:** [Mario Kart 8 Deluxe](../../dm/games/0100152000022000/README.md) on Galaxy S23 Ultra (course 2 transition with `bias=-32`).
+
 ### Texture fields Metal refuses
 
 - **Symptom:** the process ends at once (the window vanishes), with `-[MTLTextureDescriptorInternal validateWithDevice:]` failing an assertion such as `requests 9 mipmap levels, but the dimensions (1, 1, 1) can only support 1`, or `sampleCount must be > 1 for multisample textures`.

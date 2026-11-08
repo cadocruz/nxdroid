@@ -22,14 +22,19 @@ extern "C" int xbg_sampler_from_nvn(const xbg_nvn_sampler_desc *p,const xbg_samp
              (r=wrap(p->wrap_t,limits->mirror_clamp_to_edge_enabled,s.addressModeV)) ||
              (r=wrap(p->wrap_r,limits->mirror_clamp_to_edge_enabled,s.addressModeW)))return r;
     if(!finite(p->min_lod) || !finite(p->max_lod) || !finite(p->lod_bias) || p->min_lod>p->max_lod ||
-       !finite(limits->max_lod_bias) || limits->max_lod_bias<0 || p->lod_bias>limits->max_lod_bias || p->lod_bias < -limits->max_lod_bias)return -4;
+       !finite(limits->max_lod_bias) || limits->max_lod_bias<0)return -4;
     // Vulkan's filter mapping requires maxLod .25 for non-mip minification.
     // Zero would always select magFilter, silently changing min!=mag samplers.
     s.minLod=p->min_filter<2?0:(p->min_lod<0?0:p->min_lod);
-    s.maxLod=p->min_filter<2?0.25f:(p->max_lod<0?0:p->max_lod);s.mipLodBias=p->lod_bias;
-    if(!finite(p->anisotropy) || p->anisotropy<1 || !finite(limits->max_anisotropy) ||
-       p->anisotropy>limits->max_anisotropy || (p->anisotropy>1 && !limits->anisotropy_enabled))return -5;
-    s.anisotropyEnable=p->anisotropy>1;s.maxAnisotropy=p->anisotropy;
+    s.maxLod=p->min_filter<2?0.25f:(p->max_lod<0?0:p->max_lod);
+    float bias=p->lod_bias;
+    if(bias>limits->max_lod_bias)bias=limits->max_lod_bias;
+    else if(bias<-limits->max_lod_bias)bias=-limits->max_lod_bias;
+    s.mipLodBias=bias;
+    if(!finite(p->anisotropy) || p->anisotropy<1 || !finite(limits->max_anisotropy))return -5;
+    float aniso=p->anisotropy>limits->max_anisotropy?limits->max_anisotropy:p->anisotropy;
+    if(aniso>1 && !limits->anisotropy_enabled)return -5;
+    s.anisotropyEnable=aniso>1;s.maxAnisotropy=aniso;
     if(p->compare_mode>1 || p->compare_func<1 || p->compare_func>8)return -6;
     s.compareEnable=p->compare_mode;s.compareOp=VkCompareOp(p->compare_func-1);
     s.borderColor=limits->integer_border?VK_BORDER_COLOR_INT_TRANSPARENT_BLACK:VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;

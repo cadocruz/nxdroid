@@ -58,3 +58,19 @@ inline bool xbg_adreno_compiler_needs_inline(uint32_t vendor_id,const char *devi
     const int model=xbg_adreno_model(device_name);
     return model>=750 && model<800;
 }
+
+// Adreno 7xx 驱动（骁龙 8 Gen 2 等，vulkan.adreno.so）：VkCommandBuffer 在内部维护 dirty 标志（偏移 0x78）。
+// 如果同一个命令缓冲在录入绘制指令（vkCmdDraw）后再录入计算调度（vkCmdDispatch），驱动的内部准备函数 0x22aa60
+// 检测到残存的绘制 dirty 位（[cmd, #0x78] & 0xff != 0），误认为当前在 render pass 内部并尝试刷新 subpass attachment
+// 状态，调用 GetSubpassState（0x22c6a0）。因 pass 已结束返回 NULL，驱动盲目解引用 [0x0, #0xb4] 导致崩溃（SIGSEGV addr=0xb4）。
+// 遇到计算调度时，若当前槽已有绘制指令，提前提交槽（submit_slots(false)），使计算调度在干净的命令缓冲上录入，避免驱动崩溃。
+// Qualcomm Adreno 7xx drivers (Snapdragon 8 Gen 2 etc., vulkan.adreno.so) track dirty graphics state in VkCommandBuffer
+// at offset 0x78. If vkCmdDispatch is recorded into a command buffer that previously recorded draws (vkCmdDraw), the driver's
+// internal preparation hook 0x22aa60 finds dirty graphics bits ([cmd, #0x78] & 0xff != 0), mistakenly assumes a draw is in
+// progress, and calls GetSubpassState (0x22c6a0) to flush subpass attachments. Because the pass was ended, it returns NULL,
+// and the driver dereferences [0x0, #0xb4] causing SIGSEGV addr=0xb4.
+// Submitting the recording slot before dispatch when draws are present (has_draws) ensures vkCmdDispatch runs on a clean command buffer.
+inline bool xbg_adreno_compute_needs_clean_cmd(uint32_t vendor_id){
+    return vendor_id==0x5143;
+}
+
