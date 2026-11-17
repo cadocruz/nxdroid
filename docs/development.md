@@ -60,7 +60,12 @@ symptom index (`docs_symptoms.py --check`), the engine's source checks under
 provenance, audit, thread slots, `undef_scan`, JNI, `dm_vm_alias`, the launcher
 settings and the probe's output contract. `android-build` installs the NDK the Gradle
 build names and compiles `dmhost` and `libdm.so` for one profile (arm64-v8a, API 29);
-it must stay green too. Nothing runs on a device or a GPU.
+it must stay green too. `android-app` sets up the SDK packages, JDK 17 and Gradle that
+`dm/android/docker/Dockerfile` pins (the job's `env` repeats them: keep the two in step),
+compiles the app's Java (`:app:compileDebugJavaWithJavac`) and runs its JVM unit tests
+(`:app:testDebugUnitTest`, `dm/android/app/src/test`: the launcher's game scanner and
+navigation); it builds no APK and no native code, and must stay green as well. Nothing
+runs on a device or a GPU.
 
 The Mac host, iOS app and Metal jobs nxnative ran on the `xcode-27` image are gone
 with the Android-only decision. Their tests stay in the tree with the Apple sources

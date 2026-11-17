@@ -28,23 +28,22 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.util.List;
 import java.util.Locale;
 
 /**
- * Main application Activity handling display setup, immersive fullscreen,
- * modern Welcome/Launcher UI, folder selection, gamepad/controller routing,
- * and host lifecycle.
+ * The app's one Activity: the launcher (LauncherOverlayView) over the game's surface, the
+ * on-screen controller, the performance HUD, physical controller input and the host's lifecycle.
+ * The APK is built for one game profile (-PdmGame); the launcher lists every prepared game folder
+ * it finds and starts the one this APK was built for.
  */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements LauncherOverlayView.LauncherEventListener {
     public static final long DM_BTN_A = 1L << 0;
     public static final long DM_BTN_B = 1L << 1;
     public static final long DM_BTN_X = 1L << 2;
@@ -64,22 +63,22 @@ public class MainActivity extends Activity {
 
     private static final int STICK_MAX = 32767;
     private static final float DEADZONE = 0.15f;
+    private static final float NAV_THRESHOLD = 0.6f;
     private static final int REQUEST_SELECT_FOLDER = 1001;
     private static final String PREF_NAME = "nxdroid_prefs";
-    private static final String PREF_GAME_DIR = "game_dir";
+    private static final String PREF_LIBRARY_DIR = "library_dir";
+    private static final String PREF_GAME_DIR_OLD = "game_dir";   // before the library: one game folder
     private static final String PREF_SHOW_FPS = "show_fps";
+    private static final String PREF_TOUCH_CONTROLS = "touch_controls";
 
     private FrameLayout mRootContainer;
     private GameSurfaceView mSurfaceView;
     private VirtualControllerOverlayView mVirtualController;
-    private ScrollView mLauncherOverlay;
-    private TextView mPathTextView;
-    private TextView mStatusTextView;
-    private Button mLaunchButton;
-    private Button mPermButton;
+    private LauncherOverlayView mLauncher;
     private TextView mFpsOverlay;
-    private TextView mChipFps;
     private boolean mShowFps = true;
+    private boolean mTouchControls = true;
+    private String[] mBuiltGame;
 
     private final Handler mFpsHandler = new Handler(Looper.getMainLooper());
     private final Runnable mFpsUpdater = new Runnable() {
@@ -103,14 +102,15 @@ public class MainActivity extends Activity {
         }
     };
 
-    private String mGameDir;
-    private float mDisplayHz = 60.0f;
+    private String mLibraryDir;
+    private boolean mInGame = false;
 
     private long mButtons = 0;
     private int mLx = 0;
     private int mLy = 0;
     private int mRx = 0;
     private int mRy = 0;
+    private long mNavDirection = 0;   // the launcher's last stick / hat direction (one move per push)
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -130,17 +130,21 @@ public class MainActivity extends Activity {
 
         applyImmersiveMode();
         configureRefreshRate();
-
-        loadInitialGameDir();
+        mBuiltGame = NativeBridge.nativeGetBuiltGame();
+        loadPreferences();
         buildUiHierarchy();
 
+        // adb / RenderDoc: am start ... --es gameDir <folder> [--ez autoStart true] (HANDOFF.md, How a device run is made)
         Intent intent = getIntent();
         if (intent != null && intent.hasExtra("gameDir")) {
-            mGameDir = intent.getStringExtra("gameDir");
-            saveGameDir(mGameDir);
-            updateStatusDisplay();
-            if (intent.getBooleanExtra("autoStart", false)) {
-                startGameSession();
+            String gameDir = intent.getStringExtra("gameDir");
+            if (gameDir != null && !gameDir.trim().isEmpty()) {
+                File dir = new File(gameDir.trim());
+                mLibraryDir = GameScanner.isGameFolder(dir) && dir.getParent() != null ? dir.getParent() : dir.getAbsolutePath();
+                mLauncher.setLibraryDirectory(mLibraryDir);
+                if (intent.getBooleanExtra("autoStart", false)) {
+                    startGameSession(dir.getAbsolutePath());
+                }
             }
         }
     }
@@ -171,41 +175,39 @@ public class MainActivity extends Activity {
                 }
             }
         }
-
-        mDisplayHz = maxHz;
         NativeBridge.nativeSetRefreshRate(maxHz);
     }
 
-    private void loadInitialGameDir() {
+    private static String defaultLibraryDir() {
+        return new File(Environment.getExternalStorageDirectory(), "nxdroid").getAbsolutePath();
+    }
+
+    private void loadPreferences() {
         SharedPreferences prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         mShowFps = prefs.getBoolean(PREF_SHOW_FPS, true);
-        String saved = prefs.getString(PREF_GAME_DIR, null);
-        if (saved != null && !saved.trim().isEmpty()) {
-            mGameDir = saved;
-        } else {
-            File ext = Environment.getExternalStorageDirectory();
-            File defaultDir = new File(ext, "nxdroid/game");
-            mGameDir = defaultDir.getAbsolutePath();
+        mTouchControls = prefs.getBoolean(PREF_TOUCH_CONTROLS, true);
+        String saved = prefs.getString(PREF_LIBRARY_DIR, null);
+        if (saved == null) {
+            // The folder of the earlier front end was one game's: its parent holds it and any other prepared game
+            String old = prefs.getString(PREF_GAME_DIR_OLD, null);
+            if (old != null && !old.trim().isEmpty()) {
+                File dir = new File(old.trim());
+                saved = GameScanner.isGameFolder(dir) && dir.getParent() != null ? dir.getParent() : dir.getAbsolutePath();
+                prefs.edit().putString(PREF_LIBRARY_DIR, saved).remove(PREF_GAME_DIR_OLD).apply();
+            }
         }
+        mLibraryDir = saved != null && !saved.trim().isEmpty() ? saved : defaultLibraryDir();
     }
 
-    private void updateFpsBadge() {
-        if (mChipFps == null) return;
-        float density = getResources().getDisplayMetrics().density;
-        if (mShowFps) {
-            mChipFps.setText("HUD FPS: ON");
-            mChipFps.setTextColor(0xFF00FF66);
-            mChipFps.setBackground(createRoundedDrawable(0xFF132A18, 0xFF00FF66, 12, density));
-        } else {
-            mChipFps.setText("HUD FPS: OFF");
-            mChipFps.setTextColor(0xFF888888);
-            mChipFps.setBackground(createRoundedDrawable(0xFF222222, 0xFF555555, 12, density));
-        }
+    private void saveLibraryDir(String path) {
+        mLibraryDir = path;
+        getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit().putString(PREF_LIBRARY_DIR, path).apply();
+        mLauncher.setLibraryDirectory(path);
+        rescan();
     }
 
-    private void saveGameDir(String path) {
-        SharedPreferences prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putString(PREF_GAME_DIR, path).apply();
+    private void setPreference(String key, boolean value) {
+        getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit().putBoolean(key, value).apply();
     }
 
     private int dp(int val) {
@@ -230,14 +232,11 @@ public class MainActivity extends Activity {
 
         // 1. SurfaceView for native Vulkan presentation
         mSurfaceView = new GameSurfaceView(this);
-        FrameLayout.LayoutParams surfaceParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        mRootContainer.addView(mSurfaceView, surfaceParams);
+        mRootContainer.addView(mSurfaceView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 1b. Virtual Controller Overlay
+        // 2. On-screen controller
         mVirtualController = new VirtualControllerOverlayView(this);
-        FrameLayout.LayoutParams controllerParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         mVirtualController.setVisibility(View.GONE);
         mVirtualController.setOnPadStateChangeListener(new VirtualControllerOverlayView.OnPadStateChangeListener() {
             @Override
@@ -247,13 +246,13 @@ public class MainActivity extends Activity {
                 mLy = ly;
                 mRx = rx;
                 mRy = ry;
-                NativeBridge.nativeSendPad(0, mButtons, mLx, mLy, mRx, mRy);
-                NativeBridge.nativeSendInput(mButtons, mLx, mLy, mRx, mRy);
+                sendPad();
             }
         });
-        mRootContainer.addView(mVirtualController, controllerParams);
+        mRootContainer.addView(mVirtualController, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 1c. On-screen FPS / Performance HUD Overlay
+        // 3. Performance HUD
         mFpsOverlay = new TextView(this);
         mFpsOverlay.setText("FPS: --");
         mFpsOverlay.setTextSize(12);
@@ -264,306 +263,44 @@ public class MainActivity extends Activity {
         mFpsOverlay.setClickable(false);
         mFpsOverlay.setFocusable(false);
         mFpsOverlay.setVisibility(View.GONE);
-        mFpsOverlay.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                return false;
-            }
-        });
         FrameLayout.LayoutParams fpsParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         fpsParams.gravity = Gravity.TOP | Gravity.END;
         fpsParams.setMargins(0, dp(12), dp(20), 0);
         mRootContainer.addView(mFpsOverlay, fpsParams);
 
-        // 2. Launcher Overlay
-        mLauncherOverlay = new ScrollView(this);
-        mLauncherOverlay.setBackgroundColor(0xF0101216);
-        mLauncherOverlay.setFillViewport(true);
-
-        LinearLayout contentLayout = new LinearLayout(this);
-        contentLayout.setOrientation(LinearLayout.VERTICAL);
-        contentLayout.setPadding(dp(28), dp(20), dp(28), dp(28));
-
-        // --- Header Section ---
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.VERTICAL);
-
-        TextView titleView = new TextView(this);
-        titleView.setText("nxdroid");
-        titleView.setTextSize(30);
-        titleView.setTextColor(0xFF00E5FF);
-        titleView.setTypeface(Typeface.DEFAULT_BOLD);
-        header.addView(titleView);
-
-        TextView subtitleView = new TextView(this);
-        subtitleView.setText("Native AArch64 Switch Runner · Vulkan 1.3");
-        subtitleView.setTextSize(13);
-        subtitleView.setTextColor(0xFFA0AAB8);
-        subtitleView.setPadding(0, dp(2), 0, dp(10));
-        header.addView(subtitleView);
-
-        // Badges row
-        LinearLayout badgeRow = new LinearLayout(this);
-        badgeRow.setOrientation(LinearLayout.HORIZONTAL);
-
-        TextView chipHw = new TextView(this);
-        chipHw.setText("Snapdragon 8 Gen 2 · Adreno 740");
-        chipHw.setTextSize(11);
-        chipHw.setTextColor(0xFF00E5FF);
-        chipHw.setPadding(dp(10), dp(4), dp(10), dp(4));
-        chipHw.setBackground(createRoundedDrawable(0xFF192330, 0xFF00E5FF, 12, density));
-        badgeRow.addView(chipHw);
-
-        View spacer = new View(this);
-        badgeRow.addView(spacer, new LinearLayout.LayoutParams(dp(8), 1));
-
-        TextView chipHz = new TextView(this);
-        chipHz.setText(String.format(Locale.US, "Display: %.0f Hz", mDisplayHz));
-        chipHz.setTextSize(11);
-        chipHz.setTextColor(0xFF76FF03);
-        chipHz.setPadding(dp(10), dp(4), dp(10), dp(4));
-        chipHz.setBackground(createRoundedDrawable(0xFF1E2A1E, 0xFF76FF03, 12, density));
-        badgeRow.addView(chipHz);
-
-        View spacerFps = new View(this);
-        badgeRow.addView(spacerFps, new LinearLayout.LayoutParams(dp(8), 1));
-
-        mChipFps = new TextView(this);
-        mChipFps.setTextSize(11);
-        mChipFps.setPadding(dp(10), dp(4), dp(10), dp(4));
-        updateFpsBadge();
-        mChipFps.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mShowFps = !mShowFps;
-                getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                        .edit().putBoolean(PREF_SHOW_FPS, mShowFps).apply();
-                updateFpsBadge();
-            }
-        });
-        badgeRow.addView(mChipFps);
-
-        header.addView(badgeRow);
-        contentLayout.addView(header);
-
-        // --- Storage Permission Banner (Android 11+) ---
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-            mPermButton = new Button(this);
-            mPermButton.setText("⚠️ Conceder Acesso Total ao Armazenamento (Android 11+)");
-            mPermButton.setTextSize(12);
-            mPermButton.setTextColor(0xFFFFD600);
-            mPermButton.setBackground(createRoundedDrawable(0xFF2E2412, 0xFFFFD600, 8, density));
-            LinearLayout.LayoutParams permParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            permParams.setMargins(0, dp(14), 0, 0);
-            mPermButton.setLayoutParams(permParams);
-            mPermButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    try {
-                        Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                        intent.setData(Uri.parse("package:" + getPackageName()));
-                        startActivity(intent);
-                    } catch (Exception e) {
-                        Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                        startActivity(intent);
-                    }
-                }
-            });
-            contentLayout.addView(mPermButton);
-        }
-
-        // --- Game Folder Card ---
-        LinearLayout folderCard = new LinearLayout(this);
-        folderCard.setOrientation(LinearLayout.VERTICAL);
-        folderCard.setBackground(createRoundedDrawable(0xFF181B22, 0xFF282E3C, 10, density));
-        folderCard.setPadding(dp(16), dp(14), dp(16), dp(14));
-        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cardParams.setMargins(0, dp(14), 0, 0);
-        folderCard.setLayoutParams(cardParams);
-
-        TextView cardTitle = new TextView(this);
-        cardTitle.setText("📁 Pasta do Jogo / Game Directory");
-        cardTitle.setTextSize(14);
-        cardTitle.setTextColor(Color.WHITE);
-        cardTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        folderCard.addView(cardTitle);
-
-        mPathTextView = new TextView(this);
-        mPathTextView.setText(mGameDir);
-        mPathTextView.setTextSize(12);
-        mPathTextView.setTextColor(0xFFE4E9F2);
-        mPathTextView.setTypeface(Typeface.MONOSPACE);
-        mPathTextView.setBackground(createRoundedDrawable(0xFF101217, 0xFF202530, 6, density));
-        mPathTextView.setPadding(dp(10), dp(8), dp(10), dp(8));
-        LinearLayout.LayoutParams pathParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        pathParams.setMargins(0, dp(8), 0, dp(8));
-        mPathTextView.setLayoutParams(pathParams);
-        folderCard.addView(mPathTextView);
-
-        mStatusTextView = new TextView(this);
-        mStatusTextView.setTextSize(12);
-        folderCard.addView(mStatusTextView);
-
-        // Buttons row
-        LinearLayout btnRow = new LinearLayout(this);
-        btnRow.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams btnRowParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnRowParams.setMargins(0, dp(10), 0, 0);
-        btnRow.setLayoutParams(btnRowParams);
-
-        Button selectBtn = new Button(this);
-        selectBtn.setText("Selecionar Pasta");
-        selectBtn.setTextSize(12);
-        selectBtn.setTextColor(Color.WHITE);
-        selectBtn.setBackground(createRoundedDrawable(0xFF0D47A1, 0xFF1976D2, 8, density));
-        LinearLayout.LayoutParams selParams = new LinearLayout.LayoutParams(0, dp(40), 1.0f);
-        selParams.setMargins(0, 0, dp(6), 0);
-        selectBtn.setLayoutParams(selParams);
-        selectBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                launchFolderPicker();
-            }
-        });
-        btnRow.addView(selectBtn);
-
-        Button manualBtn = new Button(this);
-        manualBtn.setText("Digitar Path");
-        manualBtn.setTextSize(12);
-        manualBtn.setTextColor(Color.WHITE);
-        manualBtn.setBackground(createRoundedDrawable(0xFF263238, 0xFF455A64, 8, density));
-        LinearLayout.LayoutParams manParams = new LinearLayout.LayoutParams(0, dp(40), 1.0f);
-        manParams.setMargins(dp(6), 0, dp(6), 0);
-        manualBtn.setLayoutParams(manParams);
-        manualBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showEditPathDialog();
-            }
-        });
-        btnRow.addView(manualBtn);
-
-        Button defaultBtn = new Button(this);
-        defaultBtn.setText("Reset (/sdcard)");
-        defaultBtn.setTextSize(12);
-        defaultBtn.setTextColor(Color.WHITE);
-        defaultBtn.setBackground(createRoundedDrawable(0xFF263238, 0xFF455A64, 8, density));
-        LinearLayout.LayoutParams defParams = new LinearLayout.LayoutParams(0, dp(40), 1.0f);
-        defParams.setMargins(dp(6), 0, 0, 0);
-        defaultBtn.setLayoutParams(defParams);
-        defaultBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                File ext = Environment.getExternalStorageDirectory();
-                mGameDir = new File(ext, "nxdroid/game").getAbsolutePath();
-                saveGameDir(mGameDir);
-                updateStatusDisplay();
-            }
-        });
-        btnRow.addView(defaultBtn);
-
-        folderCard.addView(btnRow);
-        contentLayout.addView(folderCard);
-
-        // --- Launch Button ---
-        mLaunchButton = new Button(this);
-        mLaunchButton.setText("▶  INICIAR JOGO / START GAME");
-        mLaunchButton.setTextSize(16);
-        mLaunchButton.setTextColor(Color.WHITE);
-        mLaunchButton.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams launchParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
-        launchParams.setMargins(0, dp(16), 0, 0);
-        mLaunchButton.setLayoutParams(launchParams);
-        mLaunchButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startGameSession();
-            }
-        });
-        contentLayout.addView(mLaunchButton);
-
-        // --- Quick Instructions Card ---
-        LinearLayout guideCard = new LinearLayout(this);
-        guideCard.setOrientation(LinearLayout.VERTICAL);
-        guideCard.setBackground(createRoundedDrawable(0xFF14171E, 0xFF242A38, 10, density));
-        guideCard.setPadding(dp(16), dp(12), dp(16), dp(12));
-        LinearLayout.LayoutParams guideParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        guideParams.setMargins(0, dp(16), 0, 0);
-        guideCard.setLayoutParams(guideParams);
-
-        TextView guideTitle = new TextView(this);
-        guideTitle.setText("ℹ️ Instruções Rápidas / Quick Setup");
-        guideTitle.setTextSize(13);
-        guideTitle.setTextColor(0xFF00E5FF);
-        guideTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        guideCard.addView(guideTitle);
-
-        TextView guideText = new TextView(this);
-        guideText.setText(
-                "1. Selecione ou crie sua pasta no armazenamento interno (ex: /sdcard/nxdroid/game).\n" +
-                "2. Coloque os módulos NSO recompilados para AArch64 ('main', 'sdk', 'subsdk*', etc.).\n" +
-                "3. Shaders e RomFS podem ficar em 'shaders/' e 'romfs/' (ou arquivo 'romfs.img').\n" +
-                "4. Para voltar ao launcher durante a execução do jogo, pressione 'Voltar' e confirme.");
-        guideText.setTextSize(11);
-        guideText.setTextColor(0xFF90A4AE);
-        guideText.setPadding(0, dp(6), 0, 0);
-        guideCard.addView(guideText);
-
-        contentLayout.addView(guideCard);
-
-        mLauncherOverlay.addView(contentLayout);
-        mRootContainer.addView(mLauncherOverlay, new FrameLayout.LayoutParams(
+        // 4. Launcher, on top until a game starts
+        mLauncher = new LauncherOverlayView(this);
+        mLauncher.setListener(this);
+        mLauncher.setBuiltGame(mBuiltGame);
+        mLauncher.setLibraryDirectory(mLibraryDir);
+        mLauncher.setTouchControls(mTouchControls);
+        mLauncher.setStorageAccess(hasStorageAccess());
+        mRootContainer.addView(mLauncher, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         setContentView(mRootContainer);
-        updateStatusDisplay();
+        mLauncher.requestFocus();
     }
 
-    private void updateStatusDisplay() {
-        float density = getResources().getDisplayMetrics().density;
-        if (mPathTextView != null) {
-            mPathTextView.setText(mGameDir);
-        }
-
-        File folder = new File(mGameDir);
-        File mainNso = new File(folder, "main");
-        boolean ready = mainNso.exists();
-
-        if (mStatusTextView != null) {
-            if (ready) {
-                mStatusTextView.setText("🟢 Pronto para Executar: módulo 'main' encontrado (" + (mainNso.length() / (1024 * 1024)) + " MB)");
-                mStatusTextView.setTextColor(0xFF76FF03);
-            } else {
-                mStatusTextView.setText("🟡 Pasta vazia ou ausente: coloque o arquivo 'main' em " + mGameDir);
-                mStatusTextView.setTextColor(0xFFFFD600);
-            }
-        }
-
-        if (mLaunchButton != null) {
-            if (ready) {
-                mLaunchButton.setBackground(createRoundedDrawable(0xFF00C853, 0xFF69F0AE, 10, density));
-            } else {
-                mLaunchButton.setBackground(createRoundedDrawable(0xFF37474F, 0xFF546E7A, 10, density));
-            }
-        }
-
-        if (mPermButton != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
-                mPermButton.setVisibility(View.GONE);
-            } else {
-                mPermButton.setVisibility(View.VISIBLE);
-            }
-        }
+    private static boolean hasStorageAccess() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager();
     }
 
-    private void launchFolderPicker() {
+    private void rescan() {
+        mLauncher.setScanning(true);
+        GameScanner.scanDirectoryAsync(mLibraryDir, new GameScanner.ScanCallback() {
+            @Override
+            public void onScanCompleted(String rootPath, List<GameInfo> games) {
+                if (rootPath.equals(mLibraryDir)) mLauncher.setGames(games);   // a scan of a folder left meanwhile is dropped
+            }
+        });
+    }
+
+    // ---- LauncherOverlayView.LauncherEventListener ----
+
+    @Override
+    public void onChangeFolderRequested() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                 | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -571,9 +308,120 @@ public class MainActivity extends Activity {
         try {
             startActivityForResult(intent, REQUEST_SELECT_FOLDER);
         } catch (Exception e) {
-            Toast.makeText(this, "Erro ao abrir seletor de pastas: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Cannot open the folder picker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
+
+    @Override
+    public void onRescanRequested() {
+        rescan();
+    }
+
+    @Override
+    public void onLaunchGame(final GameInfo game) {
+        if (game == null) return;
+        if (!hasStorageAccess()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("No access to all files")
+                    .setMessage("The host reads the game's files directly, which needs access to all files. Grant it, then launch again.")
+                    .setPositiveButton("Open the setting", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            openAllFilesAccessSetting();
+                        }
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            return;
+        }
+        switch (mLauncher.status(game)) {
+            case LauncherOverlayView.STATUS_OTHER:
+                new AlertDialog.Builder(this)
+                        .setTitle("This APK runs another game")
+                        .setMessage(game.title + " (" + game.titleId + ") needs an APK built for it:\n\n"
+                                + "gradle -p dm/android :app:assembleDebug -PdmGame=" + game.titleId
+                                + "\n\nThis APK runs " + mLauncher.builtGameText() + ".")
+                        .setPositiveButton("OK", null)
+                        .show();
+                return;
+            case LauncherOverlayView.STATUS_UNKNOWN:
+                new AlertDialog.Builder(this)
+                        .setTitle("Title ID unknown")
+                        .setMessage("No control.nacp in " + game.folderPath + " names the game. This APK runs "
+                                + mLauncher.builtGameText() + "; any other game will not start. Launch it anyway?")
+                        .setPositiveButton("Launch", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                startGameSession(game.folderPath);
+                            }
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+                return;
+            default:
+                startGameSession(game.folderPath);
+        }
+    }
+
+    @Override
+    public void onSettingsRequested() {
+        final boolean needAccess = !hasStorageAccess();
+        final String[] items = new String[needAccess ? 5 : 4];
+        items[0] = "Performance HUD: " + (mShowFps ? "on" : "off");
+        items[1] = "Touch controls in game: " + (mTouchControls ? "on" : "off");
+        items[2] = "Type the library folder…";
+        items[3] = "Use the default library folder (" + defaultLibraryDir() + ")";
+        if (needAccess) items[4] = "Grant access to all files…";
+        new AlertDialog.Builder(this)
+                .setTitle("Settings")
+                .setItems(items, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        switch (which) {
+                            case 0:
+                                mShowFps = !mShowFps;
+                                setPreference(PREF_SHOW_FPS, mShowFps);
+                                break;
+                            case 1:
+                                onTouchControlsToggled();
+                                break;
+                            case 2:
+                                showEditPathDialog();
+                                break;
+                            case 3:
+                                saveLibraryDir(defaultLibraryDir());
+                                break;
+                            case 4:
+                                openAllFilesAccessSetting();
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    @Override
+    public void onTouchControlsToggled() {
+        mTouchControls = !mTouchControls;
+        setPreference(PREF_TOUCH_CONTROLS, mTouchControls);
+        mLauncher.setTouchControls(mTouchControls);
+    }
+
+    private void openAllFilesAccessSetting() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return;
+        try {
+            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+            intent.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+        } catch (Exception e) {
+            startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+        }
+    }
+
+    // ---- Library folder ----
 
     @Override
     @SuppressLint("WrongConstant")
@@ -592,12 +440,9 @@ public class MainActivity extends Activity {
 
                 String resolvedPath = resolveDocTreePath(treeUri);
                 if (resolvedPath != null) {
-                    mGameDir = resolvedPath;
-                    saveGameDir(mGameDir);
-                    updateStatusDisplay();
-                    Toast.makeText(this, "Pasta selecionada:\n" + mGameDir, Toast.LENGTH_SHORT).show();
+                    saveLibraryDir(resolvedPath);
                 } else {
-                    Toast.makeText(this, "Não foi possível converter URI:\n" + treeUri, Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "This folder has no file path the host can open:\n" + treeUri, Toast.LENGTH_LONG).show();
                 }
             }
         }
@@ -632,7 +477,7 @@ public class MainActivity extends Activity {
 
     private void showEditPathDialog() {
         final EditText input = new EditText(this);
-        input.setText(mGameDir);
+        input.setText(mLibraryDir);
         input.setTextColor(Color.WHITE);
         input.setBackgroundColor(0xFF1E222B);
         input.setPadding(dp(12), dp(12), dp(12), dp(12));
@@ -640,83 +485,92 @@ public class MainActivity extends Activity {
         input.setTypeface(Typeface.MONOSPACE);
 
         new AlertDialog.Builder(this)
-                .setTitle("Digitar Caminho da Pasta")
-                .setMessage("Informe o caminho absoluto da pasta do jogo:")
+                .setTitle("Library folder")
+                .setMessage("The absolute path of a game folder, or of the folder that holds game folders:")
                 .setView(input)
-                .setPositiveButton("Salvar", new DialogInterface.OnClickListener() {
+                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         String path = input.getText().toString().trim();
                         if (!path.isEmpty()) {
-                            mGameDir = path;
-                            saveGameDir(mGameDir);
-                            updateStatusDisplay();
+                            saveLibraryDir(path);
                         }
                     }
                 })
-                .setNegativeButton("Cancelar", null)
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    private void startGameSession() {
-        File gameFolder = new File(mGameDir);
-        gameFolder.mkdirs();
+    // ---- Game session ----
 
-        File mainNso = new File(gameFolder, "main");
-        if (!mainNso.exists()) {
+    private void startGameSession(String gameDir) {
+        File gameFolder = new File(gameDir);
+        if (!GameScanner.isGameFolder(gameFolder)) {
             new AlertDialog.Builder(this)
-                    .setTitle("Arquivo 'main' não encontrado")
-                    .setMessage("O módulo 'main' não existe na pasta selecionada:\n" + mGameDir +
-                            "\n\nCertifique-se de copiar os binários do jogo para este diretório.")
+                    .setTitle("No 'main' module")
+                    .setMessage("The folder has no 'main' module:\n" + gameDir
+                            + "\n\nPrepare the game with scripts/prepare_game_android.py --push, or pick the folder it wrote.")
                     .setPositiveButton("OK", null)
                     .show();
             return;
         }
 
         File shadersCandidate = new File(gameFolder, "shaders");
-        String shaderDir = shadersCandidate.exists() ? shadersCandidate.getAbsolutePath() : mGameDir;
+        String shaderDir = shadersCandidate.exists() ? shadersCandidate.getAbsolutePath() : gameDir;
 
         File romfsImg = new File(gameFolder, "romfs.img");
         File romfsFolder = new File(gameFolder, "romfs");
         String romfsDir = romfsImg.exists() ? romfsImg.getAbsolutePath()
-                : (romfsFolder.exists() ? romfsFolder.getAbsolutePath() : mGameDir);
+                : (romfsFolder.exists() ? romfsFolder.getAbsolutePath() : gameDir);
 
         File saveFolder = new File(getFilesDir(), "save");
         saveFolder.mkdirs();
         String saveDir = saveFolder.getAbsolutePath();
 
-        mLauncherOverlay.setVisibility(View.GONE);
+        mInGame = true;
+        mButtons = 0;
+        mLx = mLy = mRx = mRy = 0;
+        mLauncher.animate().alpha(0f).setDuration(250).withEndAction(new Runnable() {
+            @Override
+            public void run() {
+                if (mInGame) mLauncher.setVisibility(View.GONE);
+            }
+        }).start();
         mSurfaceView.setVisibility(View.VISIBLE);
-        mSurfaceView.bringToFront();
         mVirtualController.setVisibility(View.VISIBLE);
+        mVirtualController.setControlsVisible(mTouchControls);   // hidden controls keep their toggle button; touches go to the game
         mVirtualController.bringToFront();
         mVirtualController.requestFocus();
 
-        if (mShowFps && mFpsOverlay != null) {
+        if (mShowFps) {
             mFpsOverlay.setVisibility(View.VISIBLE);
             mFpsOverlay.bringToFront();
             mFpsHandler.removeCallbacks(mFpsUpdater);
             mFpsHandler.postDelayed(mFpsUpdater, 500);
-        } else if (mFpsOverlay != null) {
+        } else {
             mFpsOverlay.setVisibility(View.GONE);
         }
 
-        NativeBridge.nativeStartHost(mGameDir, shaderDir, romfsDir, saveDir, null);
+        if (!NativeBridge.nativeStartHost(gameDir, shaderDir, romfsDir, saveDir, null)) {
+            Toast.makeText(this, "The host did not start (see adb logcat -s dm)", Toast.LENGTH_LONG).show();
+            stopGameSession();
+        }
     }
 
+    /** Back to the launcher. After nativeStopHost the host ends the process within 1.5 s (dm/host/hle_lifecycle.c), so this matters only when the start failed. */
     private void stopGameSession() {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (mFpsOverlay != null) {
-                    mFpsOverlay.setVisibility(View.GONE);
-                }
+                mInGame = false;
+                mFpsOverlay.setVisibility(View.GONE);
                 mFpsHandler.removeCallbacks(mFpsUpdater);
                 mVirtualController.setVisibility(View.GONE);
-                mSurfaceView.setVisibility(View.GONE);
-                mLauncherOverlay.setVisibility(View.VISIBLE);
-                mLauncherOverlay.bringToFront();
-                updateStatusDisplay();
+                mLauncher.animate().cancel();
+                mLauncher.setAlpha(1f);
+                mLauncher.setVisibility(View.VISIBLE);
+                mLauncher.bringToFront();
+                mLauncher.requestFocus();
                 applyImmersiveMode();
             }
         });
@@ -726,16 +580,16 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (NativeBridge.nativeIsRunning()) {
             new AlertDialog.Builder(this)
-                    .setTitle("Sair do Jogo? / Quit Game?")
-                    .setMessage("Deseja interromper a sessão do jogo e voltar ao launcher?")
-                    .setPositiveButton("Sair / Quit", new DialogInterface.OnClickListener() {
+                    .setTitle("Quit the game?")
+                    .setMessage("The game stops and nxdroid closes with it: unsaved progress is lost.")
+                    .setPositiveButton("Quit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
                             NativeBridge.nativeStopHost();
                             stopGameSession();
                         }
                     })
-                    .setNegativeButton("Continuar / Continue", null)
+                    .setNegativeButton("Keep playing", null)
                     .show();
         } else {
             super.onBackPressed();
@@ -746,7 +600,10 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         applyImmersiveMode();
-        updateStatusDisplay();
+        if (!mInGame) {
+            mLauncher.setStorageAccess(hasStorageAccess());
+            rescan();   // the folder may have changed while the app was away (a push, a granted permission)
+        }
         if (NativeBridge.nativeIsRunning() && mShowFps && mFpsOverlay != null) {
             mFpsOverlay.setVisibility(View.VISIBLE);
             mFpsOverlay.bringToFront();
@@ -768,13 +625,27 @@ public class MainActivity extends Activity {
         NativeBridge.nativeStopHost();
     }
 
+    // ---- Physical controllers: the launcher before a game, the guest's pad during one ----
+
+    private void sendPad() {
+        NativeBridge.nativeSendPad(0, mButtons, mLx, mLy, mRx, mRy);
+        NativeBridge.nativeSendInput(mButtons, mLx, mLy, mRx, mRy);
+    }
+
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         long mapped = mapKeyCodeToButton(keyCode);
+        if (!mInGame) {
+            if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                    || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                mapped = DM_BTN_A;
+            }
+            if (mapped != 0 && mLauncher.handleButton(mapped)) return true;
+            return super.onKeyDown(keyCode, event);
+        }
         if (mapped != 0) {
             mButtons |= mapped;
-            NativeBridge.nativeSendPad(0, mButtons, mLx, mLy, mRx, mRy);
-            NativeBridge.nativeSendInput(mButtons, mLx, mLy, mRx, mRy);
+            sendPad();
             return true;
         }
         return super.onKeyDown(keyCode, event);
@@ -783,10 +654,12 @@ public class MainActivity extends Activity {
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         long mapped = mapKeyCodeToButton(keyCode);
+        if (!mInGame) {
+            return mapped != 0 || super.onKeyUp(keyCode, event);
+        }
         if (mapped != 0) {
             mButtons &= ~mapped;
-            NativeBridge.nativeSendPad(0, mButtons, mLx, mLy, mRx, mRy);
-            NativeBridge.nativeSendInput(mButtons, mLx, mLy, mRx, mRy);
+            sendPad();
             return true;
         }
         return super.onKeyUp(keyCode, event);
@@ -796,6 +669,10 @@ public class MainActivity extends Activity {
     public boolean onGenericMotionEvent(MotionEvent event) {
         if ((event.getSource() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
                 && event.getAction() == MotionEvent.ACTION_MOVE) {
+            if (!mInGame) {
+                launcherNavigate(event);
+                return true;
+            }
 
             float rawLx = event.getAxisValue(MotionEvent.AXIS_X);
             float rawLy = event.getAxisValue(MotionEvent.AXIS_Y);
@@ -830,11 +707,30 @@ public class MainActivity extends Activity {
             if (lt > 0.5f) mButtons |= DM_BTN_ZL; else mButtons &= ~DM_BTN_ZL;
             if (rt > 0.5f) mButtons |= DM_BTN_ZR; else mButtons &= ~DM_BTN_ZR;
 
-            NativeBridge.nativeSendPad(0, mButtons, mLx, mLy, mRx, mRy);
-            NativeBridge.nativeSendInput(mButtons, mLx, mLy, mRx, mRy);
+            sendPad();
             return true;
         }
         return super.onGenericMotionEvent(event);
+    }
+
+    /** The left stick or the hat moves the launcher's selection once per push. */
+    private void launcherNavigate(MotionEvent event) {
+        float x = event.getAxisValue(MotionEvent.AXIS_HAT_X);
+        float y = event.getAxisValue(MotionEvent.AXIS_HAT_Y);
+        if (Math.abs(x) < 0.5f && Math.abs(y) < 0.5f) {
+            x = event.getAxisValue(MotionEvent.AXIS_X);
+            y = event.getAxisValue(MotionEvent.AXIS_Y);
+        }
+        long direction = 0;
+        if (Math.abs(x) >= Math.abs(y)) {
+            if (x <= -NAV_THRESHOLD) direction = DM_BTN_LEFT;
+            else if (x >= NAV_THRESHOLD) direction = DM_BTN_RIGHT;
+        } else {
+            if (y <= -NAV_THRESHOLD) direction = DM_BTN_UP;
+            else if (y >= NAV_THRESHOLD) direction = DM_BTN_DOWN;
+        }
+        if (direction != 0 && direction != mNavDirection) mLauncher.handleButton(direction);
+        mNavDirection = direction;
     }
 
     private static int filterAxis(float val) {

@@ -48,6 +48,13 @@ public final class NativeBridge {
     public static native float[] nativeGetPerformanceStats();
 
     /**
+     * The game profile this library was built for (-PdmGame / -DGAME): the host can start only that game.
+     *
+     * @return {profile id (the base game's title ID), game name, program ID as 16 hex digits}.
+     */
+    public static native String[] nativeGetBuiltGame();
+
+    /**
      * Set or update the active native render surface.
      *
      * @param surface Active Android Surface (or null to detach).

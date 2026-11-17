@@ -1,7 +1,8 @@
 # Checks for the Android port that need no game files, keys, device or GPU, on GitHub's Linux runners.
 # nxdroid is Android only (HANDOFF.md §2 *Platforms*): the Mac host, iOS app and Metal jobs this workflow used to run on the xcode-27 image are gone with it; the Apple
 # sources stay in the tree until HANDOFF.md §8 item 10 removes them, and the tests that build them (dm/host/tests, dm/gfx/tests, dm/ios) are not run here.
-# android-gates is the HANDOFF.md §5 gate list; android-build compiles the host with the NDK (green since 80f73ca). Both must stay green.
+# android-gates is the HANDOFF.md §5 gate list; android-build compiles the host with the NDK (green since 80f73ca); android-app compiles the app's Java with Gradle
+# and runs its JVM unit tests (dm/android/app/src/test). All three must stay green.
 name: tests
 
 on:
@@ -20,6 +21,10 @@ concurrency:
 env:
   GAME: '0100152000022000'   # quoted: unquoted, YAML reads these digits as an octal number. Mario Kart 8 Deluxe: the profile run on the S23 Ultra (any profile builds; the checks are about code, not the game)
   NDK_VERSION: 29.0.14206865   # dm/android/app/build.gradle ndkVersion, HANDOFF.md §5
+  # The app's build environment, as dm/android/docker/Dockerfile pins it (keep the two in step): SDK packages, and Gradle by version + SHA-256
+  SDK_PACKAGES: platforms;android-36 build-tools;36.0.0 ndk;29.0.14206865 cmake;3.31.6
+  GRADLE_VERSION: 9.8.1
+  GRADLE_SHA256: dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f
 
 defaults:
   run:
@@ -122,3 +127,44 @@ jobs:
           }
           cmake --build build/android/$GAME --target dmhost dm -j4 > build.log 2>&1 || { cat build.log; grep -E "error:|undefined" build.log | head -60 > errors.log; [ -s errors.log ] || cp build.log errors.log; annotate build errors.log; exit 1; }
           cat build.log
+
+  android-app:
+    name: Android app's Java compiled with Gradle, JVM unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: SDK packages, JDK 17 and Gradle of the Dockerfile
+        run: |
+          annotate() {   # $1 title, $2 log: the log's last 40 lines as an error annotation (the job log needs a signed-in user; annotations do not)
+            local m; m=$(tail -n 40 "$2"); m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::error title=$1::$m"
+          }
+          sdk_root=${ANDROID_SDK_ROOT:-$ANDROID_HOME}
+          sdkmanager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          set +o pipefail   # yes ends on SIGPIPE when sdkmanager stops reading; that is not a failure
+          yes | "$sdkmanager" --licenses > licenses.log 2>&1 || true
+          set -o pipefail
+          # word splitting is wanted: one argument per package
+          # shellcheck disable=SC2086
+          "$sdkmanager" --install $SDK_PACKAGES > sdk.log 2>&1 || { cat sdk.log; annotate "sdkmanager $SDK_PACKAGES" sdk.log; exit 1; }
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"   # the runner image's JDK 17 (the Dockerfile's openjdk-17)
+          curl -fsSL -o "$RUNNER_TEMP/gradle.zip" "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+          echo "${GRADLE_SHA256}  $RUNNER_TEMP/gradle.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gradle-${GRADLE_VERSION}/bin" >> "$GITHUB_PATH"
+      - name: Compile the Java and run the unit tests
+        run: |
+          annotate() {   # $1 title, $2 log: the log's last 40 lines as an error annotation (the job log needs a signed-in user; annotations do not)
+            local m; m=$(tail -n 40 "$2"); m=${m//'%'/'%25'}; m=${m//$'\r'/'%0D'}; m=${m//$'\n'/'%0A'}; echo "::error title=$1::$m"
+          }
+          # No native build here (android-build compiles libdm.so): compiling the Java and the JVM tests does not run CMake
+          gradle -p dm/android --no-daemon --stacktrace -PdmGame="$GAME" :app:compileDebugJavaWithJavac :app:testDebugUnitTest > gradle.log 2>&1 || {
+            cat gradle.log
+            grep -hE "error:|FAILED|AssertionError|Exception" gradle.log | head -60 > errors.log || true   # bash -e -o pipefail: no match is not a failure here
+            for x in dm/android/app/build/test-results/testDebugUnitTest/*.xml; do if [ -f "$x" ]; then grep -A3 "<failure" "$x" >> errors.log || true; fi; done
+            [ -s errors.log ] || cp gradle.log errors.log
+            annotate "gradle" errors.log; exit 1; }
+          cat gradle.log
+          grep -ho 'tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*" errors="[0-9]*"' dm/android/app/build/test-results/testDebugUnitTest/*.xml || true

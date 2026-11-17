@@ -50,7 +50,13 @@ android {
     }
 
     ndkVersion "29.0.14206865"
+
+    // JVM unit tests (src/test, run by CI's android-app job): android.jar's methods return defaults instead of throwing
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {
+    testImplementation 'junit:junit:4.13.2'
 }

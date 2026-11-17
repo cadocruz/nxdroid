@@ -48,483 +48,145 @@ before assuming a commit is on GitHub.
 > bytes are CRLF (§10) are hashed as they are, not LF-folded: do not refresh their rows with the snippet
 > above. On the Windows machine read §10 first (its checkout is CRLF).
 
-## Status at this cut (2026-11-03)
+## Status at this cut (2026-11-17; last device run: Run 39, 2026-11-08, `501c56e`)
 
 The port is built with NDK r29, packaged as an APK (`com.nxdroid`) and runs on a physical **Samsung
 Galaxy S23 Ultra** (Snapdragon 8 Gen 2, Adreno 740, 12 GB RAM, Android 16 / SDK 36, as the probe
 measured). The one title run so far is **Mario Kart 8 Deluxe** (`0100152000022000`, update 4.0.1
-`[v1507328]`): it boots, plays its menus and videos and races.
+`[v1507328]`): it boots, plays its menus and videos, and races with a correct 3D picture at a locked
+60 fps (Run 36: 60.01–60.22 fps on the 12-kart start grid, 1,247 draws a frame, `submit_cpu_ms`
+11.90–12.56, `gpu_ms` 9.44–10.08, `legacy_wait` 0.00). The abort on the way to the second Grand Prix
+course is fixed (Run 39). Its note, `dm/games/0100152000022000/README.md`, has every finding on it.
 
 - **Native AArch64 execution:** Horizon SVCs and SDK services answered by `dm/host`; NSO modules
   rewritten by `dm/tools/patch_nso.py --target=android`.
 - **H.264 video:** `AMediaCodec` in `dm/android/apple_stubs.c`, decoded into an NV12 `CVPixelBufferRef`;
   menu video previews play in real time.
-- **Audio:** AAudio output in `dm/android/apple_stubs.c` (48 kHz stereo PCM). AAC through
-  `AudioConverter` is still a stub (an AAC track is silent, one `[RED]` line).
-- **Front end:** `MainActivity` picks the game folder (default `/storage/emulated/0/nxdroid/game`) and
-  starts the game; an on-screen multitouch gamepad (`VirtualControllerOverlayView.java`: left stick,
-  D-pad, triggers, face buttons, show/hide toggle) and physical controllers drive it. The Argon launcher
-  views (`LauncherOverlayView.java`, `GameScanner.java`) are in the tree but nothing uses them yet.
+- **Audio:** AAudio output in `dm/android/apple_stubs.c` (48 kHz stereo PCM, low-latency mode, 240-frame
+  callbacks; 0 underruns in 6,000+ callbacks in Run 38). AAC through `AudioConverter` is still a stub (an
+  AAC track is silent, one `[RED]` line).
+- **Front end:** `MainActivity` opens on the Argon launcher (since 2026-11-17), which lists the prepared
+  games of a library folder (default `/storage/emulated/0/nxdroid`, whose `game/` is where the prepare
+  script pushes) and starts the one the APK was built for (§8 item 8; written, not yet run on the device); an
+  on-screen multitouch gamepad (`VirtualControllerOverlayView.java`) and physical controllers drive it; an
+  on-screen FPS / frame-time / GPU-time HUD (`NativeBridge.nativeGetPerformanceStats()`, a setting).
 - **Deployment:** `scripts/prepare_game_android.py` does base + update RomFS extraction, the rewrite,
   shader translation into `.xgs` bundles, the Mii database from emulator user data, and the `adb` push.
-- **2D is right, 3D corruption root cause found and fixed locally (2026-11-06).** The HUD, text and
-  video have correct colours. The 3D scene defect (posterized colours, road speckle, pitch black road
-  and kart) was tracked down via RenderDoc 1.47 frame capture to missing samplers across all textures:
-  `scripts/prepare_game_android.py` had a flow-control defect in `_inspect_image_type` that caused all
-  combined image samplers (`OpTypeSampledImage`) to be recorded with descriptor type 2
-  (`VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE`) instead of type 1 (`VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`).
-  The Vulkan replay engine (`xbg_game.cpp`) consequently bound `ii.sampler = VK_NULL_HANDLE` for all
-  193,457 texture bindings across the game's 29,000+ shaders. Fixed in `prepare_game_android.py` and
-  locally batch-updated across all 27,869 `.xgs` bundle files; pending device deployment.
-- **Race-start crash on Adreno 740 diagnosed and resolved (2026-11-07).** After deploying the `.xgs`
-  combined image sampler fix, the title screen and menus rendered with proper texture filtering, but entering
-  a race aborted with `NVN sampler linear filtering unsupported ...`. Cause: `sampler_slow` in `xbg_game.cpp`
-  aborted via `xbg_fatalf` when linear filtering or PCF was requested on formats lacking
-  `VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT` on Adreno 740 (`D32_SFLOAT`, `R32_SFLOAT`,
-  `R32G32B32A32_SFLOAT`), and `null_texture` created dummy depth textures using `0x34` (`D32_SFLOAT`).
-  Resolved by clamping unsupported linear/anisotropic filtering to nearest in `sampler_slow` with a one-time log,
-  using NVN format `0x32` (`D16` / `X8_D24`) for unbound depth/shadow slots in `null_texture`, including shadow
-  flags in `ImgKey::kind`, and clearing stale pipeline cache files (`vk-pipeline-*.bin`).
-- **3D race confirmed visually clean; 60 FPS CPU optimization pack deployed (2026-11-07, Run 29).** Live
-  Galaxy S23 Ultra testing confirmed full visual correctness in the 3D race with no crashes, textures intact,
-  and `gpu_ms = 5.97–8.40 ms` (>2x headroom for 60 FPS). Frame rates were bounded to 24.86–38.44 FPS by CPU
-  submission (`submit_cpu_ms = 14.95–21.89 ms`): `legacy_waitall = true` on Android caused synchronous fence waits
-  (`legacy_wait_total = 10.23–12.40 ms/frame`), `OP_BARRIER` split open render passes 72.4 times/frame
-  (`pass_ends op28 = 72.4/frame`), and descriptor memo generations were bumped on initial resource creation
-  (`xmemo_drops = 581`). All three bottlenecks are addressed in `xbg_game.cpp`: Android switches to asynchronous
-  fence retirement (`legacy_waitall = false`), `OP_BARRIER` only splits an open pass when shader writes occurred
-  (`open_pass.shader_writes`), and memo generations bump only on modifications to existing resources.
-- **Pipeline warm-up failure in `warm::build()` resolved; real-time FPS HUD added (2026-11-07).** `NVN PERF`
-  recorded `warm_built=0 warm_failed=974` and mid-race `[longframe]` compilation hitches (`new_pipes=38
-  pipe_compile=480.7ms`). Cause: `xbg_graphics_pipeline_key()` in `xbg_pipeline_key.h` serialized 6 words for
-  the viewport header (including `negativeOneToOne` for `VK_EXT_depth_clip_control`), but `warm::build()` in
-  `xbg_game.cpp` read only 5 words, shifting deserialization by 4 bytes and failing all 974 pipeline records on
-  `r.i != r.n`. Fixed by deserializing `neg11` and attaching `VkPipelineViewportDepthClipControlCreateInfoEXT` in
-  `warm::build()`, restoring 100% warm-up pipeline compilation ahead of time. `MainActivity.java` now includes a
-  real-time on-screen performance HUD (`NativeBridge.nativeGetPerformanceStats()` showing FPS, frame time, GPU time).
-- **Run 31 telemetry verifies 100% warm-up pipeline precompilation; mtl_wait_acq and transient render-target churn resolved for 60 FPS (2026-11-07).** Live telemetry (`/tmp/mk8dx_race_perf_run31.log`) confirmed `warm_built=1058 warm_failed=0` and zero mid-race pipeline compiles (`created=0 create_ms=0.0`). Race FPS hovered at 28–39 FPS (`25.4–37.8 ms/frame`) despite `gpu_ms = 6.00–10.28 ms` due to: (1) `mtl_wait_acq` synchronously blocking the guest CPU on previous frame fences (`legacy_wait = 5.09–9.24 ms/frame`), resolved in `dm/gfx/vulkan/nvn_vk.c` by returning `1` immediately; (2) MK8DX finalizes and re-initializes ~4–5 transient render targets per frame at identical pool addresses, destroying images and framebuffers on release (`retire = 2.01–3.54 ms/frame`, `fb_creates = 4.0–5.0/frame`, `memo_bump[2] = 10,829`), resolved in `dm/gfx/vulkan/engine/xbg_game.cpp` by retaining pool-backed render-target `Image` objects in a bounded `released_images` standby list and re-adopting them in `get_image_slow`.
-- **Run 32 telemetry confirms steady ~56 FPS; Run 33 crash analysis confirms stable configuration (2026-11-07).** Live telemetry (`/tmp/mk8dx_race_perf_run32.log`) confirmed the `released_images` standby cache eliminated per-frame framebuffer/image churn: `retire` dropped from `3.09–3.54 ms/frame` down to `0.05–0.08 ms/frame`, `fb_creates` dropped to `0.00/frame`, `memo_bump[2]` was 0 during steady racing, and `submit_cpu_ms` dropped to `9.13–11.98 ms`, reaching steady ~56 FPS. 46 additional race-start pipelines were compiled and cached in `/sdcard/nxdroid/vk-pipeline-cache.bin` (9.11 MB) and `vk-pipeline-list.bin` (1.56 MB), explaining the one-time race-start dip. In Run 33, experimentally bypassing `mtl_wait` (`return 1`), enabling `upload_prologue = true`, and expanding `released_images` to non-render-target textures caused a race-start `SIGSEGV` in `vulkan.adreno.so` (`offset 0x22c24c`) due to unretired slots and desynchronized pass state. The stable configuration is restored: `mtl_wait_acq` returns `1` immediately, `mtl_wait` calls `xbg_legacy_wait` to flush submissions and retire slots, `upload_prologue = false`, and `released_images` strictly retains render-target / GPU-written textures.
-- **Run 34 telemetry confirms 54–57 FPS; safe CPU/GPU pipelining implemented in `xbg_legacy_wait` (2026-11-07).** Live telemetry (`/tmp/run34_pid24283.log`) confirmed steady 3D racing ran at `54.0–57.1 FPS` (`submit_cpu_ms = 7.86–9.10 ms`, `gpu_ms = 6.3–6.5 ms`, `legacy_wait = 0.00 ms`). During the dense 12-kart start grid (`1,226–1,287 draws/frame`, `79–82 passes`), CPU recording rose to `14.77–15.48 ms` and GPU execution rose to `9.7–10.9 ms`, with `xbg_legacy_wait` blocking in `vkWaitForFences` for `9.13–12.12 ms/frame`, serializing Frame N+1 CPU recording behind Frame N GPU execution (`28.9–35.4 FPS`, `24.6–34.6 ms/frame`). Resolved cleanly in `dm/gfx/vulkan/engine/xbg_game.cpp`: inside `xbg_legacy_wait`, after `retire_done()` and flushing in-progress recording slots (`submit_slots(false)`), `if (fence <= submitted) return 1;` returns immediately on Android. Stream arenas snapshot CPU buffers and `recording_slot()` enforces 2-slot ring backpressure, allowing Frame N+1 CPU work to pipeline concurrently with Frame N GPU execution, eliminating `legacy_wait` stalls without driver crash.
-- **Run 35 crash resolved and Run 36 locked 60 FPS milestone achieved (2026-11-07).** Live testing of an unconstrained `if (fence <= submitted) return 1;` in Run 35 caused a `SIGSEGV` in `vulkan.adreno.so + 0x22c24c` (`addr = 0xb4`) when mid-frame syncs forced mid-frame submissions that split open render passes. In Run 36, safe 1-frame boundary pipelining was deployed in `xbg_game.cpp`: `if(t && t->pending && t->covers>=fence && !cur.pending && !(cur.recording && cur.ops)) return 1;`, ensuring early return occurs only at a clean frame boundary with target batch in-flight and alternate slot free, while mid-frame syncs and ring-full conditions fall through to synchronous waiting. Device testing on Galaxy S23 Ultra achieved **60.01–60.22 FPS locked** across the 12-kart start grid (1,247 draws/frame, `submit_cpu_ms = 11.90–12.56 ms`, `gpu_ms = 9.44–10.08 ms`, `legacy_wait = 0.00 ms`) with zero crashes. Persistent keystore (`~/.android-dm/debug.keystore`) mounted to `/android-user` permanently prevents signature update collisions (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
-- **Run 37 Adreno 740 vkCmdDispatch crash resolved (2026-11-08).** Post-race-start compute dispatch crashed inside `vulkan.adreno.so` at offset `0x22c24c` (`SIGSEGV addr=0xb4`) when `vkCmdDispatch` was recorded into a command buffer with dirty graphics subpass state (`cur_slot.has_draws`). Resolved in `dm/gfx/vulkan/engine/xbg_game.cpp`: when `xbg_adreno_compute_needs_clean_cmd` is active on Adreno and a slot has recorded draw calls, `submit_slots(false)` is invoked prior to `dispatch()` to ensure compute commands execute on a clean command buffer.
-- **Run 38 audio crackling eliminated with AAudio low-latency and 240-frame sizing (2026-11-08).** Device logs revealed severe audio underruns (1,400 out of 2,000 callbacks failing, 16.8 seconds zero-padded per 44 seconds) because `AAudioStreamBuilder_setPerformanceMode` was `AAUDIO_PERFORMANCE_MODE_NONE` and callbacks requested variable bursts up to 1,600 frames against a 960-frame renderer queue. In `dm/android/apple_stubs.c`, configured `AAUDIO_PERFORMANCE_MODE_LOW_LATENCY`, fixed callback frames to 240 (5 ms at 48 kHz matching `audren` blocks) via `AAudioStreamBuilder_setFramesPerDataCallback`, and increased `NBUF` in `dm/host/hle_audren.c` from 4 to 8. Live device telemetry on Galaxy S23 Ultra verified 0 underruns across 6,000+ consecutive callbacks (0.0 ms zero-padded, locked 240 frames each) with 60 FPS locked racing.
-- **Run 39 post-race course transition crash resolved with sampler LOD bias and anisotropy clamping (2026-11-08).** Transitioning to the second Grand Prix race triggered an abort in `xbg_game.cpp` with `FATAL: NVN sampler invalid LOD range/bias result=-4 ... bias=-32` because NVN samplers on Tegra X1 allow `lod_bias` down to -32.0f, which exceeded Adreno 740's `maxSamplerLodBias` (15.0/16.0). In `dm/gfx/vulkan/engine/xbg_sampler.cpp`, clamped `p->lod_bias` to `[-limits->max_lod_bias, limits->max_lod_bias]` and `p->anisotropy` to `limits->max_anisotropy` before writing Vulkan create info, preserving mipmap biasing intent while satisfying Vulkan VUID 01079 without crashing.
-- `dm/games/0100152000022000/README.md` records the Android runs and findings (`AGENTS.md`: a game counts
-  as running on Android only when its note says so).
+  Since 2026-11-04 it scans every RomFS file for shaders and does not rewrite depth into the vertex
+  shaders by default (`--depth-rewrite` only for a device without `VK_EXT_depth_clip_control`; the stamp
+  `xgs_build.txt` records the setting).
 
-### Resume from the 2026-11-03 graphics investigation
+### How the 3D picture and the frame rate were fixed (2026-11-06 to 11-08)
 
-The diagnostic edits in `dm/gfx/vulkan/engine/xbg_game.cpp` and the test record below were committed in
-`89dc2dc` (the pool-reuse invalidation and the `copy-upload-color` branch are experiments, not fixes).
-That commit left the vendor row of `xbg_game.cpp` and `opcode_map.txt` stale, so CI's `android-gates`
-failed on it; both were brought up to date afterwards. **Any edit to `xbg_game.cpp` needs both:** the
-row's LF sha256 in `dm/tools/android_vendor.tsv` (by hand, §10) and `CC=gcc python3
-dm/gfx/vk/engine_smoke/opcode_map.py` (it cites the file's line numbers). The latest APK was built from
-`89dc2dc`'s tree and installed on the S23 Ultra; the captures and logs are in `/tmp/nxdroid-test/` on
-the Linux machine (latest: `19_pool_reuse_fix.png` / `.txt`).
+Every fix below is in the tree; the record of each run is in §8 item 12 step 9, the general mechanisms in
+`docs/reference/android.md`, `rendering.md` and `audio.md`, linked from the game note's "Found on this
+game".
 
-**Next device test, first (2026-11-04): the depth convention is converted twice.**
-`scripts/prepare_game_android.py` `_rewrite_depth` writes GL's clip-space z (near = -w) as `[0, w]` into
-every vertex shader it packs. The engine, when the game keeps NVN's GL depth mode, also chains
-`VK_EXT_depth_clip_control` with `negativeOneToOne` (`xbg_game.cpp` `draw()`, `!game_depth_zero`;
-`nvn_vk.c` logs `NVN depth mode near=-w (GL) kept by the game: active via VK_EXT_depth_clip_control`),
-which converts the already converted z again: depth becomes `z_ndc / 4 + 0.75` instead of
-`z_ndc / 2 + 0.5`. Visibility order barely changes, but depth precision halves (z-fighting: the road
-speckle) and every pass that rebuilds a position from depth (deferred lighting, shadows, fog, ambient
-occlusion) reads a wrong position (posterized light, black holes). Sprint 6's fix e) only avoids the
-double conversion when the marker `gfx-depth-clip` holds `0`; that marker was among the stale ones
-removed before the clean baseline, which would explain why the race scene looked "resolved" during
-Sprint 6 and broken in every clean run. Not measured. The test: `python3 scripts/android_gfx_ab.py
-gfx-depth-clip --off` (the script now finds the engine's marker folder, §8 item 12 step 5), one race,
-screenshot and log; and grep the earlier logs for `depth mode` and `depth clip`. If it fixes the picture,
-the root fix is to convert once, by the game's runtime depth mode: drop `_rewrite_depth` from the
-prepare script (it cannot know the runtime mode; a game that sets near = 0 gets a wrong conversion
-from it) and keep the engine's `negativeOneToOne`, which follows `nvnDeviceSetDepthMode`; then prepare
-the game again with `--rebuild-shaders`. A device without `VK_EXT_depth_clip_control` would need the
-conversion done by the engine at shader load, keyed by the mode, not at packing.
+| Run | Symptom | Cause | Fix (where) |
+|---|---|---|---|
+| 28 | 3D scene posterized, speckled, road and kart black (2D right) | `_inspect_image_type` in `scripts/prepare_game_android.py` broke out of its walk before testing for `OpTypeSampledImage`, so every texture binding of every bundle was written as `SAMPLED_IMAGE` (2), and the engine bound `VK_NULL_HANDLE` samplers. Found with RenderDoc 1.47 on the device (`Colour Pass #6`, draw 2425: `Image & Sampler: No Resource`) | the script records type 1 (`COMBINED_IMAGE_SAMPLER`); the device's bundles were patched in place, and any new preparation writes them right. The engine was not changed |
+| 29 | race start aborts: `NVN sampler linear filtering unsupported` | Adreno 740 has no linear filtering on `D32_SFLOAT`, `R32_SFLOAT`, `R32G32B32A32_SFLOAT`; `null_texture` made dummy depth in `D32_SFLOAT` | `sampler_slow` (`xbg_game.cpp`) falls back to nearest with one log line (a device limit: android.md, *Adreno 740 aborts on linear filtering…*); dummy depth uses NVN `0x32`; shadow flags in `ImgKey::kind`; stale `vk-pipeline-*.bin` removed on the device |
+| 29 | 25–38 fps with `gpu_ms` 6–8 | synchronous fence waits (`legacy_waitall`), `OP_BARRIER` closing open passes 72 times a frame, memo generations bumped on first registration | async retirement on Android, a barrier splits a pass only after shader writes (as `nvn_mtl.m` `g_pass_swrite`), memo bumps only on a change (`xbg_game.cpp`) |
+| 29–31 | `warm_built=0 warm_failed=974`, mid-race compile hitches | `warm::build()` read 5 viewport words where `xbg_graphics_pipeline_key()` writes 6 (`negativeOneToOne`) | read `neg11` and chain `VkPipelineViewportDepthClipControlCreateInfoEXT`; Run 31: `warm_built=1058 warm_failed=0` |
+| 31–32 | 28–39 fps, `legacy_wait` 5–9 ms, `retire` 2–3.5 ms, `fb_creates` 4–5 a frame | `mtl_wait_acq` waited on the previous frame's fence; the game finalizes and re-creates 4–5 transient render targets a frame at the same pool address | `mtl_wait_acq` returns 1 (`nvn_vk.c`); released render-target / GPU-written images kept in a bounded `released_images` list and re-adopted (`xbg_game.cpp`). Run 32: ~56 fps |
+| 33, 35 | `SIGSEGV` in `vulkan.adreno.so + 0x22c24c`, `addr=0xb4` | experiments: `mtl_wait` not waiting (33); an unconstrained early return in `xbg_legacy_wait` that submitted mid-frame (35) | reverted; `mtl_wait` keeps `xbg_legacy_wait` |
+| 34, 36 | start grid at 29–35 fps, `legacy_wait` 9–12 ms | `xbg_legacy_wait` waited for frame N's GPU work before frame N+1 was recorded | on Android, return at once when the target batch is in flight, the other slot is free and nothing is being recorded (`xbg_game.cpp`). Run 36: locked 60 fps |
+| 37 | `SIGSEGV` at the same `0x22c24c` / `0xb4`, after the race starts, in `vkCmdDispatch` | Adreno 7xx: a dispatch recorded into a command buffer that already holds draws finds stale graphics dirty bits and reads a null subpass state (reading of the driver in `xbg_adreno_policy.h`) | `xbg_adreno_compute_needs_clean_cmd` (Qualcomm vendor ID): submit the slot before a dispatch when it has draws (`has_draws`); a reused slot also clears a stale `open_pass` |
+| 38 | crackling audio: 1,400 of 2,000 callbacks short | AAudio in `PERFORMANCE_MODE_NONE` with bursts up to 1,600 frames against a ~960-frame queue | low-latency mode, 240-frame callbacks, `NBUF` 4 → 8 in `dm/host/hle_audren.c` |
+| 39 | abort on the second course: `NVN sampler invalid LOD range/bias result=-4 … bias=-32` | NVN allows LOD bias down to -32; Adreno's `maxSamplerLodBias` is 15–16 (VUID 01079) | `xbg_sampler.cpp` clamps the bias and the anisotropy to the device limits |
 
-**Prepared in code (2026-11-04), not measured; CI compiles it.**
-- `scripts/prepare_game_android.py` no longer applies `_rewrite_depth` by default; `--depth-rewrite`
-  turns it back on, only for a device without `VK_EXT_depth_clip_control` (and then with the marker
-  `gfx-depth-clip` = `0`). A stamp `xgs_build.txt` beside the bundles records the setting, and bundles
-  built with another one (or before the stamp, all of them with the rewrite) are rebuilt on the next
-  run without `--rebuild-shaders`. The rewrite also only ever touched stage 0, which would be wrong for
-  a game whose last stage before rasterization is a tessellation or geometry shader.
-- The two pool-aliasing experiments of `89dc2dc` are off by default, behind the marker
-  `gfx-alias-invalidate` = `1` (`xbg_game.cpp`); their log lines stay on. Reason: the textures seen
-  over the same storage are live (NVN's `nvnTextureFinalize` reaches the engine as
-  `xbg_legacy_tex_release`, which erases and retires the image, so an image still indexed has not been
-  finalized): most likely transient render targets sharing a pool range within a frame. Marking them
-  for a re-upload from guest memory can fill one with bytes the GPU never wrote, and the runs with the
-  experiments on (16 and 19) are the only ones that also showed displaced geometry.
+Findings of the earlier sessions that still hold:
 
-What is established:
+- **Ruled out as the cause of the 3D picture** (2026-11-03 to 11-05, runs 00–27; they ran before the
+  sampler fix, so their pictures say nothing about the switches themselves): the ten single-switch A/B
+  runs (`gfx-noload`, `gfx-read-preflight`, `gfx-tex-dirty`, `gfx-wb-skip`, `gfx-upload-prologue`,
+  `gfx-vcache`, `gfx-pipe-memo`, `gfx-native-bc`, `gfx-forward-temps`, `gfx-ldc-fold`), the depth
+  convention (`gfx-depth-clip`, re-pack without `_rewrite_depth`), repeated colour slots
+  (`gfx-rt-dedupe`), pool-alias invalidation (`gfx-alias-invalidate`) and CPU re-upload of GPU-drawn
+  textures (`gfx-cpugpu-refresh`). `gfx-read-preflight` on costs 50–74 ms of submit time a frame.
+- **Diagnostics the log still prints:** the game attaches one `1920x1080` `0x3d` target at colour slots 3
+  and 4 (masks `0xf`, `0`): `[RED] NVN one texture at two colour slots`; `CopyBufferToTexture` writes
+  small textures into pool ranges that transient render targets also cover: `[YELLOW] Preserving
+  GPU-written image on partial memory pool write` and `[RED] NVN CPU wrote the storage of a GPU-drawn
+  texture after the GPU`; `[RED] … hybrid draws are not collected` is a Metal-only statistic the Vulkan
+  replay answers with 0. None of them is now known to change the picture; whether the kept GPU pixels
+  are right in every case is not checked (§8 item 12 step 8a).
+- **Behind markers, off by default, not needed by the game so far:** `gfx-rt-dedupe` (attach a repeated
+  level once, as `nvn_mtl.m` `rt_dup_slot`), `gfx-sampler-match` (sampler compare follows the shader's
+  depth-compare flag), `gfx-alias-invalidate` and `gfx-cpugpu-refresh` (diagnostic experiments).
+- **Written on 2026-11-05, default on, not measured on the device:** alpha 1 for every format
+  `nvn_fmt_mtl.c` marks without alpha, composed with the game's swizzle, and 16-bit packed formats chosen
+  by bit layout (`0x3c` → `B5G6R5`, `0x96` → `A1R5G5B5`, `0x98` → `R5G5B5A1`; `0x3a` / `0x3b` keep red
+  and blue swapped without `VK_KHR_maintenance5`, one `[RED]`). A wrong colour in a menu or a font is
+  where these would show. Still open: min / max sampler reduction is dropped by `xbg_sampler_from_nvn`.
+- **Sprint 6 fixes still in the tree:** the present path keeps the swapchain at the window's size
+  (`present_native = false`; `gfx-present-native` brings the old path back) against vertical banding,
+  with a linear present blit and at least three swapchain images; a 3D view takes one layer (the LUT);
+  `gpu_written` survives partial CPU writes; swizzled views do not alias; the graphics defaults
+  `nativeStartHost()` sets (`DM_GFX_*`, §8 item 12).
 
-- The ten planned single-switch A/B runs (2026-11-03) did not improve the picture; the record is in
-  §8 item 12, step 9.
-- The recurring partial-write warning comes from `OP_COPY_B2T` (`CopyBufferToTexture`), in the
-  `copy-upload-color` path: small dynamic textures (`512x608`, `256x304`) are written into pool ranges
-  that GPU-written render targets (`1920x1080`, `960x540`, `1280x720`) also cover. Those images are live
-  (finalizing a texture removes its image from the engine), so this is most likely storage the game
-  shares between transient targets within a frame, not a stale object left behind (inferred from the
-  code, not traced on the device).
-- The `[RED] hybrid draws are not collected` line is not a rendering failure: it is the Vulkan stub of
-  a Metal-only statistic in `dm/gfx/vulkan/nvn_vk.c` (always zero).
-- **Depth-convention test completed (2026-11-04):** `gfx-depth-clip=0` was active in the correct
-  marker directory and the fresh log confirms `NVN depth clip marker off=1`,
-  `NVN depth clip control ...=1`, and `NVN depth mode near=-w (GL) kept by the game: active via
-  VK_EXT_depth_clip_control`. Capture: `/tmp/nxdroid-test/20_depth_clip_off.png`; log:
-  `/tmp/nxdroid-test/20_depth_clip_off.txt`. The screenshot remains severely corrupted, with black
-  regions, speckle and displaced geometry; this switch alone is **not the fix**. The run measured
-  approximately `27.59 fps`, `gpu_ms=12.62`, `submit_cpu_ms=14.69`. Do not repeat this exact test.
-- Fixed on 2026-11-04, not run yet: `scripts/prepare_game_android.py`'s RomFS shader scan read only
-  files under folders and extensions written for Mario Kart 8 Deluxe (`/Course/`, `/Kart/`, `.bfres`, …),
-  a game-specific rule in a general script that never found a shader elsewhere; it now scans every
-  RomFS file, as `shader_split.py`'s own main does (the profile's `shader_groups` only name groups).
+### Open after Run 39
 
-### Device session of 2026-11-04 (done): step by step
+1. **Coverage:** one game, one course start and one course transition. Other courses, a full Grand
+   Prix, battle mode, 2–4 player split screen and a long session (memory after a level change:
+   `adb shell dumpsys meminfo com.nxdroid`, the `dm_guest_discard` fix) are not run.
+2. **The `0x22c24c` crashes have one driver path.** Runs 33 and 35 (`vkCmdDrawIndexed`) and Run 37
+   (`vkCmdDispatch`) fault at the same offset with the same `addr=0xb4`; Run 37's reading of the driver
+   (a stale graphics dirty bit at `[cmd, #0x78]` leading to a null `GetSubpassState`) may also be what
+   the earlier two hit after a mid-frame submit. Not checked; worth knowing before trying another
+   change to submission or pass boundaries.
+3. **[DONE 2026-11-17] Records for Run 37:** `docs/reference/android.md`, *Adreno 7xx crashes in
+   vkCmdDispatch recorded after draws in the same command buffer* (under *Adreno driver gates*), its
+   symptom-index line and the game note's "Found on this game" line.
+4. **Records to correct:** `mtl_wait_acq` in `dm/gfx/vulkan/nvn_vk.c` returns 1 with no comment saying
+   why (the reason is in android.md, *Guest CPU blocks synchronously on previous frame fence in
+   mtl_wait_acq*); `docs/reference/audio.md`, *AAudio's default buffer duration…*, says "buffer capacity
+   of 8 frames" where the code asks for 8 callbacks (1,920 frames); `README.md` (Vulkan Graphics, 3D
+   picture) still says the 3D scene is wrong and gives ~54 fps; the game note points at a "Next device
+   session" this file no longer has.
+5. **Performance margin:** at the start grid CPU recording takes 11.9–12.6 ms of the 16.7 ms frame; a
+   heavier scene or split screen may not hold 60. `NVN PERF` `parts_ms_per_frame` is where to look.
+6. **The device's bundles were patched in place (Run 28).** A preparation from scratch with the current
+   script must give the same `type = 1` bindings; it has not been run since the fix. The counts of the
+   earlier preparation: 29,651 shaders found, 29,642 bundles, 9 without one (`missing_shaders.tsv` in the
+   work folder).
+7. The rest of the list is §8: items 2 (viewport mask), 5 (Vulkan / OpenGL games), 6 (zero-copy probe),
+   7 (128 MiB experiment), 8 (the launcher: a first run on the device) and 10 (Apple code, last).
 
-**Done on 2026-11-04: runs 20 to 25 are recorded in §8 item 12 step 9. The next session is the GPU frame
-capture further down ("Next device session (2026-11-05)"); keep these steps as the reference for
-building, installing, markers and logs.**
+### How a device run is made
 
-Everything here runs on the Linux machine that has `adb`, podman and the phone (S23 Ultra, USB
-debugging on). Commands run from the repository root. `ADB` below is the `adb` that machine used on
-2026-11-03, `/opt/platform-tools/adb` (§9 names `/tmp/opencode/platform-tools/adb`, an older path):
-pass it to the script with `--adb "$ADB"` when `adb` is not on `PATH`. Name every capture with the
-next free number in `/tmp/nxdroid-test/` (the 2026-11-03 session used `00` to `19`; start at `20`).
+On the Linux machine with `adb`, podman and the phone (USB debugging on), from the repository root.
+`ADB` is the `adb` used there (`/opt/platform-tools/adb` in the 2026-11-03 session); pass it to the
+script with `--adb "$ADB"`. Name captures with the next free number in `/tmp/nxdroid-test/` (the next is
+40).
 
-1. **Get the code and check it.** `git pull`, then `git log -1 --oneline`. The checkout must contain the
-   2026-11-04 changes: `grep -c alias_invalidate dm/gfx/vulkan/engine/xbg_game.cpp` prints a number
-   above 0, and `grep -c DEPTH_REWRITE scripts/prepare_game_android.py` and
-   `grep -c "one texture at two colour slots" dm/gfx/vulkan/engine/xbg_game.cpp` too. CI must be green for that
-   commit (both jobs of `tests.yml`).
-2. **Build the APK** (the game profile is mandatory):
-   ```sh
-   podman run --rm --userns=keep-id -v "$PWD:/workspace" -w /workspace localhost/dm-android-tools:1 \
-       gradle -p dm/android :app:assembleDebug -PdmGame=0100152000022000
-   ```
-   It writes `dm/android/app/build/outputs/apk/debug/app-debug.apk`.
-3. **Install it:** `"$ADB" install -r dm/android/app/build/outputs/apk/debug/app-debug.apk`. If it fails
-   with a signature conflict (it did on 2026-11-03), `"$ADB" uninstall com.nxdroid` first. Uninstalling
-   deletes the app's private data, the saves in `/data/user/0/com.nxdroid/files/save` among them, but
-   not `/storage/emulated/0/nxdroid/`: check afterwards that `"$ADB" shell ls /storage/emulated/0/nxdroid/game`
-   still lists `main`, `romfs.img` and the `.xgs` bundles. Record the installed commit in the test record.
-4. **Prepare the session:**
-   ```sh
-   "$ADB" logcat -G 16M
-   python3 scripts/android_gfx_ab.py --adb "$ADB" --clear-all --no-restart
-   python3 scripts/android_gfx_ab.py --adb "$ADB" --list      # "the engine reads markers from /storage/emulated/0/nxdroid", nothing else
-   ```
-   Do **not** pass `--game-dir /storage/emulated/0/nxdroid` any more: the 2026-11-03 session needed it
-   with the first version of the script; the script now takes the game folder (default
-   `/storage/emulated/0/nxdroid/game`) and finds the marker folder itself, and the parent of
-   `/storage/emulated/0/nxdroid` would be the wrong folder.
-5. **Run 20, the new APK's baseline, no marker** (the pool-alias experiments are now off, so this can
-   differ from the 2026-11-03 baseline):
-   ```sh
-   "$ADB" logcat -c
-   "$ADB" shell am force-stop com.nxdroid && "$ADB" shell am start -n com.nxdroid/.MainActivity
-   ```
-   In the app press **START GAME** (the automated restart stops at the launcher), start a race on
-   **Mario Kart Stadium**, keep racing about a minute, then:
-   ```sh
-   "$ADB" exec-out screencap -p > /tmp/nxdroid-test/20_base_0411.png
-   "$ADB" logcat -d -s dm > /tmp/nxdroid-test/20_base_0411.txt
-   ```
-6. **Run 21, the depth test** (the bundles on the phone still carry the rewrite, so this marker leaves
-   one conversion, the shaders'):
-   ```sh
-   python3 scripts/android_gfx_ab.py --adb "$ADB" gfx-depth-clip --off --wait 120 \
-       --shot /tmp/nxdroid-test/21_depthclip_off.png --log /tmp/nxdroid-test/21_depthclip_off.txt
-   ```
-   Within the 120 s: press START GAME and race. Then
-   `python3 scripts/android_gfx_ab.py --adb "$ADB" gfx-depth-clip --clear --no-restart`.
-7. **Check the logs of runs 20 and 21 before anything else** (`grep` each file):
-   - `NVN depth clip control (VK_EXT_depth_clip_control)=1`: the device has the extension.
-   - `NVN depth mode near=-w (GL) kept by the game: active via VK_EXT_depth_clip_control`: MK8DX keeps
-     the GL mode, so the engine converts. Its absence means the game sets near = 0: then the engine
-     never converted, and the shaders' rewrite alone was the wrong one; go to step 8 regardless.
-   - `NVN depth clip marker off=0` in run 20 and `=1` in run 21: the marker was read.
-   - `NVN pool-alias invalidation experiment=0` in both.
-   - `[RED] NVN one texture at two colour slots`, `[RED] NVN stencil-mode texture read as depth` and
-     `[RED] NVN sampler compare mode does not match the shader` (diagnostics added on 2026-11-04, the
-     first five of each): each present makes it suspect 1, 2 or 3 of "If the depth test does not fix it"
-     below. Copy them into the test record. `NVN repeated colour slots attached once=0` and
-     `NVN sampler depth compare follows the shader=0` must be there too (the markers of steps 7b and 7c,
-     off).
-7b. **Run 21b, only if run 20's log has `[RED] NVN one texture at two colour slots`:** the fix is in the
-   APK behind a marker. With no other marker set:
-   ```sh
-   python3 scripts/android_gfx_ab.py --adb "$ADB" gfx-rt-dedupe --on --wait 120        --shot /tmp/nxdroid-test/21b_rt_dedupe.png --log /tmp/nxdroid-test/21b_rt_dedupe.txt
-   python3 scripts/android_gfx_ab.py --adb "$ADB" gfx-rt-dedupe --clear --no-restart
-   ```
-   Its log must say `NVN repeated colour slots attached once=1`; a `[RED] NVN colour slot … repeats slot …
-   with write mask …` line means a dropped slot really had writes. If 21b fixes the picture, try it once
-   more together with the depth marker (`gfx-depth-clip --off` and `gfx-rt-dedupe --on`, both set) to
-   see whether both faults were present.
-7c. **Run 21c, only if run 20's log has `[RED] NVN sampler compare mode does not match the shader`:** the
-   same way with `gfx-sampler-match --on` (files `21c_sampler_match.*`), then `--clear --no-restart`. Its
-   log must say `NVN sampler depth compare follows the shader=1`; a
-   `[RED] NVN sampler compare enabled … LEQUAL assumed` line means a compare the game's sampler did not
-   enable got an assumed function (note it: if shadows look inverted, LEQUAL was the wrong guess).
-   - `[YELLOW] Preserving GPU-written image`, every `[RED]`, `NVN PERF` (fps, `gpu_ms`,
-     `submit_cpu_ms`), `Swapchain`.
-8. **Run 22, the packing without the rewrite** (do it when run 21 looks right, and also when the game
-   turned out to set near = 0 in step 7): prepare the game again with the current script and push it.
-   ```sh
-   python3 scripts/prepare_game_android.py <base game .nsp or .xci> --title-id 0100152000022000 \
-       [-u <update .nsp>] [-k <prod.keys>] --push
-   ```
-   Same input, keys and tools as the last preparation (it needs `hactool`, `prod.keys`, `capstone` in
-   its Python and `dotnet` or podman for `dmsh_xlate`). Since 2026-11-04 it scans **every** RomFS file
-   for shaders (before: only Mario Kart's folders and a few extensions), so the scan takes longer and may
-   find shaders the earlier packs missed: record its `Total unique shaders identified: N` and compare it
-   with the earlier preparation's count if that log still exists. Its log must say `Shader bundles were built with
-   other settings than 'depth_rewrite=0': rebuilding them`, and `"$ADB" shell cat
-   /storage/emulated/0/nxdroid/game/xgs_build.txt` must print `depth_rewrite=0`. Read the end of its
-   shader section too: since 2026-11-04 it counts what it loses instead of dropping it silently
-   (`[RED] N of M shaders have no bundle: … not translated …, … failed to pack; the list is
-   <work>/xlate_work/missing_shaders.tsv`, `[RED] the shader translator exited with …`, and a `WARNING`
-   for RomFS asset files it could not scan). Copy those lines into the test record; any shader without a
-   bundle is a candidate cause of a wrong draw (before, the translator's exit status was ignored and a
-   failed translation or packing left no trace). Then, with no marker
-   (`--list` empty), race again as in step 5 and save `22_norewrite.png` / `.txt`. Run 22 must look
-   like run 21.
-9. **Optional, only if runs 20 to 22 all stay wrong:** run 23 with `gfx-alias-invalidate --on` (the
-   2026-11-03 experiments) to check whether they change anything; clear it afterwards.
-10. **Bring back** every `.png` and `.txt` of runs 20 to 23, one line per run saying how the 3D scene
-    looked (same as the 2026-11-03 baseline, better, correct, worse) and anything else seen (crash,
-    hang, stutter; after a crash also `"$ADB" logcat -d -b crash > /tmp/nxdroid-test/<n>_crash.txt`),
-    and append the results to the test record in §8 item 12 step 9, one bullet per run, with the
-    installed commit, the marker, the visual result and the log lines of step 7.
-11. **What the results mean:** run 21 or 22 right → the double conversion was the cause; keep the new
-    packing default, drop the marker, record it in `docs/reference/android.md` (Symptom, Cause, Fix,
-    Found on) and in the MK8DX note, and run `python3 dm/tools/docs_symptoms.py`. Runs 21 and 22 wrong
-    → it was not the cause (keep the new default anyway: one conversion is right in every mode); go on
-    with "If the depth test does not fix it" below.
-
-### Device session (2026-11-06): capture one race frame with RenderDoc — smoking gun and root cause found
-
-The 2026-11-04 session (runs 20 to 25, §8 item 12 step 9) and 2026-11-05 short runs (runs 26 and 27) ruled out
-the double depth conversion, the re-pack without the rewrite, repeated colour slots, and CPU-written texture
-re-uploading. A GPU frame capture was executed with **RenderDoc 1.47** on the Galaxy S23 Ultra (Adreno 740,
-Android 16).
-
-**Setup and Layer Integration on Android 16:**
-Because Android 16 One UI restricts external Vulkan layer injection from debug apps, `libVkLayer_GLES_RenderDoc.so`
-was packaged directly into `dm/android/app/src/main/jniLibs/arm64-v8a/` and built into the debug APK. The app
-was started with `--es gameDir "/storage/emulated/0/nxdroid/game" --ez autoStart true` to boot directly into
-the race and avoid connection timeouts on the launcher. Three complete Vulkan race frames were captured:
-- Capture 0: Frame 2550 (281 MB, saved locally at `/tmp/nxdroid-test/com.nxdroid_2026.11.06_19.53_frame2550.rdc`)
-- Capture 1: Frame 2925 (358 MB)
-- Capture 2: Frame 3370 (332 MB)
-
-**Pass-by-Pass Inspection on Remote Adreno 740 Replay:**
-1. **Frame End (`EID 3207: Swapchain Image 125`):** reproduced the identical 3D corruption seen during live
-   gameplay: pitch-black road and kart, dark posterized sky, speckling, while 2D UI elements remained clean.
-2. **`Depth-only Pass #1` (EIDs 228-272):** shadow map pass (`2D Depth Attachment 71032`, `1024x1024[2]` D24).
-   The depth thumbnail showed the clean shadow silhouette of Mario on his kart from the light's point of view.
-3. **`Colour Pass #2 (3 Targets + Depth)` (EIDs 277-1254):** G-buffer geometry pass. The normal buffer
-   (`FB3: 2D Color Attachment 71187`) displayed crisp, completely correct 3D normal vectors of the track,
-   stadium arch, and loop. This definitively proved that camera matrices, vertex transformation, geometry,
-   and culling are 100% correct.
-4. **`Colour Pass #6 (1 Targets + Depth)` (EIDs 1341-2433):** lighting and material pass (`FB0: 2D Color Attachment 77198`,
-   `1920x1080` R11G11B10F). Background stadium lights, neon signs, and buildings rendered cleanly. However,
-   draws for the track (`EID 2425: vkCmdDrawIndexed(1320, 1)`) and the kart drew pitch-black pixels.
-
-**The Smoking Gun (Pipeline State and Shaders):**
-- Inspecting `Pipeline State -> FS` at draw 2425: under `Resources`, every bound texture
-  (`Set 0, 257: fp_t_tcb_14`, `Set 0, 258: fp_t_tcb_8`, `Set 0, 259: fp_t_tcb_10`) displayed
-  `Image & Sampler | No Resource` highlighted in bright red.
-- Disassembly of `Shader Module 72780` (`758bfeb7e8f3ea4d.xgs`) showed each texture declared as
-  `%23 = OpTypeSampledImage %22`, requiring descriptor type 1 (`VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`).
-- Reading the binary `.xgs` bundle header revealed `b.type = 2` (`VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE`)!
-- **Root Cause:** In `scripts/prepare_game_android.py`, `_inspect_image_type` had a flow control defect:
-  ```python
-  elif op == 27:
-      curr = w[2]
-      break
-  ```
-  The `break` skipped past the `if curr in types and types[curr][0] == 27:` check because `curr` had
-  already been advanced to `w[2]` (`OpTypeImage`). Thus `is_sampled_image` was always `False`, forcing
-  `desc_type = 2` across **all 193,457 texture bindings** in all 27,869 `.xgs` bundles in the entire game.
-- In `xbg_game.cpp`:
-  ```cpp
-  if (b.type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER || b.type == VK_DESCRIPTOR_TYPE_SAMPLER) {
-      ii.sampler = sampler(...);
-  }
-  ```
-  Because `b.type` was 2 (`SAMPLED_IMAGE`), `ii.sampler` was never created and was written as `VK_NULL_HANDLE`.
-  When Adreno 740 executed `OpImageSampleImplicitLod`, hardware sampling through a null sampler failed and
-  returned `(0, 0, 0, 0)`, rendering the road, kart, and all textured meshes completely black.
-
-**How it was treated:**
-1. Fixed `_inspect_image_type` in `scripts/prepare_game_android.py`: setting `is_sampled_image = True`
-   directly within the `elif op == 27:` traversal branch.
-2. In-place batch update across all 27,869 `.xgs` bundles in `./prepared_games/Mario_Kart_8_Deluxe_0100152000022000USAv0/`:
-   all 193,457 texture bindings corrected from `type = 2` to `type = 1` (`COMBINED_IMAGE_SAMPLER`) in 11.95s.
-3. Left `xbg_game.cpp` untouched: the engine's C++ code was already correct and expecting `COMBINED_IMAGE_SAMPLER`.
-4. Left APK untouched: no rebuild required since the issue was entirely in offline packaging metadata.
-
-**Why it was treated this way:**
-Fixing the defect at the exact source (`prepare_game_android.py`) guarantees that all `.xgs` bundles match
-Vulkan and SPIR-V specifications. Introducing runtime workarounds in `xbg_game.cpp` (e.g. guessing sampler
-parameters for `SAMPLED_IMAGE` descriptors) would have violated `AGENTS.md` by masking a tool bug with an
-engine hack and complicating upstream maintenance.
-
-### If the depth test does not fix it: the next suspects (2026-11-04, read, not measured)
-
-A review of how NVN formats reach Vulkan, against `nvn_mtl.m` (the replay that ran these games right),
-found **no wrong format** on Mario Kart 8 Deluxe's path: `0x1` R8, `0xd` RG8, `0x25` RGBA8, `0x29`
-RGBA16F, `0x3d` RGB10A2 (`A2B10G10R10_UNORM_PACK32`, red in the low bits), `0x3f` R11G11B10F, the depth
-formats (D24 kept as D24, closer to the Switch than Metal's D32F) and the BC table all match; views take
-another format only when the game asks, at the same size; clears and blend states map one to one. It
-found Metal-only fixes the Vulkan engine does not have, ranked:
-
-1. **One texture at two colour slots** (verified by reading). `nvn_mtl.m` attaches the same level /
-   layer only once (`rt_dup_slot`, ~3159): Breath of the Wild's G-buffer passes attach a buffer twice
-   with the second slot's write mask 0, and on Apple's tiling GPU the copy stored later (loaded, never
-   written) overwrote the drawn one and blacked out the whole 3D picture. Mario Kart 8 Deluxe runs on the
-   same Nintendo engine family (sead / agl), and Adreno also renders in tiles. The Vulkan engine attaches
-   both (`xbg_game.cpp`, the attachment loop after `targets[]` is filled). The log line
-   `[RED] NVN one texture at two colour slots` says whether the game does it (with both slots' write
-   masks). Fix if it does: attach a repeated level / layer once and leave the later slot unused
-   (`VK_ATTACHMENT_UNUSED`), as Metal does, and say in red when the dropped slot has a non-zero mask.
-   **Written on 2026-11-04, behind the marker `gfx-rt-dedupe` = `1`** (off by default until a device run
-   shows the case: step 7b of the next session). The render pass with the unused slot is another render
-   pass, so its pipelines never mix with the undeduplicated ones.
-2. **Stencil-mode textures read as depth** (verified by reading). The writer records
-   `nvnTextureViewSetDepthStencilMode` / `nvnTextureBuilderSetDepthStencilMode` (`view_t.dsmode`,
-   `tex_t.stencil`), and `nvn_mtl.m` binds a stencil-only view (~4137; reading depth instead striped
-   Pokémon Legends: Z-A's lit picture); nothing in `dm/gfx/vulkan` reads it, so a deferred lighting pass
-   that tests stencil bits tests bits of the depth value instead (speckle, holes, hard edges). The log
-   line `[RED] NVN stencil-mode texture read as depth` says whether the game does it. A fix is more than
-   an aspect flag: a stencil view returns integers, and the translated shader declares a float texture
-   (Metal hands the raw bits through; the Vulkan equivalent needs a check of what the SPIR-V declares).
-3. **Shadow samplers not matched to the shader** (inferred). `compareEnable` comes only from the NVN
-   sampler (`xbg_sampler.cpp`), never checked against the binding's shadow flag (`b.flags` bit 14);
-   Vulkan leaves a compare sampler on a plain fetch (and the reverse) undefined, where Metal ignored the
-   compare function. Could give hard black / white edges. Logged since 2026-11-04:
-   `[RED] NVN sampler compare mode does not match the shader` (that bit 14 marks a depth-compare sampler
-   is read from the null-texture code, which picks a depth format for it; not confirmed elsewhere).
-   **Written on 2026-11-04, behind the marker `gfx-sampler-match` = `1`** (off by default): where the two
-   disagree, the sampler's compare follows the shader; a compare the NVN sampler did not enable takes its
-   compare function if usable, else `LEQUAL` (an assumption, said in red). Step 7c tests it.
-4. Lower likelihood here (none of these formats is in Mario Kart 8 Deluxe's race log). **Written on
-   2026-11-05, default on, not measured on the device** (`xbg_game.cpp`, `nvn_no_alpha`, `packed16_pick`
-   and the swizzle in `Image::view`, checked by a harness of the extracted code on the Windows machine):
-   - Alpha 1: every format `nvn_fmt_mtl.c` marks without alpha (`0x37`, `0x3a`, `0x41`, `0x45`,
-     `0x6d`-`0x78`, `0x96`, `0x99`, `0x9b`; it was `0x37` and `0x6d` only), composed with the game's
-     swizzle as `nvn_mtl.m` `tex_by_id` does (~4127): a channel the swizzle points at alpha reads 1, and a
-     swizzled alpha (`(1 1 1 R)`) keeps what the game asked; before, alpha was forced to 1 over it.
-   - 16-bit packed formats by bit: `0x3c` RGB565 → `B5G6R5_UNORM_PACK16` (red in the low bits, as Echoes
-     of Wisdom's RGB565 hearts showed on Metal), `0x96` BGR5 → `A1R5G5B5` (it was R5G6B5, the wrong field
-     widths), `0x98` A1BGR5 → `R5G5B5A1`. Where the device lacks `B5G6R5` or `R5G5B5A1` (sampled, colour
-     attachment, transfer), the old format is kept with one `[RED] NVN format %#x: the device has no
-     Vulkan format …` line. `0x3a` RGB5 / `0x3b` RGB5A1 need `A1B5G5R5_PACK16` (`VK_KHR_maintenance5`, not
-     enabled): they take `A1R5G5B5` (`0x3a` was R5G6B5) and say `[RED] NVN format RGB5 / RGB5A1` once,
-     red and blue still swapped. Mostly 2D: a wrong colour in a menu or a font is where it would show.
-   - Still open: min / max sampler reduction dropped by `xbg_sampler_from_nvn` (an SDK this old probably
-     does not use it).
-
-The two `[RED]` lines are in the APK of this session's commit, so run 20's log already answers 1 and 2.
-
-### Device fixes and measurements (Sprint 6)
-
-1. **Vertical banding ("venetian blinds"), resolved.** 16 vertical columns of alternating brightness.
-   Cause: `ANativeWindow_setBuffersGeometry(active, 1920, 1080)` made Qualcomm's display processor
-   decimate non-integer columns (the panel is portrait; the window is 1544x720 landscape). Fix in
-   `dm/android/vulkan_present.cpp`: `present_native = false` (the swapchain stays at the window's size;
-   a `gfx-present-native` marker other than `0` turns the old path back on) and the present blit uses
-   `VK_FILTER_LINEAR` when the format supports it.
-2. **3D colour fixes (in the tree; the 3D picture is still wrong, above):**
-   a) **3D LUT view bounds:** `xbg_game.cpp` `Image::view()` passed `layerCount = depth` (32) for MK8DX's
-      32x32x32 colour-correction LUT (`agl::env::ColorCorrection`), violating
-      `VUID-VkImageViewCreateInfo-imageViewType-04973`; a 3D view now takes `base_layer = 0`,
-      `layer_cnt = 1`.
-   b) **Render targets reset by CPU writes to their pool:** a small CPU write into a pool that also holds
-      render targets ran `invalidate_cpu_range()`, which cleared `gpu_written` / `uploaded` and made a
-      later `get_image(..., true)` upload stale guest memory over the target. `gpu_written` is now kept
-      on partial CPU writes.
-   c) **Poisoned pipeline blacklist (`gfx-pipe-skip`):** stopping the app while warm-up threads compiled
-      left in-flight markers, and `pipeguard::load()` blacklisted 89 pipelines. The poisoned cache files
-      were removed on the device (an operational fix: stopping mid-compile can do it again).
-   d) **Texture view swizzle:** `registered_texture_equal` / `register_texture_record` compare
-      `view->set_swizzle` and `view->swz`, so differently swizzled views no longer alias.
-   e) **Depth clip control:** the `gfx-depth-clip` marker check keeps `VK_EXT_depth_clip_control`
-      (`negativeOneToOne`) from applying the depth rewrite twice: `prepare_game_android.py` already bakes
-      `z = 0.5 * z + 0.5 * w` into every vertex shader.
-   Measured after them, on the **track preview cards** (not the race scene): 256 levels per channel and
-   over 21,000 distinct colours.
-3. **Frame rate.** The Sprint 6 notes report, on the S23 Ultra, `fps = 53.67`, `gpu_ms = 7.96`,
-   `submit_cpu_ms = 6.66`, `present_cpu_ms = 0.48`, against 12–19 fps with `gpu_ms` 19.5 and
-   `submit_cpu_ms` 58 before (`docs/reference/android.md`, *Every `DM_GFX_*` switch the engine documents
-   for Android was unset*). The changes credited:
-   a) at least three swapchain images (`ci.minImageCount = max(3, minImageCount)`, `vulkan_present.cpp`;
-      four on OHOS), against SurfaceFlinger fence stalls;
-   b) the graphics defaults that `nativeStartHost()` (`dm/android/jni_android.c`) sets before the host
-      starts, each logged with its value in effect, an existing environment value or a `gfx-*` marker
-      winning: `TEX_DIRTY=1`, `VCACHE=1`, `PIPE_MEMO=1`, `ASYNC_POOL_RESET=1`, `PERF_SAMPLE=0`,
-      `NATIVE_BC=1`, `DEFER_EVENTS=2`, `WB_SKIP=1`, `SHADER_REUSE=1`, `UPLOAD_PROLOGUE=1`,
-      `XVIEW_GUARD=1`, `LDC_FOLD=1`, `FORWARD_TEMPS=1`, `QUAD_DERIVATIVES=1`, `WARP32=1`,
-      `READ_PREFLIGHT=0`, `NOLOAD=1` (all `DM_GFX_*`);
-   c) the vertex/index cache (~1,364 hits a frame) and the pipeline memo (~800 draws a frame).
-   **Unverified:** which build and which defaults the 53.67 fps run had is not recorded, and
-   `android.md` still says the defaults are not measured. Re-measure with §8 item 12 step 2.
-
-### Device test session of 2026-11-03 (done): how the A/B runs are made
-
-**Done on 2026-11-03; the results are in §8 item 12 step 9 and the next session is above.** Kept as the
-reference for an A/B session; use the script's current behaviour (it finds the marker folder itself) and
-`--clear-all --no-restart` before a baseline. One session, on a
-machine with `adb` and the phone connected (USB debugging on), with the APK built from current `main`
-installed (§5) and Mario Kart 8 Deluxe prepared in `/storage/emulated/0/nxdroid/game`. Each run below
-is one race start on **Mario Kart Stadium**, the track of the 2026-11-03 screenshots, held for about a
-minute. The background of each step is in §8 item 12.
-
-1. **Make the log buffer large enough** (the default drops the early lines a race pushes out), and keep
-   it for the session: `adb logcat -G 16M`.
-2. **Baseline, no marker:**
-   ```sh
-   python scripts/android_gfx_ab.py --clear-all
-   python scripts/android_gfx_ab.py --list                 # must print nothing
-   adb logcat -c
-   ```
-   Start the game from the app, start the race, wait a minute, then:
-   ```sh
-   adb exec-out screencap -p > 00_base.png
-   adb logcat -d -s dm > 00_base.txt
-   adb shell dumpsys meminfo com.nxdroid > 00_base_mem.txt
-   ```
-3. **One switch at a time**, in this order (§8 item 12 steps 6 and 8). The script writes the marker,
-   restarts the app and saves the screenshot and the log after `--wait` seconds: start the game and
-   the race by hand within that time.
-   ```sh
-   python scripts/android_gfx_ab.py gfx-noload          --off --wait 120 --shot 01_noload_off.png    --log 01_noload_off.txt
-   python scripts/android_gfx_ab.py gfx-noload          --clear --no-restart
-   python scripts/android_gfx_ab.py gfx-read-preflight  --on  --wait 120 --shot 02_preflight_on.png  --log 02_preflight_on.txt
-   python scripts/android_gfx_ab.py gfx-read-preflight  --clear --no-restart
-   python scripts/android_gfx_ab.py gfx-tex-dirty       --off --wait 120 --shot 03_texdirty_off.png  --log 03_texdirty_off.txt
-   python scripts/android_gfx_ab.py gfx-tex-dirty       --clear --no-restart
-   ```
-   Then, the same way, each of `gfx-wb-skip`, `gfx-upload-prologue`, `gfx-vcache`, `gfx-pipe-memo`,
-   `gfx-native-bc`, `gfx-forward-temps` and `gfx-ldc-fold` with `--off` (files `04_…` to `10_…`).
-   Clear each marker before the next, so only one is ever set. Stop early if one run gives a correct
-   3D picture, and run that one twice to be sure.
-4. **If the game folder is not the default** (picked in the launcher), add `--game-dir <folder>` to
-   every `android_gfx_ab.py` line; `--list` shows the markers it sees there.
-5. **Memory** (the `dm_guest_discard` fix): `adb shell dumpsys meminfo com.nxdroid` once in a race and
-   once after going back to the menu and starting another track (`11_mem_race.txt`, `12_mem_after.txt`).
-6. **Bring back** the folder with every `.png` and `.txt`, and one line per run saying what the 3D scene
-   looked like (same as the baseline, better, correct, worse) and anything else seen (a crash, a hang,
-   a stutter). If the app crashed, also `adb logcat -d -b crash > crash.txt`.
-
-What is read first in the logs: the `nativeStartHost: DM_GFX_…` lines and the engine's `(marker gfx-…)`
-lines (which value each switch had), `Swapchain surface format= colorSpace=` and `Swapchain: … srgb=
-source_srgb=` (§8 item 12 steps 3 and 3b), `[YELLOW] Preserving GPU-written image on partial memory
-pool write` (step 8a), `[nvn] virtual pool … mapped up to` (step 7a), every `[RED]` line, and `NVN PERF`
-(fps, `gpu_ms`, `submit_cpu_ms`, `parts_ms_per_frame`).
+1. `git pull`, `git log -1 --oneline`; CI green for that commit. Build the APK (§5, with the persistent
+   keystore mount) and `"$ADB" install -r dm/android/app/build/outputs/apk/debug/app-debug.apk`. If it
+   fails on the signature, `"$ADB" uninstall com.nxdroid` deletes the app's saves
+   (`/data/user/0/com.nxdroid/files/save`) but not `/storage/emulated/0/nxdroid/`; check afterwards that
+   `ls /storage/emulated/0/nxdroid/game` still lists `main`, `romfs.img` and the `.xgs` bundles. Record
+   the installed commit.
+2. `"$ADB" logcat -G 16M`, then `python3 scripts/android_gfx_ab.py --adb "$ADB" --clear-all --no-restart`
+   and `--list` (it must print no marker). The engine reads markers from the game folder's parent,
+   `/storage/emulated/0/nxdroid/`; do not pass `--game-dir /storage/emulated/0/nxdroid`.
+3. `"$ADB" logcat -c`, start the app, press **Launch** (the old front end: **START GAME**), race, then
+   `"$ADB" exec-out screencap -p > /tmp/nxdroid-test/<n>_<name>.png` and
+   `"$ADB" logcat -d -s dm > /tmp/nxdroid-test/<n>_<name>.txt`; after a crash also
+   `"$ADB" logcat -d -b crash`. The app can also start straight into the game:
+   `am start -n com.nxdroid/.MainActivity --es gameDir /storage/emulated/0/nxdroid/game --ez autoStart true`
+   (used for RenderDoc).
+4. One switch: `python3 scripts/android_gfx_ab.py --adb "$ADB" <marker> --off|--on --wait 120 --shot …
+   --log …`, then `<marker> --clear --no-restart`; one marker at a time (§8 item 12 steps 4 and 5).
+5. Read first: the `nativeStartHost: DM_GFX_…` lines and the engine's `(marker gfx-…)` lines, every
+   `[RED]`, `Swapchain …`, `NVN PERF` (`fps`, `gpu_ms`, `submit_cpu_ms`, `legacy_wait`,
+   `parts_ms_per_frame`, `warm_built` / `warm_failed`). Append the run to §8 item 12 step 9.
+6. A GPU frame capture: RenderDoc 1.47, with `libVkLayer_GLES_RenderDoc.so` packaged into
+   `dm/android/app/src/main/jniLibs/arm64-v8a/` of a debug APK (Android 16 One UI refuses an external
+   layer for a debug app). Copy the layer from the RenderDoc install for the capture only: the folder
+   `jniLibs/` is in `.gitignore`, since everything in it is packaged into the APK. (The layer, 27.8 MB, was
+   committed by mistake in `c6427e3` and removed on 2026-11-17; nothing in the app loads it.)
+7. After a stopped warm-up or a change to descriptor layouts, remove the pipeline cache files on the
+   device (`/sdcard/nxdroid/vk-pipeline-*.bin`; §10).
 
 ---
 
@@ -587,7 +249,7 @@ new fact in `docs/reference/android.md`, not here.
 
 | Path | What it is | State |
 |---|---|---|
-| `dm/gfx/vulkan/` (85 tracked files) | the vendored Vulkan engine and its `nvn_vk.c` adapter | pinned, adapted (12 handlers in `xbg_game.cpp`, 27 entry points in `nvn_vk.c`, the Sprint 6 fixes, sampler linear filtering fallback, D16 dummy depth, ImgKey shadow separation, async fence retirement, barrier pass coalescing, memo epoch stability, warm::build negativeOneToOne alignment, mtl_wait_acq non-blocking return, transient render-target retention, xbg_legacy_wait safe 1-frame boundary pipelining) |
+| `dm/gfx/vulkan/` (85 tracked files) | the vendored Vulkan engine and its `nvn_vk.c` adapter | pinned, adapted (12 handlers in `xbg_game.cpp`, 27 entry points in `nvn_vk.c`, the Sprint 6 fixes, sampler linear filtering fallback, D16 dummy depth, ImgKey shadow separation, async fence retirement, barrier pass coalescing, memo epoch stability, warm::build negativeOneToOne alignment, mtl_wait_acq non-blocking return, transient render-target retention, xbg_legacy_wait safe 1-frame boundary pipelining, the Adreno compute-after-draw gate `xbg_adreno_compute_needs_clean_cmd`, sampler LOD bias / anisotropy clamp in `xbg_sampler.cpp`) |
 | `dm/android/` | the bionic compatibility layer (`compat/`), build environment (`docker/`, `CMakeLists.txt`, Gradle), `front_android.c` (our `front.h`), `vulkan_present.cpp`, `jni_android.c`, `port_android.c`, `apple_stubs.c` (+ `apple_stubs/include`), `app/` (Java, real-time FPS HUD), `tools/`, `tests/` (`test_device_bionic.c`, `test_vm_alias.c`), `mockups/` | NDK r29 build of `dmhost` and `libdm.so`, both run on the device; CI compiles them |
 | `dm/tools/android_vendor.py` + `.tsv` | provenance gate: 108 rows, 13 adapted | green in CI; on a Windows checkout read §10 |
 | `dm/gfx/vk/probe/` | the device capability probe (`vk_probe.c`, Makefile with desktop and `android` targets, output contract in `tests/test_probe_output.py`) | run on the device, 0 breaches |
@@ -597,8 +259,8 @@ new fact in `docs/reference/android.md`, not here.
 | `dm/android/tools/{host_sources,undef_scan}.py`, `dm/tools/tests/test_{thread_slots,android_undef_scan,android_jni,android_vm_alias,launcher_settings,env_switches}.py` | source-list expander, undefined-symbol and Mach-O assembly gate, and the Android tool tests | green in CI |
 | `dm/tools/android_audit.py` + baseline + tests | "is this file portable to Android?"; the baseline only shrinks | 760 hits in 38 files |
 | `scripts/prepare_game_android.py` | prepares a game folder for the device and can push it, build and install the APK | in use |
-| `scripts/android_gfx_ab.py` | A/B one engine switch over `adb` without a rebuild (§8 item 12 step 5) | syntax-checked only |
-| `.github/workflows/tests.yml` | CI: `android-gates` and `android-build`, Linux | green and blocking since `94d3ee4` |
+| `scripts/android_gfx_ab.py` | A/B one engine switch over `adb` without a rebuild (§8 item 12 step 5) | used on the device in runs 01–27; no unit test |
+| `.github/workflows/tests.yml` | CI: `android-gates`, `android-build` and `android-app` (since 2026-11-17), Linux | the first two green and blocking since `94d3ee4`; `android-app` not run yet |
 | `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `.github` templates | describe the Android port; README's game gallery is folded below the Android games section and labelled as nxnative's Mac / iPhone builds | current |
 | `docs/reference/android.md` | the vendored engine reference: pin, gate, device, Adreno gates, ABI gaps, licensing, the Android findings | current, with the stale lines named in §8 item 11 |
 | `.opencode/agents/android-{dev,qa,shaders,upstream}.md` | the four specialist agents this work was coordinated through | in use |
@@ -609,7 +271,10 @@ Run these before believing anything. CI (`.github/workflows/tests.yml`, GitHub's
 them on every push to `main` and every pull request: `android-gates` (provenance, both vocabularies,
 the audit, the symptom index, the four engine source checks, the tool tests below) and `android-build`
 (NDK `ndk;29.0.14206865` through `sdkmanager`, `GAME=0100152000022000`, configure, then
-`cmake --build … --target dmhost dm`). Both are green and blocking since `94d3ee4`. CI never runs the
+`cmake --build … --target dmhost dm`), both green and blocking since `94d3ee4`; and, since 2026-11-17,
+`android-app` (the SDK packages, JDK 17 and Gradle 9.8.1 of `dm/android/docker/Dockerfile`, then
+`gradle -p dm/android :app:compileDebugJavaWithJavac :app:testDebugUnitTest`: the app's Java and its JVM
+unit tests in `dm/android/app/src/test`, no APK and no native build; not yet run on GitHub). CI never runs the
 `engine_smoke` build (it needs a Vulkan driver) nor anything on a device.
 
 ```sh
@@ -736,9 +401,11 @@ Current counts:
   assignments). On scratch copies it catches **40 mutations** (among them the pending-report rule, the
   restart masks, the lower-left viewport flip and the `multiViewport` gate); QA's exact round-H
   mutations were not rerun, only their categories.
-- **Open:** the GL depth mode (near = -w) has no Vulkan entry point; a game that keeps it gets one
-  `[RED]` at its first submission and near = 0 depth. (Android writes the GL rewrite into every vertex
-  shader's SPIR-V instead: Status item 2e.)
+- **GL depth mode (near = -w):** a game that keeps it gets `negativeOneToOne` through
+  `VK_EXT_depth_clip_control` (`nvn_vk.c`, the log line `NVN depth mode near=-w (GL) kept by the game:
+  active via VK_EXT_depth_clip_control`; the Adreno 740 has the extension). **Open:** on a device without
+  it the replay has no near = -w vertex entry point (`nvn_mtl.m` `entry_z`): one `[RED]` and near = 0
+  depth, unless the game is prepared with `--depth-rewrite` (Status).
 
 ## 8. What to do next, in order
 
@@ -818,29 +485,39 @@ Current counts:
    translator's `dmsh_xlate.dll` through `dotnet` (or the `mcr.microsoft.com/dotnet/sdk` container), so a
    Mac is no longer needed for this; that the experiment's shader can be taken from there is read from
    the code, not tried.
-8. **[DONE] The app shell.** `dm/android/jni_android.c` (JNI registration, stdout/stderr to logcat tag
-   `dm`, host start/stop, surface, refresh rate, touch and pad input, the graphics defaults of Status
-   item 3b; tested by `test_android_jni.py`) and `dm/android/app/` (Gradle: compileSdk 36, minSdk 29,
-   targetSdk 36, arm64-v8a, NDK 29.0.14206865, `-DGAME=`; package `com.nxdroid`). `MainActivity`'s own
-   folder picker and the virtual gamepad run on the device. Default game folder:
-   `/storage/emulated/0/nxdroid/game`. **Open:** the Argon launcher (`LauncherOverlayView.java`,
-   `GameScanner.java`, spec `dm/android/mockups/design_spec_argon.md`: hero card, title grid) is written
-   but not wired into `MainActivity` (nothing references it); the help text in `MainActivity.java` (~426)
-   is Portuguese, against `AGENTS.md`'s English rule.
-   **Argon assessment (2026-11-03, read only; the owner deferred the work until after the device
-   graphics tests):** the view draws the spec's top bar, hero card, 4-slot grid and footer, but its data
-   is fake (four placeholder games added in `init`, title from the folder name, title ID falling back to
-   `010015100B514000`, API / fps / prewarm counts from folder-name substrings, size "5.7 GB", fixed
-   "Vulkan 1.3" / "S23 Ultra" / "v0.1.0-alpha", every card "Playable"); `control.nacp` and `icon.jpg`,
-   which `prepare_game_android.py` copies, are read by nothing; its default folder is
-   `/storage/emulated/0/Games/Switch/`; it has touch only (no key handling), no fade, no paging past 4
-   games. Two limits of the architecture: the APK is built for one profile (`-DGAME`), so a library can
-   start only that game (a JNI getter for the built title ID is needed to mark the others); and stopping
-   a game ends the app's process (`nativeStopHost` → SIGTERM → `_exit(0)`, `hle_lifecycle.c`), so there
-   is no return to the launcher without moving the host to a separate process. Estimate to wire it in
-   with real data, gamepad navigation, the built-game check and English strings: 400-500 lines, 12-20 h,
-   most of it checkable only on the device. CI does not compile the Java (`android-build` builds the
-   native targets only): a Gradle `assembleDebug` job would be the first step.
+8. **[DONE] The app shell; [WRITTEN 2026-11-17, not run on the device] the Argon launcher.**
+   `dm/android/jni_android.c` (JNI registration, stdout/stderr to logcat tag `dm`, host start/stop,
+   surface, refresh rate, touch and pad input, the graphics defaults of Status, `nativeGetBuiltGame`;
+   tested by `test_android_jni.py`) and `dm/android/app/` (Gradle: compileSdk 36, minSdk 29, targetSdk 36,
+   arm64-v8a, NDK 29.0.14206865, `-DGAME=`; package `com.nxdroid`). The virtual gamepad runs on the
+   device.
+   **The launcher** (`LauncherOverlayView.java`, spec `dm/android/mockups/design_spec_argon.md`) is now
+   `MainActivity`'s only front screen; the old folder card, with its Portuguese strings, is gone and every
+   string is English. What it shows is read, not made up: `GameScanner.java` lists the library folder
+   (default `/storage/emulated/0/nxdroid`; the folder itself when it holds `main`, else each subfolder
+   that does; a saved folder of the old front end is moved to its parent) and reads each game's
+   `control.nacp` (name and publisher of the first language, the deflated title area of newer SDKs too,
+   display version, title ID from `SaveDataOwnerId`, else `PresenceGroupId`, else a 16-hex-digit part of
+   the folder name), `icon.jpg`, the size, the `.xgs` count and the RomFS; the status bar has the device,
+   SoC, refresh rate, controller, temperature, battery and clock. `nativeGetBuiltGame` returns the
+   profile this APK was built for (`DM_GAME_ID`, `DM_GAME_NAME`, `DM_GAME_PROGRAM_ID` from
+   `game_profile.h`): a game with that ID is "Built into this APK", another ID is refused with the
+   `-PdmGame=` command, an unknown ID asks first. Gamepad: D-pad / left stick move, A launches, Y
+   rescans, X changes the folder, + settings (HUD, touch controls, typed folder, default folder,
+   all-files access), − touch controls, L / R page by four. The launcher fades out on launch; the
+   `gameDir` / `autoStart` intent extras still start a folder directly.
+   **Checked:** the Java compiled with `javac` 21 against hand-written stubs of the Android classes it
+   uses (no Android SDK on the Windows machine; the stubs carry the real signatures as remembered, so a
+   wrong assumption about an Android API would pass), `GameScanner`'s NACP and folder reading ran on the
+   JVM over synthetic folders (20 checks, compressed title area included), `nativeGetBuiltGame`
+   compiled with `-Wall -Wextra -Werror` against the JDK's `jni.h`. **Not checked:** the Gradle build,
+   the layout on the S23 Ultra's screen, a controller in the launcher. CI's `android-app` job (§5) now
+   compiles the Java and runs the JVM tests of the scanner and the navigation
+   (`dm/android/app/src/test`, 11 tests; they passed locally against the same stubs); it builds no APK.
+   **Limits that stay:** the APK starts only the game it was built for; quitting a game ends the app's
+   process (`nativeStopHost` → SIGTERM → `_exit(0)`, `hle_lifecycle.c`), so there is no return to the
+   launcher without moving the host to a separate process; no favourites, recent list or search (the
+   spec's tabs); no per-game settings.
 9. **[VERIFIED ON S23 ULTRA] Validation with the NDK and the device.** `dmhost` and `libdm.so` link
    with no undefined symbols; on the device: `vk_probe` (§3), `test_device_bionic` (`TLS_SLOT_APP` free,
    `RLIMIT_NICE = 40`), `test_vm_alias` (memfd aliasing, shared write coherence, independent
@@ -882,10 +559,13 @@ Current counts:
       and `properties.apiVersion >= VK_API_VERSION_1_3`.
     - `docs/reference/android.md`'s undef_scan and thread-slot entries no longer call the NDK link and
       the Android rewrite pending (items 4, 4a, 9).
-12. **The graphics work on the device (open, needs a build and a log).** The graphics defaults
-    (`jni_android.c`, Status item 3b), the present changes (`vulkan_present.cpp`, Status items 1 and 3a)
-    and the colour-space filter (3b below) are committed and compiled in CI (`android-build`); none is
-    measured on the device since. To measure:
+12. **The graphics work on the device (3D picture fixed in Run 28, 60 fps in Run 36; the switches and
+    the A/B procedure below stay the reference).** Steps 1 to 8 were written while the cause of the 3D
+    picture was unknown (it was the sampler descriptor type, Status); their reading of each switch still
+    holds, their suspects are closed. The graphics defaults (`jni_android.c`, the Sprint 6 list in
+    Status), the present changes (`vulkan_present.cpp`) and the colour-space filter (3b below) are in
+    the APK the device runs; which of the defaults matter for the frame rate is not measured one by one.
+    To measure:
     1. Build and install the APK (§5; README, *How to play*), run a race, then collect
        `adb logcat -d -s dm > log.txt`.
     2. Read, in the log, the `nativeStartHost: DM_GFX_…` lines (the value in effect for each switch),
@@ -1202,9 +882,9 @@ Current counts:
       afterward. Future `--clear-all` calls must use `--no-restart`, then the test marker must be the
       only file present; the clean baseline must be repeated.
     - (The A/B runs of 2026-11-03 are recorded above, out of order: the clean baseline and the ten
-      single-switch runs, then the alias tracing, runs 12 to 19. Next: runs 20 onwards of the 2026-11-04
-      session, "Next device session" near the top. Each bullet: run number, installed commit, the
-      marker, the visual result, the step 7 log lines, and whether the run crashed, hung or stuttered.)
+      single-switch runs, then the alias tracing, runs 12 to 19; runs 20 onwards follow in order. Each
+      bullet: run number, installed commit, the marker, the visual result, the log lines of "How a device
+      run is made" step 5 (Status), and whether the run crashed, hung or stuttered.)
     - **Run 20, `gfx-depth-clip=0` (2026-11-04):** valid capture
       `/tmp/nxdroid-test/20_depth_clip_off.png` and log
       `/tmp/nxdroid-test/20_depth_clip_off.txt`. The marker was initially applied in the wrong
@@ -1361,6 +1041,31 @@ Current counts:
       - **Legacy Wait Stall:** 0.00 ms.
       - **Stability:** zero crashes, pipeline caches 100% active.
       - **Persistent keystore:** `~/.android-dm/debug.keystore` mounted to `/android-user` preventing `INSTALL_FAILED_UPDATE_INCOMPATIBLE`.
+    - **Run 37, compute dispatch crash after the race start (2026-11-08, fixed in `501c56e`):** with the Run 36
+      build, the race crashed after it started with `SIGSEGV` in `vulkan.adreno.so + 0x22c24c` (`addr=0xb4`), this
+      time in `vkCmdDispatch`. Reading of the driver (comment in `dm/gfx/vulkan/engine/xbg_adreno_policy.h`): the
+      command buffer keeps graphics dirty bits at `[cmd, #0x78]`; a dispatch recorded after draws in the same
+      command buffer makes its preparation hook (`0x22aa60`) call `GetSubpassState` (`0x22c6a0`), which returns
+      NULL once the pass has ended, and the driver reads `[NULL, #0xb4]`. Fix: `Slot::has_draws` (set by draws and
+      masked clears) and, when `xbg_adreno_compute_needs_clean_cmd` (Qualcomm vendor ID `0x5143`), `dispatch()`
+      submits the recording slot before a dispatch into a slot with draws; `recording_slot()` also clears an
+      `open_pass` left on a reused command buffer. Same offset and fault address as Runs 33 and 35 (Status, Open
+      item 2). Log and capture paths are not recorded. Reference: `docs/reference/android.md`, *Adreno 7xx
+      crashes in vkCmdDispatch recorded after draws in the same command buffer*.
+    - **Run 38, audio crackling (2026-11-08, fixed in `501c56e`):** the log counted 1,400 short callbacks of 2,000
+      (16.8 s zero-padded in 44 s) with bursts up to 1,600 frames against a ~960-frame renderer queue. Fix in
+      `dm/android/apple_stubs.c`: `AAUDIO_PERFORMANCE_MODE_LOW_LATENCY`, `setFramesPerDataCallback(rate / 200)`
+      (240 frames at 48 kHz, one `audren` block), buffer capacity of 8 callbacks, buffer size two bursts (at
+      least two callbacks); `NBUF` 4 → 8 in `dm/host/hle_audren.c`. Measured: 0 underruns in 6,000+ callbacks,
+      0.0 ms zero-padded, 60 fps racing. Reference: `docs/reference/audio.md`, *AAudio's default buffer duration
+      and performance mode on Android*.
+    - **Run 39, abort on the course transition (2026-11-08, fixed in `501c56e`):** going on to the second Grand
+      Prix course aborted with `FATAL: NVN sampler invalid LOD range/bias result=-4 … bias=-32`. NVN takes a LOD
+      bias down to -32; Vulkan requires `|mipLodBias| <= maxSamplerLodBias` (VUID 01079; 15–16 on the Adreno
+      740). Fix: `xbg_sampler_from_nvn` (`xbg_sampler.cpp`) clamps the bias to `±max_lod_bias` and the
+      anisotropy to `max_anisotropy`. The record of that day calls it resolved; a run through the second course
+      after the fix (log, screenshot) is not recorded. Reference:
+      `docs/reference/rendering.md`, *Sampler LOD bias and anisotropy beyond Vulkan limits*.
 
 ## 9. How to work in this tree
 
@@ -1413,8 +1118,9 @@ Current counts:
 - **The desktop smoke build proves compilation and initialization, not a frame.** `presents=0` is
   correct there: there is no guest and no shader bundle.
 - **Stopping the app while the warm-up threads compile pipelines can poison the pipeline blacklist**
-  (`gfx-pipe-skip`, Status item 2c): if many pipelines are suddenly skipped, remove the cache files on
-  the device.
+  (`gfx-pipe-skip`; it blacklisted 89 pipelines once in Sprint 6): if many pipelines are suddenly skipped, remove the cache files on
+  the device. Remove them too after the bundles' descriptor types change: in Run 29 the cached pipelines
+  still carried the `SAMPLED_IMAGE` layouts of the bundles before the sampler fix.
 
 ## 11. Where the knowledge lives
 

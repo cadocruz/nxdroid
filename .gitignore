@@ -17,3 +17,5 @@ build/
 dm/tools/bin/
 dm/android/tests/*_android
 
+# GPU debug layers (RenderDoc) packaged by hand for a capture: never commit them
+dm/android/app/src/main/jniLibs/

@@ -171,7 +171,7 @@ For a replaced DSP renderer the size query keeps the service's work-buffer contr
 
 - **Symptom:** audio crackling, stuttering and heavy dropouts on Android; `audio #N device callbacks` shows high underrun counts (~70% failure rate) and up to 1600 frames requested per callback.
 - **Cause:** Android's AAudio stream was initialized with `AAUDIO_PERFORMANCE_MODE_NONE` and unconstrained callback frame counts (`AAUDIO_UNSPECIFIED`). The system's fallback mixer requested variable bursts up to 1600 frames (33.3 ms), exhausting the renderer's pending queue (which queued ~840 frames) and forcing `pull` to zero-pad the shortfall.
-- **Fix:** `AudioUnitInitialize` in `dm/android/apple_stubs.c` sets `AAUDIO_PERFORMANCE_MODE_LOW_LATENCY`, fixes the callback size to 5 ms frames via `AAudioStreamBuilder_setFramesPerDataCallback(b, rate / 200)` (240 frames at 48 kHz), requests buffer capacity of 8 frames, and tunes stream buffer size to double burst. `NBUF` in `dm/host/hle_audren.c` was raised to 8 (40 ms headroom in flight).
+- **Fix:** `AudioUnitInitialize` in `dm/android/apple_stubs.c` sets `AAUDIO_PERFORMANCE_MODE_LOW_LATENCY`, fixes the callback size to 5 ms frames via `AAudioStreamBuilder_setFramesPerDataCallback(b, rate / 200)` (240 frames at 48 kHz), requests a buffer capacity of 8 callbacks (`frames_per_cb * 8`, 1,920 frames at 48 kHz), and sets the stream buffer size to two bursts, at least two callbacks. `NBUF` in `dm/host/hle_audren.c` was raised to 8 (40 ms headroom in flight).
 - **Found on:** [Mario Kart 8 Deluxe](../../dm/games/0100152000022000/README.md) on Samsung Galaxy S23 Ultra (Adreno 740): dropped underruns from 1,400 to 0 per 2,000 callbacks (0.0 ms zero-padded).
 
 ### The ring / silent switch muted the game on iOS

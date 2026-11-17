@@ -455,8 +455,30 @@ static jfloatArray nativeGetPerformanceStats(JNIEnv *env, jclass clazz) {
     return result;
 }
 
+// ---- The game this library was built for (game_profile.h through dm.h, chosen by -DGAME / -PdmGame) ----
+// {profile id (the base game's title ID), name, program ID as 16 hex digits}: the launcher marks the folders this APK can start.
+static jobjectArray nativeGetBuiltGame(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    char program_id[17];
+    snprintf(program_id, sizeof program_id, "%016llX", (unsigned long long)DM_GAME_PROGRAM_ID);
+    const char *values[3] = {DM_GAME_ID, DM_GAME_NAME, program_id};
+    jclass string_class = (*env)->FindClass(env, "java/lang/String");
+    if (!string_class) return NULL;
+    jobjectArray result = (*env)->NewObjectArray(env, 3, string_class, NULL);
+    (*env)->DeleteLocalRef(env, string_class);
+    if (!result) return NULL;
+    for (int i = 0; i < 3; i++) {
+        jstring value = (*env)->NewStringUTF(env, values[i]);
+        if (!value) return result;
+        (*env)->SetObjectArrayElement(env, result, i, value);
+        (*env)->DeleteLocalRef(env, value);
+    }
+    return result;
+}
+
 // ---- JNI Native Registration and JNI_OnLoad ----
 static const JNINativeMethod k_methods[] = {
+    {"nativeGetBuiltGame", "()[Ljava/lang/String;", (void *)nativeGetBuiltGame},
     {"nativeStartHost", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;)Z", (void *)nativeStartHost},
     {"nativeStopHost", "()V", (void *)nativeStopHost},
     {"nativeIsRunning", "()Z", (void *)nativeIsRunning},
@@ -512,6 +534,7 @@ JNI_EXPORT_BRIDGE(nativeStartHost, jboolean, (JNIEnv *env, jclass clazz, jstring
 JNI_EXPORT_BRIDGE_VOID(nativeStopHost, (JNIEnv *env, jclass clazz), (env, clazz))
 JNI_EXPORT_BRIDGE(nativeIsRunning, jboolean, (JNIEnv *env, jclass clazz), (env, clazz))
 JNI_EXPORT_BRIDGE(nativeGetPerformanceStats, jfloatArray, (JNIEnv *env, jclass clazz), (env, clazz))
+JNI_EXPORT_BRIDGE(nativeGetBuiltGame, jobjectArray, (JNIEnv *env, jclass clazz), (env, clazz))
 JNI_EXPORT_BRIDGE_VOID(nativeSetSurface, (JNIEnv *env, jclass clazz, jobject s, jint w, jint h), (env, clazz, s, w, h))
 JNI_EXPORT_BRIDGE_VOID(nativeSurfaceDestroyed, (JNIEnv *env, jclass clazz), (env, clazz))
 JNI_EXPORT_BRIDGE_VOID(nativeSetRefreshRate, (JNIEnv *env, jclass clazz, jfloat hz), (env, clazz, hz))

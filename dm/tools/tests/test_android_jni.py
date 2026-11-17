@@ -46,6 +46,8 @@ class AndroidJniContract(unittest.TestCase):
             'nativeSendPad',
             'nativeSendPadPlayers',
             'nativeSendInput',
+            'nativeGetPerformanceStats',
+            'nativeGetBuiltGame',
         ]
         for m in expected_methods:
             with self.subTest(method=m):

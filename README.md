@@ -7,15 +7,15 @@ nxdroid is an Android-only port of [nxnative](https://github.com/seedds/nxnative
 **The Android port is running on a physical device.** Built and verified on a Samsung Galaxy S23 Ultra (Snapdragon 8 Gen 2 / Adreno 740, 12 GB RAM, Android 16 / SDK 36) with **Mario Kart 8 Deluxe** (`0100152000022000`, Update 4.0.1 `[v1507328]`):
 
 - **Native Execution:** The game's AArch64 code runs natively with rewrites from `dm/tools/patch_nso.py --target=android`. Horizon SVCs and system services are handled by `dm/host`.
-- **Vulkan Graphics:** NVN commands are replayed via the Vulkan replay engine (`dm/gfx/vulkan`) with triple buffering (`ci.minImageCount = 3`) and bilinear scaling blits (`VK_FILTER_LINEAR`) to the native display extent (`1544x720`). The 2D interface and video render correctly. The 3D scene is not right yet: screenshots of 2026-11-03 show it posterized, speckled and with black holes (wrong data in the 3D chain's intermediate targets, cause open). An earlier measurement gave ~54 FPS (`gpu_ms ~ 8 ms`). The A/B procedure for the engine's switches is in [HANDOFF.md](HANDOFF.md) §8 item 12.
+- **Vulkan Graphics:** NVN commands are replayed via the Vulkan replay engine (`dm/gfx/vulkan`) with triple buffering (`ci.minImageCount = 3`) and bilinear scaling blits (`VK_FILTER_LINEAR`) to the native display extent (`1544x720`). The 2D interface, the videos and the 3D race render correctly, and the race holds a locked 60 FPS on the 12-kart start grid (`gpu_ms` ~10 ms, `submit_cpu_ms` ~12 ms). The runs, the fixes that got there and the A/B procedure for the engine's switches are in [HANDOFF.md](HANDOFF.md) (Status and §8 item 12).
 - **Hardware Video Decoding:** H.264 video decoding (used by the menus' track video previews) is implemented via Android NDK `AMediaCodec` in `dm/android/apple_stubs.c`, decoding directly to NV12 / CVPixelBufferRef.
-- **Audio Output:** Real audio output is enabled via AAudio in `dm/android/apple_stubs.c` (48 kHz stereo PCM).
-- **Frontend & Controls:** An Android APK (`com.nxdroid`) whose `MainActivity` picks the game folder and starts the game, with a multitouch virtual controller overlay (`VirtualControllerOverlayView.java`: D-Pad, left stick, triggers, face buttons and a show/hide toggle, `🎮`) and physical controllers ([Playing](docs/playing.md)). The Argon launcher views (`LauncherOverlayView.java`, `GameScanner.java`) are in the tree but not wired into `MainActivity` yet.
+- **Audio Output:** Real audio output is enabled via AAudio in `dm/android/apple_stubs.c` (48 kHz stereo PCM, low-latency mode). AAC tracks are still silent (`AudioConverter` is a stub).
+- **Frontend & Controls:** An Android APK (`com.nxdroid`) that opens on a launcher listing the prepared games in its library folder (name, icon, version and title ID from each game's `control.nacp`, touch and gamepad navigation) and starts the one the APK was built for, with a multitouch virtual controller overlay (`VirtualControllerOverlayView.java`: D-Pad, left stick, triggers, face buttons and a show/hide toggle, `🎮`) and physical controllers ([Playing](docs/playing.md)).
 - **Automation:** `scripts/prepare_game_android.py` automates RomFS extraction, NSO rewriting, shader compilation, Mii database generation, and deployment via ADB.
 
 Detailed diagnostics, findings, and live performance metrics are documented in [HANDOFF.md](HANDOFF.md) and [docs/reference/android.md](docs/reference/android.md).
 
-Android is the sole target. The legacy Apple code (Metal, iOS/Mac apps) remains in the repository as reference until final cleanup. CI runs on Linux: the Android gates and an NDK build of `dmhost` and `libdm.so` on every push ([Continuous integration](docs/development.md#continuous-integration)).
+Android is the sole target. The legacy Apple code (Metal, iOS/Mac apps) remains in the repository as reference until final cleanup. CI runs on Linux: the Android gates, an NDK build of `dmhost` and `libdm.so`, and a Gradle compile of the app's Java with its unit tests on every push ([Continuous integration](docs/development.md#continuous-integration)).
 
 ## How the Android build is structured
 
@@ -44,18 +44,17 @@ The Android build is organized under `dm/android/`:
    ```
    This extracts the base game and its update, rewrites the NSOs for Android, compiles the shaders, imports the Mii database, and pushes the files to `/storage/emulated/0/nxdroid/game/` (`--device-dir` to change it). It needs `hactool` and your `prod.keys` for an archive (`-k`, otherwise looked for in the emulator folders).
 4. **Launch:**
-   Open the **nxdroid** app on the device, select the game folder, and play using on-screen virtual controls or a connected USB/Bluetooth controller.
+   Open the **nxdroid** app on the device: its launcher finds the game in `/storage/emulated/0/nxdroid` (**Change folder** for another place). Grant access to all files when it asks, press **Launch**, and play with the on-screen controls or a USB / Bluetooth controller ([Playing](docs/playing.md)).
 
 ## Open
 
-- **3D picture:** the corrupted 3D scene above; the suspects and the order to test them are in [HANDOFF.md](HANDOFF.md) §8 item 12.
-- **Frame pacing to 60 fps lock:** Fine-tuning command submission intervals and buffer recycling to sustain 60 fps under heavy 12-kart racing load.
+- **More of Mario Kart 8 Deluxe:** one course start and one course transition have been run; other courses, battle mode and split screen (the heaviest load for the 60 fps lock) have not.
 - **Graphics for Vulkan and OpenGL guest games:** `dm/gfx/vk/hle_vk.m` and `dm/gfx/gl/hle_gl.m` need Vulkan backends.
 - **Guest memory zero-copy:** Investigation of `AHardwareBuffer` memory import to eliminate the mirror copy.
 
 ## Games
 
-On Android, one game has been run: **Mario Kart 8 Deluxe** (`0100152000022000`, update 4.0.1) boots, plays its menus and videos and races on the S23 Ultra, with the 3D scene still corrupted ([Status](#status)). Every other profile in the [games table](dm/games/README.md#games) comes from nxnative and has not been run on Android yet: its note, screenshot and size describe nxnative's Mac and iPhone builds, not this port.
+On Android, one game has been run: **Mario Kart 8 Deluxe** (`0100152000022000`, update 4.0.1) boots, plays its menus and videos and races on the S23 Ultra at 60 FPS with a correct 3D scene ([Status](#status)). Every other profile in the [games table](dm/games/README.md#games) comes from nxnative and has not been run on Android yet: its note, screenshot and size describe nxnative's Mac and iPhone builds, not this port.
 
 <details>
 <summary>The games nxnative runs on Mac and iPhone (not run on Android)</summary>

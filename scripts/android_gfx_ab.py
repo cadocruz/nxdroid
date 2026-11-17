@@ -21,7 +21,7 @@ import subprocess
 import sys
 import time
 
-# MainActivity's default (Environment.getExternalStorageDirectory() + "/nxdroid/game") and prepare_game_android.py's --device-dir
+# prepare_game_android.py's --device-dir, the game folder MainActivity's launcher finds in its default library (<shared storage>/nxdroid)
 DEFAULT_GAME_DIR = "/storage/emulated/0/nxdroid/game"
 PACKAGE = "com.nxdroid"
 ACTIVITY = "com.nxdroid/.MainActivity"
