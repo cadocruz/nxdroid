@@ -63,8 +63,10 @@ course is fixed (Run 39). Its note, `dm/games/0100152000022000/README.md`, has e
 - **H.264 video:** `AMediaCodec` in `dm/android/apple_stubs.c`, decoded into an NV12 `CVPixelBufferRef`;
   menu video previews play in real time.
 - **Audio:** AAudio output in `dm/android/apple_stubs.c` (48 kHz stereo PCM, low-latency mode, 240-frame
-  callbacks; 0 underruns in 6,000+ callbacks in Run 38). AAC through `AudioConverter` is still a stub (an
-  AAC track is silent, one `[RED]` line).
+  callbacks; 0 underruns in 6,000+ callbacks in Run 38). AAC movie tracks decode through MediaCodec since
+  2026-11-17 (`AudioConverter` in `apple_stubs.c`; docs/reference/movies.md, *AAC movie sound on Android goes
+  through MediaCodec*): tested on the PC against a stand-in decoder, not on the device, and no game run so
+  far has AAC movies (Mario Kart 8 Deluxe's previews are H.264).
 - **Front end:** `MainActivity` opens on the Argon launcher (since 2026-11-17), which lists the prepared
   games of a library folder (default `/storage/emulated/0/nxdroid`, whose `game/` is where the prepare
   script pushes) and starts the one the APK was built for (§8 item 8; written, not yet run on the device); an

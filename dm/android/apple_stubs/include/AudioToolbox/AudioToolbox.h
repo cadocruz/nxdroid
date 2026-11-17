@@ -1,6 +1,6 @@
-// The AudioToolbox interface the host names (hle_audio.c's output unit, hle_movie.c's AAC converter), on bionic: the types and constants, and functions that fail with a
-// [RED] line once (dm/android/apple_stubs.c). No audio backend is behind them: hle_audio.c's silent sink is the output on this platform (DM_AUDIO is off by default here),
-// and an AAC movie track is silent. This directory is on the Android include path only; the Apple build sees the real framework.
+// The AudioToolbox interface the host names (hle_audio.c's output unit, hle_movie.c's AAC converter), on bionic: the types and constants, implemented in
+// dm/android/apple_stubs.c (the output unit over AAudio, the AAC converter over MediaCodec; anything else fails with a [RED] line once).
+// This directory is on the Android include path only; the Apple build sees the real framework.
 #pragma once
 #include <stdint.h>
 #include <stddef.h>

@@ -226,6 +226,7 @@ One line per symptom in the [subsystem references](../reference/): what you see 
 - a native-texture movie freezes on its 16th picture while the game keeps running; `DM_MOVIE_TRACE=1` shows 16 `AcquireOutputBufferIndex` / `GetOutputBuffer` pairs and no `ReleaseOutputBufferIndex`. → [`GetOutputBuffer` returns the output index in native-texture mode](../reference/movies.md#getoutputbuffer-returns-the-output-index-in-native-texture-mode)
 - the game crashed on a null right after the failed open. → [`movie::Extractor` runs natively](../reference/movies.md#movieextractor-runs-natively)
 - VP8 WebM movies play black; `movie::Decoder` is created with decoder type 2. → [VP8 uses the same libvpx worker and output paths](../reference/movies.md#vp8-uses-the-same-libvpx-worker-and-output-paths)
+- on Android a movie's AAC track is silent while its picture plays, and the log has `[RED] AAC decoding through AudioToolbox is not implemented on this platform` and `[RED] movie: AudioToolbox cannot create an AAC decoder (-50; …), outputting silence`. → [AAC movie sound on Android goes through MediaCodec](../reference/movies.md#aac-movie-sound-on-android-goes-through-mediacodec)
 
 ## Audio
 

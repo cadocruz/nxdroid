@@ -1,9 +1,10 @@
-// The Apple media frameworks the host names, on bionic. Two families have real backends: the AudioUnit
-// output plays through AAudio (hle_audio.c's 48 kHz stereo PCM) and VideoToolbox's H.264 decoder decodes
-// through MediaCodec into an NV12 CVPixelBufferRef (hle_movie_avc.c). The rest fail, each family saying so
-// once with a [RED] line, so that the Android link set is complete: an AAC track through AudioConverter is
-// silent, an unsupported AudioUnit component type is refused. The host's own fallbacks then apply: the
-// silent sink paces the game's audio in real time.
+// The Apple media frameworks the host names, on bionic. Three families have real backends: the AudioUnit
+// output plays through AAudio (hle_audio.c's 48 kHz stereo PCM), AudioConverter decodes AAC to PCM16 through
+// MediaCodec (hle_movie.c's movie tracks), and VideoToolbox's H.264 decoder decodes through MediaCodec into an
+// NV12 CVPixelBufferRef (hle_movie_avc.c). The rest fail, each family saying so once with a [RED] line, so
+// that the Android link set is complete: an AudioConverter for another format pair or an unsupported
+// AudioUnit component type is refused. The host's own fallbacks then apply: the silent sink paces the game's
+// audio in real time.
 #include "../host/dm.h"   // LOG
 #include <AudioToolbox/AudioToolbox.h>
 #include <VideoToolbox/VideoToolbox.h>
@@ -17,7 +18,7 @@
 enum { kStubFailed = -50 /* paramErr: no component, converter or session exists on this platform */ };
 static void said(const char *what) { LOG("[RED] %s is not implemented on this platform: the Apple framework calls fail here (interface stubs, dm/android/apple_stubs.c)", what); }
 
-// ---- AudioToolbox: output units (AAudio) and the AAC converter ----
+// ---- AudioToolbox: output units (AAudio) ----
 struct OpaqueAudioComponentInstance {
     AudioStreamBasicDescription fmt;
     AURenderCallbackStruct cb;
@@ -193,11 +194,241 @@ OSStatus AudioOutputUnitStop(AudioUnit u) {
     }
     return noErr;
 }
-OSStatus AudioConverterNew(const AudioStreamBasicDescription *in, const AudioStreamBasicDescription *out, AudioConverterRef *c) { (void)in; (void)out; if (c) *c = NULL; static int once; if (!once++) said("AAC decoding through AudioToolbox"); return kStubFailed; }
-OSStatus AudioConverterDispose(AudioConverterRef c) { (void)c; return kStubFailed; }
-OSStatus AudioConverterSetProperty(AudioConverterRef c, AudioConverterPropertyID id, UInt32 size, const void *data) { (void)c; (void)id; (void)size; (void)data; return kStubFailed; }
+// ---- AudioToolbox: the AAC converter, through MediaCodec ----
+// hle_movie.c's AAC decoder (md_aac_open / md_aac) as AudioToolbox serves it: AudioConverterNew from MPEG-4 AAC to interleaved signed 16-bit PCM,
+// the configuration as a magic cookie (an MPEG-4 ES descriptor around the AudioSpecificConfig, or the AudioSpecificConfig alone), then
+// AudioConverterFillComplexBuffer, whose input callback hands over one raw AAC frame. MediaCodec's AAC decoder ("audio/mp4a-latm", csd-0 =
+// AudioSpecificConfig) decodes it; each of its output buffers is one decoded frame (1024 samples per channel, 2048 with SBR), and a fill hands out
+// at most one, as AudioToolbox does for the one packet the callback gives: the game sizes its outputs by one frame (hle_movie.c,
+// GetOutputBufferSize). MediaCodec may return a frame one packet late; the frames it has not handed out yet wait in a short queue. Its output is
+// PCM16 at the stream's own rate (no resampling, as the host asks for the input rate); a channel count other than the one asked for is mixed to it
+// (mono doubled, stereo averaged, otherwise channels dropped or silent).
+#define AAC_QUEUE 4   // decoded frames waiting to be handed out
+#define AAC_FRAME_MAX (2048 * 8)   // samples in one decoded frame: 2048 per channel with SBR, 8 channels at most
+
+struct OpaqueAudioConverter {
+    AMediaCodec *codec;
+    int rate, ch;                 // the stream as AudioConverterNew gave it; ch is also the output's channel count
+    int out_ch;                   // the decoder's output channels (its output format)
+    int64_t pts;                  // presentation time of the next input, in microseconds (MediaCodec wants one)
+    int16_t *queue[AAC_QUEUE];    // decoded frames, already in ch channels
+    UInt32 queue_frames[AAC_QUEUE];
+    int queue_head, queue_n;
+    int red_input, red_format;
+};
+
+// The AudioSpecificConfig in a magic cookie: an ES_Descriptor (tag 3) holding a DecoderConfigDescriptor (4) holding the DecoderSpecificInfo (5),
+// a DecoderConfigDescriptor alone, or the AudioSpecificConfig itself (ISO/IEC 14496-1 7.2.6; the cookie hle_movie.c builds is the first kind)
+static int aac_descriptor(const uint8_t **p, const uint8_t *end, int tag, size_t *len) {
+    if (*p >= end || **p != tag) return 0;
+    const uint8_t *q = *p + 1;
+    size_t n = 0;
+    for (int i = 0; i < 4; i++) {
+        if (q >= end) return 0;
+        uint8_t b = *q++;
+        n = n << 7 | (b & 0x7f);
+        if (!(b & 0x80)) break;
+    }
+    if ((size_t)(end - q) < n) return 0;
+    *p = q; *len = n;
+    return 1;
+}
+static int aac_cookie_asc(const uint8_t *cookie, size_t n, const uint8_t **asc, size_t *asc_n) {
+    const uint8_t *p = cookie, *end = cookie + n;
+    size_t len;
+    if (n && cookie[0] == 3) {
+        if (!aac_descriptor(&p, end, 3, &len) || len < 3) return 0;
+        end = p + len;
+        uint8_t flags = p[2];
+        p += 3;   // ES_ID, then the flags
+        if (flags & 0x80) p += 2;                       // dependsOn_ES_ID
+        if (flags & 0x40) { if (p >= end) return 0; p += 1 + *p; }   // URL
+        if (flags & 0x20) p += 2;                       // OCR_ES_Id
+        if (p > end) return 0;
+    }
+    if (p < end && *p == 4) {
+        if (!aac_descriptor(&p, end, 4, &len) || len < 13) return 0;
+        end = p + len;
+        p += 13;   // objectTypeIndication, streamType, bufferSizeDB, maxBitrate, avgBitrate
+        if (!aac_descriptor(&p, end, 5, &len) || !len) return 0;
+        *asc = p; *asc_n = len;
+        return 1;
+    }
+    if (n < 2 || cookie[0] == 3) return 0;
+    *asc = cookie; *asc_n = n;   // the AudioSpecificConfig alone
+    return 1;
+}
+
+static int aac_start(AudioConverterRef c, const uint8_t *asc, size_t asc_n) {
+    c->codec = AMediaCodec_createDecoderByType("audio/mp4a-latm");
+    if (!c->codec) { LOG("[RED] AudioConverter: MediaCodec has no AAC decoder (audio/mp4a-latm): the AAC track is silent"); return 0; }
+    AMediaFormat *fmt = AMediaFormat_new();
+    AMediaFormat_setString(fmt, "mime", "audio/mp4a-latm");
+    AMediaFormat_setInt32(fmt, "sample-rate", c->rate);
+    AMediaFormat_setInt32(fmt, "channel-count", c->ch);
+    AMediaFormat_setInt32(fmt, "is-adts", 0);
+    AMediaFormat_setBuffer(fmt, "csd-0", asc, asc_n);
+    media_status_t st = AMediaCodec_configure(c->codec, fmt, NULL, NULL, 0);
+    AMediaFormat_delete(fmt);
+    if (st == AMEDIA_OK) st = AMediaCodec_start(c->codec);
+    if (st != AMEDIA_OK) {
+        LOG("[RED] AudioConverter: MediaCodec's AAC decoder refused the stream (%d; %d channels %d Hz, AudioSpecificConfig %zu bytes, object type %d): the AAC track is silent",
+            (int)st, c->ch, c->rate, asc_n, asc_n ? asc[0] >> 3 : 0);
+        AMediaCodec_delete(c->codec);
+        c->codec = NULL;
+        return 0;
+    }
+    char *name = NULL;
+    if (AMediaCodec_getName(c->codec, &name) == AMEDIA_OK && name) {
+        LOG("[movie] AAC through MediaCodec (%s): %d channels %d Hz, object type %d", name, c->ch, c->rate, asc_n ? asc[0] >> 3 : 0);
+        AMediaCodec_releaseName(c->codec, name);
+    }
+    return 1;
+}
+
+static void aac_mix(int16_t *dst, int dst_ch, const int16_t *src, int src_ch, UInt32 frames) {
+    for (UInt32 f = 0; f < frames; f++, dst += dst_ch, src += src_ch) {
+        if (dst_ch == src_ch) memcpy(dst, src, (size_t)dst_ch * 2);
+        else if (dst_ch == 2 && src_ch == 1) dst[0] = dst[1] = src[0];
+        else if (dst_ch == 1 && src_ch >= 2) dst[0] = (int16_t)(((int)src[0] + src[1]) / 2);
+        else for (int k = 0; k < dst_ch; k++) dst[k] = k < src_ch ? src[k] : 0;
+    }
+}
+
+// Take the decoder's outputs into the queue: wait up to timeout_us for the first, then take what is ready. 1 when a frame was queued.
+static int aac_drain(AudioConverterRef c, int64_t timeout_us) {
+    int got = 0;
+    for (int tries = 0; tries < 8; tries++) {
+        AMediaCodecBufferInfo info;
+        ssize_t idx = AMediaCodec_dequeueOutputBuffer(c->codec, &info, got ? 0 : timeout_us);
+        if (idx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
+            AMediaFormat *f = AMediaCodec_getOutputFormat(c->codec);
+            int32_t v;
+            if (f) {
+                if (AMediaFormat_getInt32(f, "channel-count", &v) && v > 0) c->out_ch = v;
+                if (AMediaFormat_getInt32(f, "pcm-encoding", &v) && v != 2 && !c->red_format++)
+                    LOG("[RED] AudioConverter: MediaCodec's AAC output is PCM encoding %d, not 16-bit: read as 16-bit", (int)v);
+                if (AMediaFormat_getInt32(f, "sample-rate", &v) && v != c->rate)
+                    LOG("[movie] AAC through MediaCodec: output %d Hz for a %d Hz stream (SBR doubles it), %d channels", (int)v, c->rate, c->out_ch);
+                AMediaFormat_delete(f);
+            }
+            continue;
+        }
+        if (idx == AMEDIACODEC_INFO_OUTPUT_BUFFERS_CHANGED) continue;
+        if (idx < 0) break;   // AMEDIACODEC_INFO_TRY_AGAIN_LATER, or an error
+        size_t cap = 0;
+        uint8_t *buf = AMediaCodec_getOutputBuffer(c->codec, (size_t)idx, &cap);
+        int src_ch = c->out_ch > 0 ? c->out_ch : c->ch;
+        UInt32 frames = buf && info.size > 0 && (size_t)info.offset + (size_t)info.size <= cap ? (UInt32)info.size / (UInt32)(2 * src_ch) : 0;
+        if ((size_t)frames * (size_t)c->ch > AAC_FRAME_MAX) frames = (UInt32)(AAC_FRAME_MAX / c->ch);
+        if (frames && c->queue_n < AAC_QUEUE) {
+            int slot = (c->queue_head + c->queue_n) % AAC_QUEUE;
+            aac_mix(c->queue[slot], c->ch, (const int16_t *)(buf + info.offset), src_ch, frames);
+            c->queue_frames[slot] = frames;
+            c->queue_n++;
+            got = 1;
+        } else if (frames && !c->red_input++) {
+            LOG("[RED] AudioConverter: decoded AAC frames are not being taken (%d waiting): a frame is dropped", c->queue_n);
+        }
+        AMediaCodec_releaseOutputBuffer(c->codec, (size_t)idx, false);
+    }
+    return got;
+}
+
+OSStatus AudioConverterNew(const AudioStreamBasicDescription *in, const AudioStreamBasicDescription *out, AudioConverterRef *c) {
+    if (c) *c = NULL;
+    if (!in || !out || !c || in->mFormatID != kAudioFormatMPEG4AAC || out->mFormatID != kAudioFormatLinearPCM || out->mBitsPerChannel != 16
+        || !(out->mFormatFlags & kLinearPCMFormatFlagIsSignedInteger) || out->mChannelsPerFrame < 1 || out->mChannelsPerFrame > 8) {
+        static int once;
+        if (!once++) said("AudioConverter other than MPEG-4 AAC to interleaved 16-bit PCM");
+        return kStubFailed;
+    }
+    AudioConverterRef r = calloc(1, sizeof *r);
+    if (!r) return kStubFailed;
+    r->rate = in->mSampleRate > 0 ? (int)in->mSampleRate : 48000;
+    r->ch = (int)out->mChannelsPerFrame;
+    for (int i = 0; i < AAC_QUEUE; i++) {
+        r->queue[i] = malloc(AAC_FRAME_MAX * sizeof(int16_t));
+        if (!r->queue[i]) { AudioConverterDispose(r); return kStubFailed; }
+    }
+    *c = r;
+    return noErr;
+}
+
+OSStatus AudioConverterDispose(AudioConverterRef c) {
+    if (!c) return kStubFailed;
+    if (c->codec) { AMediaCodec_stop(c->codec); AMediaCodec_delete(c->codec); }
+    for (int i = 0; i < AAC_QUEUE; i++) free(c->queue[i]);
+    free(c);
+    return noErr;
+}
+
+OSStatus AudioConverterSetProperty(AudioConverterRef c, AudioConverterPropertyID id, UInt32 size, const void *data) {
+    if (!c || id != kAudioConverterDecompressionMagicCookie || !data || !size) return kStubFailed;
+    const uint8_t *asc = NULL;
+    size_t asc_n = 0;
+    if (!aac_cookie_asc(data, size, &asc, &asc_n)) { LOG("[RED] AudioConverter: no AudioSpecificConfig in the %u-byte magic cookie", (unsigned)size); return kStubFailed; }
+    if (c->codec) { AMediaCodec_stop(c->codec); AMediaCodec_delete(c->codec); c->codec = NULL; }
+    c->queue_n = 0;
+    return aac_start(c, asc, asc_n) ? noErr : kStubFailed;
+}
+
 OSStatus AudioConverterFillComplexBuffer(AudioConverterRef c, AudioConverterComplexInputDataProc proc, void *ref, UInt32 *packets, AudioBufferList *out, AudioStreamPacketDescription *desc) {
-    (void)c; (void)proc; (void)ref; (void)out; (void)desc; if (packets) *packets = 0; return kStubFailed;
+    (void)desc;
+    UInt32 capacity = packets ? *packets : 0;
+    if (packets) *packets = 0;
+    if (!c || !proc || !out || !out->mNumberBuffers || !out->mBuffers[0].mData) return kStubFailed;
+    if (!c->codec) {   // no magic cookie: AAC-LC from the stream's rate and channel count, as hle_movie.c builds one without csd-0
+        static const int rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
+        int fi = 3;
+        for (int i = 0; i < 13; i++) if (rates[i] == c->rate) fi = i;
+        uint8_t asc[2] = {(uint8_t)(2 << 3 | fi >> 1), (uint8_t)((fi & 1) << 7 | (c->ch & 15) << 3)};
+        if (!aac_start(c, asc, sizeof asc)) return kStubFailed;
+    }
+    UInt32 room = out->mBuffers[0].mDataByteSize / (UInt32)(2 * c->ch);
+    if (capacity > room || !capacity) capacity = room;
+
+    // One packet from the callback into the decoder
+    UInt32 np = 1;
+    AudioBufferList in = {1, {{(UInt32)c->ch, 0, NULL}}};
+    AudioStreamPacketDescription *pd = NULL;
+    OSStatus st = proc(c, &np, &in, &pd, ref);
+    if (st == noErr && np > 0 && in.mBuffers[0].mData && in.mBuffers[0].mDataByteSize) {
+        const uint8_t *pkt = in.mBuffers[0].mData;
+        size_t n = pd ? pd->mDataByteSize : in.mBuffers[0].mDataByteSize;
+        if (pd && pd->mStartOffset > 0) pkt += pd->mStartOffset;
+        if (n > in.mBuffers[0].mDataByteSize) n = in.mBuffers[0].mDataByteSize;
+        ssize_t idx = AMediaCodec_dequeueInputBuffer(c->codec, 10000);
+        if (idx < 0) { aac_drain(c, 0); idx = AMediaCodec_dequeueInputBuffer(c->codec, 10000); }
+        size_t cap = 0;
+        uint8_t *buf = idx >= 0 ? AMediaCodec_getInputBuffer(c->codec, (size_t)idx, &cap) : NULL;
+        if (buf && n <= cap) {
+            memcpy(buf, pkt, n);
+            AMediaCodec_queueInputBuffer(c->codec, (size_t)idx, 0, n, (uint64_t)c->pts, 0);
+            c->pts += (int64_t)1024 * 1000000 / c->rate;
+        } else {
+            if (buf) AMediaCodec_queueInputBuffer(c->codec, (size_t)idx, 0, 0, (uint64_t)c->pts, 0);
+            if (!c->red_input++) LOG("[RED] AudioConverter: MediaCodec took no AAC input (input buffer %zd, %zu of %zu bytes): a packet is dropped", idx, n, cap);
+        }
+        if (!c->queue_n) aac_drain(c, 5000);   // the decoder usually answers within one packet; wait a little for this packet's frame
+        else aac_drain(c, 0);
+        if (!c->queue_n) aac_drain(c, 15000);
+        st = noErr;
+    }
+
+    // Hand out one decoded frame
+    if (c->queue_n) {
+        int slot = c->queue_head;
+        UInt32 frames = c->queue_frames[slot] < capacity ? c->queue_frames[slot] : capacity;
+        memcpy(out->mBuffers[0].mData, c->queue[slot], (size_t)frames * 2 * c->ch);
+        out->mBuffers[0].mDataByteSize = frames * 2u * (UInt32)c->ch;
+        c->queue_head = (c->queue_head + 1) % AAC_QUEUE;
+        c->queue_n--;
+        if (packets) *packets = frames;
+    } else {
+        out->mBuffers[0].mDataByteSize = 0;
+    }
+    return st;   // the callback's own status when it gave nothing (hle_movie.c ends a fill with 1), as AudioToolbox returns it
 }
 
 // ---- CoreFoundation, CoreMedia, CoreVideo, VideoToolbox: the H.264 decoder ----
